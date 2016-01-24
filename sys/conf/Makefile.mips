@@ -37,7 +37,7 @@ SYSTEM_DEP:= ${SYSTEM_DEP:$S/conf/${LDSCRIPT_NAME}=${LDSCRIPT_NAME}}
 KERNLOADADDR?=0x80001000
 # This obscure value is defined by CFE for WR160N
 # To be changed later
-TRAMPLOADADDR?=0x807963c0
+TRAMPLOADADDR?=0x807ffff0
 
 # We default to the MIPS32 ISA, if none specified in the
 # kernel configuration file.
@@ -72,7 +72,7 @@ ${KERNEL_KO}.tramp.bin: ${KERNEL_KO} $S/$M/$M/elf_trampoline.c \
 	${CC} -O -nostdlib -I. -I$S ${TRAMP_EXTRA_FLAGS} ${TRAMP_LDFLAGS} -Xlinker \
 		-T -Xlinker ${LDSCRIPT_NAME}.tramp.noheader \
 		-DKERNNAME="\"${KERNEL_KO}.tmp\"" -DELFSIZE=${TRAMP_ELFSIZE} \
-		$S/$M/$M/elf_trampoline.c $S/$M/$M/inckern.S \
+		$S/$M/$M/inckern.S $S/$M/$M/elf_trampoline.c \
 		-o ${KERNEL_KO}.tramp.elf
 	${OBJCOPY} -S -O binary ${KERNEL_KO}.tramp.elf \
 		${KERNEL_KO}.tramp.bin
