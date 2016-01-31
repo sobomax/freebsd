@@ -12,7 +12,11 @@
 #define BCMA_DEBUG_LEVEL	0x20
 #define BCMA_TRACE_LEVEL	0x30
 
-#define BCMA_LOGGING	BCMA_INFO_LEVEL
+#define BCMA_DEFAULT_LEVEL	BCMA_DEBUG_LEVEL
+
+#if !(defined(BCMA_LOGGING))
+#define BCMA_LOGGING	BCMA_DEFAULT_LEVEL
+#endif
 
 #if BCMA_LOGGING >= BCMA_DEBUG_LEVEL
 #define BCMA_LOGPRINT(a, level) {printf("[BCMA %s] => %s:%d: ", level, __func__, __LINE__), printf a; printf("\n");}

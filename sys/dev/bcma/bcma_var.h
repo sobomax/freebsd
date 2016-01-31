@@ -10,6 +10,9 @@
 #include <sys/malloc.h>
 #include <sys/rman.h>
 #include <sys/systm.h>
+#include <sys/queue.h>
+
+#include <machine/resource.h>
 
 MALLOC_DECLARE(M_BCMA);
 
@@ -26,9 +29,11 @@ struct bcma_eeprom_coreaddress {
 	u_int8_t  port;
 	u_int32_t address;
 	u_int32_t size;
+	LIST_ENTRY(bcma_eeprom_coreaddress) next_address;
 };
 
 struct bcma_eeprom_coreinfo {
+	LIST_ENTRY(bcma_eeprom_coreinfo) next_core;
 	u_int16_t manuf;
 	u_int16_t id;
 	u_int8_t class;
@@ -37,6 +42,8 @@ struct bcma_eeprom_coreinfo {
 	u_int8_t num_sports; //slave
 	u_int8_t num_mwraps; //master
 	u_int8_t num_swraps; //slave
+	LIST_HEAD(bcma_eeprom_address_head, bcma_eeprom_coreaddress) addresses;
+	struct resource_list resources;
 };
 
 struct bcma_softc {
@@ -46,6 +53,13 @@ struct bcma_softc {
 	int mem_rid;
 	int erom_rid;
 	struct bcma_chipinfo chip;
+	LIST_HEAD(bcma_eeprom_info_head, bcma_eeprom_coreinfo) cores;
+};
+
+struct bcma_chipcommon_softc {
+
+
+	int unused;
 };
 
 /**
@@ -53,3 +67,4 @@ struct bcma_softc {
  */
 void bcma_release_resources(struct bcma_softc* sc);
 void bcma_scan_eeprom(struct bcma_softc* sc);
+int bcma_init_scan_eeprom(struct bcma_softc* sc, u_int32_t offset, u_int32_t size, int resource_id);
