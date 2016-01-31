@@ -1,0 +1,210 @@
+/*
+ * bcma_chipcommon.h
+ *
+ *  Created on: Jan 29, 2016
+ *      Author: mizhka
+ */
+
+#pragma once
+
+/**
+ * Registers
+ */
+#define BCMA_CC_ID				0x0000
+#define BCMA_CC_CAP				0x0004		/* Capabilities */
+#define BCMA_CC_CORECTL			0x0008
+#define BCMA_CC_BIST			0x000C
+#define BCMA_CC_OTPS			0x0010		/* OTP status */
+#define BCMA_CC_OTPC			0x0014		/* OTP control */
+#define BCMA_CC_OTPP			0x0018		/* OTP prog */
+#define BCMA_CC_OTPL			0x001C		/* OTP layout */
+#define BCMA_CC_IRQSTAT			0x0020
+#define BCMA_CC_IRQMASK			0x0024
+#define BCMA_CC_CHIPCTL			0x0028		/* Rev >= 11 only */
+#define BCMA_CC_CHIPSTAT		0x002C		/* Rev >= 11 only */
+#define BCMA_CC_JCMD			0x0030		/* Rev >= 10 only */
+
+#define BCMA_CC_JIR				0x0034		/* Rev >= 10 only */
+#define BCMA_CC_JDR				0x0038		/* Rev >= 10 only */
+#define BCMA_CC_JCTL			0x003C		/* Rev >= 10 only */
+
+#define BCMA_CC_FLASHCTL		0x0040
+#define BCMA_CC_FLASHADDR		0x0044
+#define BCMA_CC_FLASHDATA		0x0048
+#define BCMA_CC_BCAST_ADDR		0x0050
+#define BCMA_CC_BCAST_DATA		0x0054
+#define BCMA_CC_GPIOPULLUP		0x0058		/* Rev >= 20 only */
+#define BCMA_CC_GPIOPULLDOWN	0x005C		/* Rev >= 20 only */
+#define BCMA_CC_GPIOIN			0x0060
+#define BCMA_CC_GPIOOUT			0x0064
+#define BCMA_CC_GPIOOUTEN		0x0068
+#define BCMA_CC_GPIOCTL			0x006C
+#define BCMA_CC_GPIOPOL			0x0070
+#define BCMA_CC_GPIOIRQ			0x0074
+#define BCMA_CC_WATCHDOG		0x0080
+#define BCMA_CC_GPIOTIMER		0x0088		/* LED powersave (corerev >= 16) */
+
+#define BCMA_CC_GPIOTOUTM		0x008C		/* LED powersave (corerev >= 16) */
+#define BCMA_CC_CLOCK_N			0x0090
+#define BCMA_CC_CLOCK_SB		0x0094
+#define BCMA_CC_CLOCK_PCI		0x0098
+#define BCMA_CC_CLOCK_M2		0x009C
+#define BCMA_CC_CLOCK_MIPS		0x00A0
+#define BCMA_CC_CLKDIV			0x00A4		/* Rev >= 3 only */
+
+#define BCMA_CC_CAP_EXT			0x00AC		/* Capabilities */
+#define BCMA_CC_PLLONDELAY		0x00B0		/* Rev >= 4 only */
+#define BCMA_CC_FREFSELDELAY	0x00B4		/* Rev >= 4 only */
+#define BCMA_CC_SLOWCLKCTL		0x00B8		/* 6 <= Rev <= 9 only */
+
+#define BCMA_CC_SYSCLKCTL		0x00C0		/* Rev >= 3 only */
+
+#define BCMA_CC_CLKSTSTR		0x00C4		/* Rev >= 3 only */
+#define BCMA_CC_EROM			0x00FC
+#define BCMA_CC_PCMCIA_CFG		0x0100
+#define BCMA_CC_PCMCIA_MEMWAIT	0x0104
+#define BCMA_CC_PCMCIA_ATTRWAIT	0x0108
+#define BCMA_CC_PCMCIA_IOWAIT	0x010C
+#define BCMA_CC_IDE_CFG			0x0110
+#define BCMA_CC_IDE_MEMWAIT		0x0114
+#define BCMA_CC_IDE_ATTRWAIT	0x0118
+#define BCMA_CC_IDE_IOWAIT		0x011C
+#define BCMA_CC_PROG_CFG		0x0120
+#define BCMA_CC_PROG_WAITCNT	0x0124
+#define BCMA_CC_FLASH_CFG		0x0128
+#define BCMA_CC_FLASH_CFG_DS	0x0010	/* Data size, 0=8bit, 1=16bit */
+#define BCMA_CC_FLASH_WAITCNT	0x012C
+
+/* Block 0x140 - 0x190 registers are chipset specific */
+#define BCMA_CC_4706_FLASHSCFG	0x018C		/* Flash struct configuration */
+#define BCMA_CC_SROM_CONTROL	0x0190
+/* NAND flash registers for BCM4706 (corerev = 31) */
+#define BCMA_CC_NFLASH_CTL		0x01A0
+#define  BCMA_CC_NFLASH_CTL_ERR	0x08000000
+#define BCMA_CC_NFLASH_CONF		0x01A4
+#define BCMA_CC_NFLASH_COL_ADDR	0x01A8
+#define BCMA_CC_NFLASH_ROW_ADDR	0x01AC
+#define BCMA_CC_NFLASH_DATA		0x01B0
+#define BCMA_CC_NFLASH_WAITCNT0	0x01B4
+/* 0x1E0 is defined as shared BCMA_CLKCTLST */
+#define BCMA_CC_HW_WORKAROUND	0x01E4 /* Hardware workaround (rev >= 20) */
+#define BCMA_CC_UART0_DATA		0x0300
+#define BCMA_CC_UART0_IMR		0x0304
+#define BCMA_CC_UART0_FCR		0x0308
+#define BCMA_CC_UART0_LCR		0x030C
+#define BCMA_CC_UART0_MCR		0x0310
+#define BCMA_CC_UART0_LSR		0x0314
+#define BCMA_CC_UART0_MSR		0x0318
+#define BCMA_CC_UART0_SCRATCH	0x031C
+#define BCMA_CC_UART1_DATA		0x0400
+#define BCMA_CC_UART1_IMR		0x0404
+#define BCMA_CC_UART1_FCR		0x0408
+#define BCMA_CC_UART1_LCR		0x040C
+#define BCMA_CC_UART1_MCR		0x0410
+#define BCMA_CC_UART1_LSR		0x0414
+#define BCMA_CC_UART1_MSR		0x0418
+#define BCMA_CC_UART1_SCRATCH	0x041C
+
+/* PMU registers (rev >= 20) */
+#define BCMA_CC_PMU_CTL			0x0600 /* PMU control */
+#define BCMA_CC_PMU_CAP			0x0604 /* PMU capabilities */
+#define BCMA_CC_PMU_STAT		0x0608 /* PMU status */
+#define BCMA_CC_PMU_RES_STAT	0x060C /* PMU res status */
+#define BCMA_CC_PMU_RES_PEND	0x0610 /* PMU res pending */
+#define BCMA_CC_PMU_TIMER		0x0614 /* PMU timer */
+#define BCMA_CC_PMU_MINRES_MSK	0x0618 /* PMU min res mask */
+#define BCMA_CC_PMU_MAXRES_MSK	0x061C /* PMU max res mask */
+#define BCMA_CC_PMU_RES_TABSEL	0x0620 /* PMU res table sel */
+#define BCMA_CC_PMU_RES_DEPMSK	0x0624 /* PMU res dep mask */
+#define BCMA_CC_PMU_RES_UPDNTM	0x0628 /* PMU res updown timer */
+#define BCMA_CC_PMU_RES_TIMER	0x062C /* PMU res timer */
+#define BCMA_CC_PMU_CLKSTRETCH	0x0630 /* PMU clockstretch */
+#define BCMA_CC_PMU_WATCHDOG	0x0634 /* PMU watchdog */
+#define BCMA_CC_PMU_RES_REQTS	0x0640 /* PMU res req timer sel */
+#define BCMA_CC_PMU_RES_REQT	0x0644 /* PMU res req timer */
+#define BCMA_CC_PMU_RES_REQM	0x0648 /* PMU res req mask */
+#define BCMA_CC_CHIPCTL_ADDR	0x0650
+#define BCMA_CC_CHIPCTL_DATA	0x0654
+#define BCMA_CC_REGCTL_ADDR		0x0658
+#define BCMA_CC_REGCTL_DATA		0x065C
+#define BCMA_CC_PLLCTL_ADDR		0x0660
+#define BCMA_CC_PLLCTL_DATA		0x0664
+#define BCMA_CC_PMU_STRAPOPT	0x0668 /* (corerev >= 28) */
+#define BCMA_CC_PMU_XTAL_FREQ	0x066C /* (pmurev >= 10) */
+
+#define BCMA_CC_SPROM				0x0800 /* SPROM beginning */
+/* NAND flash MLC controller registers (corerev >= 38) */
+#define BCMA_CC_NAND_REVISION		0x0C00
+#define BCMA_CC_NAND_CMD_START		0x0C04
+#define BCMA_CC_NAND_CMD_ADDR_X		0x0C08
+#define BCMA_CC_NAND_CMD_ADDR		0x0C0C
+#define BCMA_CC_NAND_CMD_END_ADDR	0x0C10
+#define BCMA_CC_NAND_CS_NAND_SELECT	0x0C14
+#define BCMA_CC_NAND_CS_NAND_XOR	0x0C18
+#define BCMA_CC_NAND_SPARE_RD0		0x0C20
+#define BCMA_CC_NAND_SPARE_RD4		0x0C24
+#define BCMA_CC_NAND_SPARE_RD8		0x0C28
+#define BCMA_CC_NAND_SPARE_RD12		0x0C2C
+#define BCMA_CC_NAND_SPARE_WR0		0x0C30
+#define BCMA_CC_NAND_SPARE_WR4		0x0C34
+#define BCMA_CC_NAND_SPARE_WR8		0x0C38
+#define BCMA_CC_NAND_SPARE_WR12		0x0C3C
+#define BCMA_CC_NAND_ACC_CONTROL	0x0C40
+#define BCMA_CC_NAND_CONFIG		    0x0C48
+#define BCMA_CC_NAND_TIMING_1		0x0C50
+#define BCMA_CC_NAND_TIMING_2		0x0C54
+#define BCMA_CC_NAND_SEMAPHORE		0x0C58
+#define BCMA_CC_NAND_DEVID			0x0C60
+#define BCMA_CC_NAND_DEVID_X		0x0C64
+#define BCMA_CC_NAND_BLOCK_LOCK_STATUS	0x0C68
+#define BCMA_CC_NAND_INTFC_STATUS	0x0C6C
+#define BCMA_CC_NAND_ECC_CORR_ADDR_X	0x0C70
+#define BCMA_CC_NAND_ECC_CORR_ADDR	0x0C74
+#define BCMA_CC_NAND_ECC_UNC_ADDR_X	0x0C78
+#define BCMA_CC_NAND_ECC_UNC_ADDR	0x0C7C
+#define BCMA_CC_NAND_READ_ERROR_COUNT	0x0C80
+#define BCMA_CC_NAND_CORR_STAT_THRESHOLD	0x0C84
+#define BCMA_CC_NAND_READ_ADDR_X	0x0C90
+#define BCMA_CC_NAND_READ_ADDR		0x0C94
+#define BCMA_CC_NAND_PAGE_PROGRAM_ADDR_X	0x0C98
+#define BCMA_CC_NAND_PAGE_PROGRAM_ADDR	0x0C9C
+#define BCMA_CC_NAND_COPY_BACK_ADDR_X	0x0CA0
+#define BCMA_CC_NAND_COPY_BACK_ADDR	0x0CA4
+#define BCMA_CC_NAND_BLOCK_ERASE_ADDR_X	0x0CA8
+#define BCMA_CC_NAND_BLOCK_ERASE_ADDR	0x0CAC
+#define BCMA_CC_NAND_INV_READ_ADDR_X	0x0CB0
+#define BCMA_CC_NAND_INV_READ_ADDR	0x0CB4
+#define BCMA_CC_NAND_BLK_WR_PROTECT	0x0CC0
+#define BCMA_CC_NAND_ACC_CONTROL_CS1	0x0CD0
+#define BCMA_CC_NAND_CONFIG_CS1		0x0CD4
+#define BCMA_CC_NAND_TIMING_1_CS1	0x0CD8
+#define BCMA_CC_NAND_TIMING_2_CS1	0x0CDC
+#define BCMA_CC_NAND_SPARE_RD16		0x0D30
+#define BCMA_CC_NAND_SPARE_RD20		0x0D34
+#define BCMA_CC_NAND_SPARE_RD24		0x0D38
+#define BCMA_CC_NAND_SPARE_RD28		0x0D3C
+#define BCMA_CC_NAND_CACHE_ADDR		0x0D40
+#define BCMA_CC_NAND_CACHE_DATA		0x0D44
+#define BCMA_CC_NAND_CTRL_CONFIG	0x0D48
+#define BCMA_CC_NAND_CTRL_STATUS	0x0D4C
+
+/* Flashcontrol action + opcodes for Atmel flashes */
+#define  BCMA_CC_FLASHCTL_AT_READ			0x07e8
+#define  BCMA_CC_FLASHCTL_AT_PAGE_READ			0x07d2
+#define  BCMA_CC_FLASHCTL_AT_STATUS			0x01d7
+#define  BCMA_CC_FLASHCTL_AT_BUF1_WRITE			0x0384
+#define  BCMA_CC_FLASHCTL_AT_BUF2_WRITE			0x0387
+#define  BCMA_CC_FLASHCTL_AT_BUF1_ERASE_PROGRAM		0x0283
+#define  BCMA_CC_FLASHCTL_AT_BUF2_ERASE_PROGRAM		0x0286
+#define  BCMA_CC_FLASHCTL_AT_BUF1_PROGRAM		0x0288
+#define  BCMA_CC_FLASHCTL_AT_BUF2_PROGRAM		0x0289
+#define  BCMA_CC_FLASHCTL_AT_PAGE_ERASE			0x0281
+#define  BCMA_CC_FLASHCTL_AT_BLOCK_ERASE		0x0250
+#define  BCMA_CC_FLASHCTL_AT_BUF1_WRITE_ERASE_PROGRAM	0x0382
+#define  BCMA_CC_FLASHCTL_AT_BUF2_WRITE_ERASE_PROGRAM	0x0385
+#define  BCMA_CC_FLASHCTL_AT_BUF1_LOAD			0x0253
+#define  BCMA_CC_FLASHCTL_AT_BUF2_LOAD			0x0255
+#define  BCMA_CC_FLASHCTL_AT_BUF1_COMPARE		0x0260
+#define  BCMA_CC_FLASHCTL_AT_BUF2_COMPARE		0x0261
+#define  BCMA_CC_FLASHCTL_AT_BUF1_REPROGRAM		0x0258
+#define  BCMA_CC_FLASHCTL_AT_BUF2_REPROGRAM		0x0259
