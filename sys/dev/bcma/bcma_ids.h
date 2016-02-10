@@ -98,3 +98,7 @@ const char* bcma_ids_lookup(u_int16_t id, struct bcma_id* root);
 
 extern struct bcma_id bcma_vendors[];
 extern struct bcma_id bcma_core_ids[];
+extern struct bcma_id bcma_chipcommon_pll_types[];
+extern struct bcma_id bcma_chipcommon_external_buses[];
+extern struct bcma_id bcma_chipcommon_flash_types[];
+extern struct bcma_id bcma_erom_addr_types[];

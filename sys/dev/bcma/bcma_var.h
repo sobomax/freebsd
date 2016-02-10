@@ -13,8 +13,13 @@
 #include <sys/queue.h>
 
 #include <machine/resource.h>
+#include <dev/bcma/bcma_chipcommon.h>
 
 MALLOC_DECLARE(M_BCMA);
+
+//Masks
+#define BCMA_BITS(value,MASK)		(value & MASK) >> MASK##_SHIFT;
+#define BCMA_EROM_BITS(value,MASK)	(value & MASK) >> MASK##_SHIFT;
 
 struct bcma_chipinfo {
 	u_int16_t id;
@@ -56,12 +61,35 @@ struct bcma_softc {
 	LIST_HEAD(bcma_eeprom_info_head, bcma_eeprom_coreinfo) cores;
 };
 
-struct bcma_chipcommon_softc {
-
-
-	int unused;
+struct bcma_chipcommon_capabilities{
+	u_int8_t num_uarts:BCMA_CC_CAP_NUM_UART_BASE;
+	u_int8_t is_bigend:BCMA_CC_CAP_BIG_ENDIAN_BASE;
+	u_int8_t uart_clock:BCMA_CC_CAP_UART_CLOCK_BASE;
+	u_int8_t uart_gpio:BCMA_CC_CAP_UART_GPIO_BASE;
+	u_int8_t external_buses:BCMA_CC_CAP_EXTERNAL_BUSES_BASE;
+	u_int8_t flash_type:BCMA_CC_CAP_FLASH_TYPE_BASE;
+	u_int8_t pll_type:BCMA_CC_CAP_PLL_TYPE_BASE;
+	u_int8_t power_control:BCMA_CC_CAP_POWER_CONTROL_BASE;
+	u_int8_t otp_size:BCMA_CC_CAP_OTP_SIZE_BASE;
+	u_int8_t jtag_master:BCMA_CC_CAP_JTAG_MASTER_BASE;
+	u_int8_t boot_rom:BCMA_CC_CAP_BOOT_ROM_BASE;
+	u_int8_t is_64bit:BCMA_CC_CAP_64BIT_BASE;
+	u_int8_t pmu:BCMA_CC_CAP_PMU_BASE;
+	u_int8_t eci:BCMA_CC_CAP_ECI_BASE;
+	u_int8_t sprom:BCMA_CC_CAP_SPROM_BASE;
 };
 
+struct bcma_chipcommon_softc {
+	u_int8_t revision;
+	struct resource* mem, *flash_mem;
+	int mem_rid, flash_mem_rid;
+	struct bcma_chipcommon_capabilities capabilities;
+};
+
+struct bcma_pcie_softc {
+	struct resource* mem;
+	int mem_rid;
+};
 /**
  * Private methods of BCMA
  */

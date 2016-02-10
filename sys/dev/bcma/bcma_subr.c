@@ -240,8 +240,9 @@ void bcma_scan_eeprom(struct bcma_softc* sc){
 			}
 			int resource_id = bcma_generate_rid(core_id, coreaddress->type, coreaddress->port, &magic);
 			bus_set_resource(child, SYS_RES_MEMORY, resource_id, coreaddress->address, coreaddress->size);
-			BCMA_DEBUG(("Assigned address for 0x%01x/0x%01x [rid=0x%04x]: 0x%04x - 0x%04x (0x%04x)",
-					coreaddress->type, coreaddress->port, resource_id, coreaddress->address,
+			BCMA_DEBUG(("Assigned address for %s 0x%01x [rid=0x%04x]: 0x%04x - 0x%04x (0x%04x)",
+					bcma_ids_lookup(coreaddress->type, bcma_erom_addr_types),
+					coreaddress->port, resource_id, coreaddress->address,
 					coreaddress->address + coreaddress->size - 1, coreaddress->size))
 
 			free(coreaddress, M_BCMA);

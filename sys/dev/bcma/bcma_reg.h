@@ -29,8 +29,6 @@
 
 #define BCMA_EROM_TAGX			0x00000006 /* 0110 - we have to ignore 0x8 bit when checking tag for SCAN_ER_TAG_ADDR */
 
-//Masks
-#define BCMA_EROM_BITS(value,MASK)		(value & MASK) >> MASK##_SHIFT;
 //Fixed
 #define BCMA_EROM_CLASS			0x000000F0
 #define BCMA_EROM_CLASS_SHIFT	4

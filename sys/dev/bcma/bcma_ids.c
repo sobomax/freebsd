@@ -7,6 +7,17 @@
 
 #include <dev/bcma/bcma_ids.h>
 
+const char* bcma_ids_lookup(u_int16_t id, struct bcma_id* root){
+	struct bcma_id* ptr = root;
+
+	while(1){
+		if((ptr->id == id) || (ptr->id == 0))
+			return ptr->name;
+		ptr++;
+	}
+}
+
+//IDs
 struct bcma_id bcma_vendors[] = {{ BCMA_MANUF_ARM, "ARM" },
 								 { BCMA_MANUF_BCM, "Broadcom"},
 								 { BCMA_MANUF_MIPS,"MIPS"},
@@ -77,13 +88,33 @@ struct bcma_id bcma_core_ids[] = {
 		{ 0, "UNKNOWN"}
 	};
 
-const char* bcma_ids_lookup(u_int16_t id, struct bcma_id* root){
+struct bcma_id bcma_chipcommon_pll_types[] = {
+		{ 0x02, "48Mhz base, 3 dividers" },
+		{ 0x04, "48Mhz, 4 dividers" },
+		{ 0x06, "25Mhz, 2 dividers" },
+		{ 0x01, "48Mhz, 4 dividers" },
+		{ 0x03, "25Mhz, 4 dividers" },
+		{ 0x05, "100/200 or 120/240 only" },
+		{ 0x07, "25Mhz, 4 dividers" },
+		{ 0, "UNKNOWN"}
+};
 
-	struct bcma_id* ptr = root;
+struct bcma_id bcma_chipcommon_external_buses[] = {
+		{ 0x02, "ExtBus: ProgIf only" },
+		{ 0x01, "ExtBus: PCMCIA, IDE and Prog" },
+		{ 0x00, "No ExtBus present" }
+};
 
-	while(1){
-		if((ptr->id == id) || (ptr->id == 0))
-			return ptr->name;
-		ptr++;
-	}
-}
+struct bcma_id bcma_chipcommon_flash_types[] = {
+		{ 0x01, "ST" },
+		{ 0x02, "Atmel" },
+		{ 0x07, "parallel" },
+		{ 0x00, "none" }
+};
+
+struct bcma_id bcma_erom_addr_types[] = {
+		{ 0x01, "        bridge" },
+		{ 0x02, " slave wrapper" },
+		{ 0x03, "master wrapper" },
+		{ 0x00, "    slave port" }
+};
