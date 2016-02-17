@@ -357,6 +357,8 @@ bhnd_generic_get_probe_order(device_t dev, device_t child)
 
 		return (BHND_PROBE_DEFAULT);
 	}
+
+	return -1;
 }
 
 /**

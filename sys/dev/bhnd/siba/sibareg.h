@@ -262,5 +262,7 @@
 	(SIBA_REG_GET((sbidh), IDH_RCE) | ((sbidh) & SIBA_IDH_RC_MASK))
 
 #define	SIBA_COMMIT		0xfd8		/* update buffered registers value */
+#define	SIBA_IDLOW			0x0ff8
+#define	SIBA_IDHIGH			0x0ffc
 
 #endif /* _BHND_SIBA_SIBAREG_ */

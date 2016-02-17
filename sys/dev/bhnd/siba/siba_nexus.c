@@ -38,7 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/bus.h>
 
 #include <dev/bhnd/bhnd_ids.h>
-#include <dev/bhnd/cores/bhnd_chipcreg.h>
+#include <dev/bhnd/cores/chipc/chipcreg.h>
 
 #include "sibareg.h"
 #include "sibavar.h"
@@ -140,6 +140,12 @@ siba_nexus_getirq(uint16_t devid)
 	return (irq);
 }
 #endif
+
+
+struct bhnd_core_info core_null;
+static struct bhnd_core_info siba_parse_core_info(u_int32_t a, u_int32_t b, u_int32_t c){
+	return core_null;
+}
 
 static int
 siba_nexus_probe(device_t dev)
@@ -298,11 +304,13 @@ siba_nexus_attach(device_t dev)
 	return (siba_attach(dev));
 }
 
+#ifdef notyet
 static const struct bhnd_chipid *
 siba_nexus_get_chipid(device_t dev, device_t child) {
 	struct siba_nexus_softc	*sc = device_get_softc(dev);
 	return (&sc->siba_cid);
 }
+#endif
 
 static struct resource *
 siba_nexus_alloc_resource(device_t bus, device_t child, int type, int *rid,
@@ -438,11 +446,13 @@ static device_method_t siba_nexus_methods[] = {
 	/* Bus interface */
 	DEVMETHOD(bus_activate_resource,siba_nexus_activate_resource),
 	DEVMETHOD(bus_alloc_resource,	siba_nexus_alloc_resource),
-	DEVMETHOD(bus_setup_intr,	bus_generic_setup_intr),
+	DEVMETHOD(bus_setup_intr,		bus_generic_setup_intr),
 	DEVMETHOD(bus_teardown_intr,	bus_generic_teardown_intr),
 
 	/* bhnd interface */
-	DEVMETHOD(bhnd_get_chipid,	siba_nexus_get_chipid),
+#ifdef notyet
+	DEVMETHOD(bhnd_get_chipid,		siba_nexus_get_chipid),
+#endif
 
 	DEVMETHOD_END
 };
