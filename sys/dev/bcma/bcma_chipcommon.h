@@ -7,6 +7,7 @@
 
 #pragma once
 
+#define BCMA_CHIPCOMMON_MEM_RID 0
 #define BCMA_CHIPCOMMON_FLASH	0x0101
 
 /**
