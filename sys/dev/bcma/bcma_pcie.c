@@ -65,4 +65,5 @@ static driver_t bcma_pcie_driver = {
 
 static devclass_t bcma_pcie_class;
 
-DRIVER_MODULE(bcma_pcie, bcma, bcma_pcie_driver, bcma_pcie_class, 0, 0);
+EARLY_DRIVER_MODULE(bcma_pcie, bcma, bcma_pcie_driver, bcma_pcie_class, 0, 0,
+    BUS_PASS_BUS);

@@ -171,4 +171,5 @@ static driver_t bcma_driver = {
 };
 static devclass_t bcma_devclass;
 
-DRIVER_MODULE(bcma, nexus, bcma_driver, bcma_devclass, 0, 0);
+EARLY_DRIVER_MODULE(bcma, nexus, bcma_driver, bcma_devclass, 0, 0,
+    BUS_PASS_BUS);
