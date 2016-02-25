@@ -2041,7 +2041,6 @@ iwm_mvm_load_ucode_wait_alive(struct iwm_softc *sc,
 
 	sc->sc_uc_current = ucode_type;
 	error = iwm_start_fw(sc, ucode_type);
-	iwm_fw_info_free(&sc->sc_fw);
 	if (error) {
 		sc->sc_uc_current = old_type;
 		return error;
@@ -3374,6 +3373,11 @@ iwm_setrates(struct iwm_softc *sc, struct iwm_node *in)
 		    "only %zu\n", __func__, nrates, nitems(lq->rs_table));
 		return;
 	}
+	if (nrates == 0) {
+		device_printf(sc->sc_dev,
+		    "%s: node supports 0 rates, odd!\n", __func__);
+		return;
+	}
 
 	/*
 	 * XXX .. and most of iwm_node is not initialised explicitly;
@@ -3385,8 +3389,14 @@ iwm_setrates(struct iwm_softc *sc, struct iwm_node *in)
 	memset(&in->in_ridx, -1, sizeof(in->in_ridx));
 	IWM_DPRINTF(sc, IWM_DEBUG_TXRATE,
 	    "%s: nrates=%d\n", __func__, nrates);
-	for (i = 0; i < nrates; i++) {
-		int rate = ni->ni_rates.rs_rates[i] & IEEE80211_RATE_VAL;
+
+	/*
+	 * Loop over nrates and populate in_ridx from the highest
+	 * rate to the lowest rate.  Remember, in_ridx[] has
+	 * IEEE80211_RATE_MAXSIZE entries!
+	 */
+	for (i = 0; i < min(nrates, IEEE80211_RATE_MAXSIZE); i++) {
+		int rate = ni->ni_rates.rs_rates[(nrates - 1) - i] & IEEE80211_RATE_VAL;
 
 		/* Map 802.11 rate to HW rate index. */
 		for (ridx = 0; ridx <= IWM_RIDX_MAX; ridx++)
@@ -3443,7 +3453,7 @@ iwm_setrates(struct iwm_softc *sc, struct iwm_node *in)
 		 * our hardware table containing the
 		 * configuration to use for this rate.
 		 */
-		ridx = in->in_ridx[(nrates-1)-i];
+		ridx = in->in_ridx[i];
 		tab = iwm_rates[ridx].plcp;
 		tab |= nextant << IWM_RATE_MCS_ANT_POS;
 		if (IWM_RIDX_IS_CCK(ridx))
@@ -4937,6 +4947,7 @@ iwm_suspend(device_t dev)
 static int
 iwm_detach_local(struct iwm_softc *sc, int do_net80211)
 {
+	struct iwm_fw_info *fw = &sc->sc_fw;
 	device_t dev = sc->sc_dev;
 	int i;
 
@@ -4952,6 +4963,10 @@ iwm_detach_local(struct iwm_softc *sc, int do_net80211)
 	/* Free descriptor rings */
 	for (i = 0; i < nitems(sc->txq); i++)
 		iwm_free_tx_ring(sc, &sc->txq[i]);
+
+	/* Free firmware */
+	if (fw->fw_fp != NULL)
+		iwm_fw_info_free(fw);
 
 	/* Free scheduler */
 	iwm_free_sched(sc);

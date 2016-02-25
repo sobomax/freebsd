@@ -708,7 +708,7 @@ t4_attach(device_t dev)
 		sc->fw_msg_handler[i] = fw_msg_not_handled;
 	t4_register_cpl_handler(sc, CPL_SET_TCB_RPL, t4_filter_rpl);
 	t4_register_cpl_handler(sc, CPL_TRACE_PKT, t4_trace_pkt);
-	t4_register_cpl_handler(sc, CPL_TRACE_PKT_T5, t5_trace_pkt);
+	t4_register_cpl_handler(sc, CPL_T5_TRACE_PKT, t5_trace_pkt);
 	t4_init_sge_cpl_handlers(sc);
 
 	/* Prepare the adapter for operation */
@@ -3642,6 +3642,9 @@ setup_intr_handlers(struct adapter *sc)
 #ifdef DEV_NETMAP
 	struct sge_nm_rxq *nm_rxq;
 #endif
+#ifdef RSS
+	int nbuckets = rss_getnumbuckets();
+#endif
 
 	/*
 	 * Setup interrupts.
@@ -3700,6 +3703,10 @@ setup_intr_handlers(struct adapter *sc)
 					    t4_intr, rxq, s);
 					if (rc != 0)
 						return (rc);
+#ifdef RSS
+					bus_bind_intr(sc->dev, irq->res,
+					    rss_getcpu(q % nbuckets));
+#endif
 					irq++;
 					rid++;
 					vi->nintr++;
