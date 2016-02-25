@@ -2,6 +2,10 @@
 
 This is ongoing effort to port FreeBSD to the Broadcom 47xx series of SoCs.
 
+Some of the widespred hardware utilizing this SoC are:
+
+o Asus RT-N16 WiFi Router
+
 ## How to build
 
  $ make TARGET=mips TARGET_ARCH=mipsel KERNCONF=BCM471x buildworld buildkernel
