@@ -4,7 +4,7 @@ This is ongoing effort to port FreeBSD to the Broadcom 47xx series of SoCs.
 
 Some of the widespred hardware utilizing this SoC are:
 
-o Asus RT-N16 WiFi Router
+ * Asus RT-N16 WiFi Router
 
 ## How to build
 
@@ -25,4 +25,6 @@ o Asus RT-N16 WiFi Router
 
   CFE> xxx
 
-5. Load and boot kernel
+5. Load and boot kernel:
+
+  CFE> boot -tftp -raw -addr=0x807ffff0 -max=0x770000 192.168.2.10:kernel.tramp.bin
