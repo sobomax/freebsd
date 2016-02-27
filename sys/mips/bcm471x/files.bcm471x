@@ -5,5 +5,7 @@
 # which are believed to be devices we have drivers for
 # which just need to be tweaked for attachment to an SSB system bus.
 mips/bcm471x/s5_machdep.c		standard
-mips/mips/intr_machdep.c		standard
 mips/mips/tick.c			standard
+mips/mips/mips_pic.c			standard
+kern/subr_intr.c			standard
+kern/pic_if.m				standard
