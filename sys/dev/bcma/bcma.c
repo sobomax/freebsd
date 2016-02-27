@@ -95,7 +95,9 @@ static int bcma_attach(device_t dev){
 	BCMA_DEBUG(("Attaching BCMA devices..."))
 	res = bus_generic_attach(dev);
 
+#if !defined(NO_STOP_IN_BCMA)
 	kdb_enter("STOP", "stop in bcma");
+#endif
 	return res;
 }
 

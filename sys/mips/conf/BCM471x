@@ -38,7 +38,7 @@ options 	ALT_BREAK_TO_DEBUGGER
 options 	BREAK_TO_DEBUGGER
 options		BOOTVERBOSE=1
 
-makeoptions	DEBUG="-g3 -DMIPS_INTRNG -DBROKEN_INTERRUPTS"		#Build kernel with gdb(1) debug symbols
+makeoptions	DEBUG="-g3 -DMIPS_INTRNG -DBROKEN_INTERRUPTS -DNO_STOP_IN_BCMA"		#Build kernel with gdb(1) debug symbols
 makeoptions	MODULES_OVERRIDE=""
 
 options 	DDB
