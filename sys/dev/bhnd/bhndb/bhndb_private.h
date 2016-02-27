@@ -124,6 +124,8 @@ const struct bhndb_hw_priority	*bhndb_hw_priority_find_device(
 				     const struct bhndb_hw_priority *table,
 				     device_t device);
 
+void bhndb_print_resources(struct bhndb_resources* res);
+char* bhndb_print_class(bhnd_devclass_t class);
 
 /**
  * Dynamic register window allocation reference.
@@ -189,6 +191,37 @@ bhndb_dw_exhausted(struct bhndb_resources *br)
 	return (br->dwa_freelist == 0);
 }
 
+#define CTZ32_BSEARCH(x, n, MASK, SHIFT) 	if( (x & MASK) == 0){ x<<= SHIFT; n+= SHIFT; }
+static inline int bhndb_ctz32(u_int32_t y){
+	int n = 0;
+	if(y == 0) return 32;
+
+	int x = y;
+
+	CTZ32_BSEARCH(x, n, 0x0000FFFF, 16);
+	CTZ32_BSEARCH(x, n, 0x000000FF, 8);
+	CTZ32_BSEARCH(x, n, 0x0000000F, 4);
+	CTZ32_BSEARCH(x, n, 0x00000003, 2);
+	CTZ32_BSEARCH(x, n, 0x00000001, 1);
+
+	return n;
+}
+
+static inline int bhndb_popcount(u_int32_t y)
+{
+	u_int32_t x = y;
+    x = x - ((x >> 1) & 0x55555555);
+    /* Every 2 bits holds the sum of every pair of bits */
+    x = ((x >> 2) & 0x33333333) + (x & 0x33333333); // 0011001100110011
+    /* Every 4 bits holds the sum of every 4-set of bits (3 significant bits) */
+    x = (x + (x >> 4)) & 0x0F0F0F0F;
+    /* Every 8 bits holds the sum of every 8-set of bits (4 significant bits) */
+    x = (x + (x >> 16));
+    /* The lower 16 bits hold two 8 bit sums (5 significant bits).*/
+    /*    Upper 16 bits are garbage */
+    return (x + (x >> 8)) & 0x0000003F;  /* (6 significant bits) */
+}
+
 /**
  * Find the next free dynamic window region in @p br.
  * 
@@ -202,7 +235,7 @@ bhndb_dw_next_free(struct bhndb_resources *br)
 	if (bhndb_dw_exhausted(br))
 		return (NULL);
 
-	dw_free = &br->dw_alloc[__builtin_ctz(br->dwa_freelist)];
+	dw_free = &br->dw_alloc[bhndb_ctz32(br->dwa_freelist)];
 
 	KASSERT(LIST_EMPTY(&dw_free->refs),
 	    ("free list out of sync with refs"));

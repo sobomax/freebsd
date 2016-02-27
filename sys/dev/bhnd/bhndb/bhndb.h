@@ -80,8 +80,8 @@ struct bhndb_regwin {
 		int		rid;		/**< resource id */
 	} res;
 
-
-	union {
+	//mizhka: migrated from unnamed to named to meet C99
+	union specific {
 		/** Core-specific register window (BHNDB_REGWIN_T_CORE). */
 		struct {
 			bhnd_devclass_t	class;		/**< mapped core's class */
@@ -98,7 +98,7 @@ struct bhndb_regwin {
 		struct {
 			bus_size_t	cfg_offset;	/**< window address config offset. */
 		} dyn;
-        };
+    } win_spec;
 };
 
 #define	BHNDB_REGWIN_TABLE_END	{ BHNDB_REGWIN_T_INVALID, 0, 0, { 0, 0 } }

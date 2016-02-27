@@ -257,8 +257,8 @@ bhndb_initialize_region_cfg(struct bhndb_softc *sc, device_t *devs, int ndevs,
 			
 			/* Fetch the base address of the mapped port. */
 			error = bhnd_get_region_addr(child, 
-			    regw->core.port_type, regw->core.port, 
-			    regw->core.region, &addr, &size);
+			    regw->win_spec.core.port_type, regw->win_spec.core.port,
+			    regw->win_spec.core.region, &addr, &size);
 			if (error)
 			    return (error);
 
@@ -491,7 +491,7 @@ bhndb_read_chipid(struct bhndb_softc *sc, const struct bhndb_hwcfg *cfg,
 	rs.type = cc_win->res.type;
 	rs.rid = cc_win->res.rid;
 	rs.flags = RF_ACTIVE;
-
+	BUS_PRINT_CHILD(sc->parent_dev, sc->dev);
 	return (bhnd_read_chipid(sc->parent_dev, &rs, cc_win->win_offset,
 	    result));
 }
@@ -1080,8 +1080,8 @@ bhndb_alloc_resource(device_t dev, device_t child, int type,
 		if (error) {
 			device_printf(dev,
 			    "failed to activate entry %#x type %d for "
-				"child %s\n",
-			     *rid, type, device_get_nameunit(child));
+				"child %s: %d\n",
+			     *rid, type, device_get_nameunit(child), error);
 
 			rman_release_resource(rv);
 
@@ -1342,17 +1342,37 @@ bhndb_try_activate_resource(struct bhndb_softc *sc, device_t child, int type,
 	/* Look for a bus region matching the resource's address range */
 	r_start = rman_get_start(r);
 	r_size = rman_get_size(r);
+
+	if(bootverbose){
+		device_printf(sc->dev, "%s: trying to activate %p (%ld) : rid=%d for %s\n",
+				__func__,
+				(void *)(uintptr_t)r_start, r_size, rid, device_get_nameunit(child));
+
+		bhndb_print_resources(sc->bus_res);
+	}
+
 	region = bhndb_find_resource_region(sc->bus_res, r_start, r_size);
 	if (region != NULL)
 		dw_priority = region->priority;
+
+	if(bootverbose){
+		if(region == NULL){
+			device_printf(sc->dev, "%s: no region found\n", __func__);
+		}else{
+			device_printf(sc->dev, "%s: found %s region %p (%lld)\n", __func__ ,
+					((region->static_regwin) ? "static" : "dynamic"),
+					(void *)(uintptr_t)region->addr, region->size);
+		}
+	}
 
 	/* Prefer static mappings over consuming a dynamic windows. */
 	if (region && region->static_regwin) {
 		error = bhndb_activate_static_region(sc, region, child, type,
 		    rid, r);
 		if (error)
-			device_printf(sc->dev, "static window allocation "
+			device_printf(sc->dev, "%s: static window allocation "
 			     "for 0x%llx-0x%llx failed\n",
+				 __func__,
 			     (unsigned long long) r_start,
 			     (unsigned long long) r_start + r_size - 1);
 		return (error);
@@ -1361,10 +1381,16 @@ bhndb_try_activate_resource(struct bhndb_softc *sc, device_t child, int type,
 	/* A dynamic window will be required; is this resource high enough
 	 * priority to be reserved a dynamic window? */
 	if (dw_priority < sc->bus_res->min_prio) {
+		device_printf(sc->dev, "%s: priority %d is lower than min priority %d\n",
+				__func__, dw_priority, sc->bus_res->min_prio);
 		if (indirect)
 			*indirect = true;
 
 		return (ENOMEM);
+	}
+
+	if(bootverbose){
+		device_printf(sc->dev, "%s: trying to find and retain window...\n", __func__);
 	}
 
 	/* Find and retain a usable window */
@@ -1373,6 +1399,7 @@ bhndb_try_activate_resource(struct bhndb_softc *sc, device_t child, int type,
 	} BHNDB_UNLOCK(sc);
 
 	if (dwa == NULL) {
+		device_printf(sc->dev, "%s: no window is found...\n", __func__);
 		if (indirect)
 			*indirect = true;
 		return (ENOMEM);
@@ -1381,6 +1408,10 @@ bhndb_try_activate_resource(struct bhndb_softc *sc, device_t child, int type,
 	/* Configure resource with its real bus values. */
 	parent_offset = dwa->win->win_offset;
 	parent_offset += r_start - dwa->target;
+
+	if(bootverbose){
+		device_printf(sc->dev, "%s: parent_offset=%p\n", __func__ , (void*)(uintptr_t)parent_offset);
+	}
 
 	error = bhndb_init_child_resource(r, dwa->parent_res, parent_offset,
 	    dwa->win->win_size);

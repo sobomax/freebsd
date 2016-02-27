@@ -581,6 +581,10 @@ bhnd_read_chipid(device_t dev, struct resource_spec *rs,
 	/* Allocate the ChipCommon window resource and fetch the chipid data */
 	rid = rs->rid;
 	rtype = rs->type;
+	if(bootverbose){
+		device_printf(dev, "trying to allocate rid 0x%04x\n", rid);
+	}
+
 	res = bus_alloc_resource_any(dev, rtype, &rid, RF_ACTIVE);
 	if (res == NULL) {
 		device_printf(dev,
@@ -588,8 +592,14 @@ bhnd_read_chipid(device_t dev, struct resource_spec *rs,
 		return (ENXIO);
 	}
 
+	if(bootverbose){
+		device_printf(dev, "CHIPC pre-read [0x%04x]: 0x%04x, 0x%04x\n", rid, chipc_offset + CHIPC_ID, res->r_bushandle);
+	}
 	/* Fetch the basic chip info */
 	reg = bus_read_4(res, chipc_offset + CHIPC_ID);
+	if(bootverbose){
+		device_printf(dev, "CHIPC: 0x%04x\n", reg);
+	}
 	*result = bhnd_parse_chipid(reg, 0x0);
 
 	/* Fetch the enum base address */
