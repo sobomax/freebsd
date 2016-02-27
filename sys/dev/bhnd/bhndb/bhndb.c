@@ -614,9 +614,12 @@ bhndb_generic_init_full_config(device_t dev, device_t child,
 	}
 
 	if (hostb == NULL) {
-		device_printf(sc->dev, "no host bridge core found\n");
-		error = ENODEV;
-		goto cleanup;
+		if(sc->bus_res->cfg->is_hostb_required){
+			device_printf(sc->dev, "no host bridge core found\n");
+			error = ENODEV;
+			goto cleanup;
+		}
+		device_printf(sc->dev, "WARNING: no host bridge core found\n");
 	}
 
 	/* Find our full register window configuration */

@@ -83,7 +83,7 @@ struct bhndb_softc {
 	device_t			 bus_dev;	/**< child bhnd(4) bus */
 	device_t			 hostb_dev;	/**< child host bridge device, or NULL
 							     if the @p bus_dev has not yet
-							     called BHNDB_INIT_FULL_CONFIG() */
+							     called BHNDB_INIT_FULL_CONFIG() or SoC attachment */
 
 	struct rman			 mem_rman;	/**< bridged bus memory manager */
 	struct mtx			 sc_mtx;	/**< resource lock. */

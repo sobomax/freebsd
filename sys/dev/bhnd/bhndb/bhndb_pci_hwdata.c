@@ -82,6 +82,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3;
  *   at the default enumeration address (0x18000000).
  */
 const struct bhndb_hwcfg bhndb_pci_siba_generic_hwcfg = {
+	.is_hostb_required = true,
 	.resource_specs = (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -111,6 +112,7 @@ const struct bhndb_hwcfg bhndb_pci_siba_generic_hwcfg = {
  * - Compatible with both siba(4) and bcma(4) bus enumeration.
  */
 const struct bhndb_hwcfg bhndb_pci_bcma_generic_hwcfg = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -316,6 +318,7 @@ const struct bhndb_hw bhndb_pci_generic_hw_table[] = {
  * - PCI (cid=0x804, revision <= 12)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v0 = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -364,6 +367,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v0 = {
  * - PCI (cid=0x804, revision >= 13)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pci = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -428,6 +432,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pci = {
  * - PCIE (cid=0x820) with ChipCommon (revision <= 31)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pcie = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -492,6 +497,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pcie = {
  * - PCIE (cid=0x820) with ChipCommon (revision >= 32)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -557,6 +563,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
  * - PCIE2 (cid=0x83c)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3 = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }

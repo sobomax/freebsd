@@ -37,6 +37,27 @@ __FBSDID("$FreeBSD$");
 #include "bhndb_private.h"
 #include "bhndbvar.h"
 
+
+int
+bhndb_attach_by_class(device_t parent, device_t *child, int unit, devclass_t child_devclass)
+{
+	int error;
+
+	*child = device_add_child(parent, devclass_get_name(child_devclass),
+		unit);
+	if (*child == NULL)
+		return (ENXIO);
+
+	if (!(error = device_probe_and_attach(*child)))
+		return (0);
+
+	if ((device_delete_child(parent, *child)))
+		device_printf(parent, "failed to detach bhndb child\n");
+
+	return (error);
+
+}
+
 /**
  * Attach a BHND bridge device to @p parent.
  *
@@ -51,21 +72,9 @@ __FBSDID("$FreeBSD$");
 int
 bhndb_attach_bridge(device_t parent, device_t *bhndb, int unit)
 {
-	int error;
-
-	*bhndb = device_add_child(parent, devclass_get_name(bhndb_devclass),
-	    unit);
-	if (*bhndb == NULL)
-		return (ENXIO);
-
-	if (!(error = device_probe_and_attach(*bhndb)))
-		return (0);
-
-	if ((device_delete_child(parent, *bhndb)))
-		device_printf(parent, "failed to detach bhndb child\n");
-
-	return (error);
+	return bhndb_attach_by_class(parent, bhndb, unit, bhndb_devclass);
 }
+
 
 /*
  * Call BHNDB_SUSPEND_RESOURCE() for all resources in @p rl.
@@ -309,9 +318,18 @@ bhndb_alloc_resources(device_t dev, device_t parent_dev,
 	{
 		struct bhndb_dw_alloc *dwa;
 
-		/* Skip non-DYN windows */
-		if (win->win_type != BHNDB_REGWIN_T_DYN)
+		/* Skip non-DYN windows and process FIXED windows */
+		if (win->win_type != BHNDB_REGWIN_T_DYN){
+			if(win->win_type != BHNDB_REGWIN_T_FIXED)
+				continue;
+
+			int error = bhndb_add_resource_region(r,
+					win->win_offset,win->win_size, BHNDB_PRIORITY_DEFAULT, win);
+			if(error)
+				goto failed;
+
 			continue;
+		}
 
 		/* Validate the window size */
 		if (win->win_size == 0) {
@@ -956,8 +974,9 @@ void bhndb_print_resources(struct bhndb_resources* res){
 	while(rw->win_type != BHNDB_REGWIN_T_INVALID){
 		printf(" -> [%p-%p]", (void*)rw->win_offset, (void*)(rw->win_offset + rw->win_size));
 		if(rw->win_type == BHNDB_REGWIN_T_CORE){
-			printf("(core %s port %d)\n", bhndb_print_class(rw->win_spec.core.class), rw->win_spec.core.port);
+			printf("(core %s port %d)", bhndb_print_class(rw->win_spec.core.class), rw->win_spec.core.port);
 		}
+		printf("\n");
 		rw++;
 	}
 
