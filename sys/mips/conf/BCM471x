@@ -36,8 +36,9 @@ options 	CFE
 options 	CFE_CONSOLE
 options 	ALT_BREAK_TO_DEBUGGER
 options 	BREAK_TO_DEBUGGER
+options		BOOTVERBOSE=1
 
-makeoptions	DEBUG=-g		#Build kernel with gdb(1) debug symbols
+makeoptions	DEBUG="-g3 -DMIPS_INTRNG -DBROKEN_INTERRUPTS"		#Build kernel with gdb(1) debug symbols
 makeoptions	MODULES_OVERRIDE=""
 
 options 	DDB
@@ -46,7 +47,7 @@ options 	KDB
 options 	SCHED_4BSD		#4BSD scheduler
 options 	INET			#InterNETworking
 options 	NFSCL			#Network Filesystem Client
-options 	NFS_ROOT		#NFS usable as /, requires NFSCL
+#options 	NFS_ROOT		#NFS usable as /, requires NFSCL
 options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 
@@ -55,8 +56,10 @@ options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 options 	INVARIANTS
 options 	INVARIANT_SUPPORT
 
-#options 	BUS_DEBUG
-#makeoptions	BUS_DEBUG
+##options 	BUS_DEBUG
+##makeoptions	BUS_DEBUG
+options		VERBOSE_SYSINIT
+makeoptions	VERBOSE_SYSINIT
 
 device		bcma			
 #device		pci			# siba_pcib
@@ -86,3 +89,9 @@ device		bcma
 device		loop
 device		ether
 device		md
+options		GEOM_UZIP
+
+options		MD_ROOT                 # MD is a potential root device
+options		MD_ROOT_SIZE=512        # 8MB ram disk
+makeoptions	MFS_IMAGE=/tmp/root.img.ulzma
+options		ROOTDEVNAME=\"ufs:md0.uzip\"
