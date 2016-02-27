@@ -775,7 +775,7 @@ bhndb_pci_compat_setregwin(struct bhndb_pci_softc *sc,
 		if ((error = bhndb_pci_fast_setregwin(sc, rw, addr)))
 			return (error);
 
-		if (pci_read_config(parent, rw->dyn.cfg_offset, 4) == addr)
+		if (pci_read_config(parent, rw->win_spec.dyn.cfg_offset, 4) == addr)
 			return (0);
 
 		DELAY(10);
@@ -805,7 +805,7 @@ bhndb_pci_fast_setregwin(struct bhndb_pci_softc *sc,
 		if (addr % rw->win_size != 0)
 			return (EINVAL);
 
-		pci_write_config(parent, rw->dyn.cfg_offset, addr, 4);
+		pci_write_config(parent, rw->win_spec.dyn.cfg_offset, addr, 4);
 		break;
 	default:
 		return (ENODEV);

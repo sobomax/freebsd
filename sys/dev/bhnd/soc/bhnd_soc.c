@@ -13,17 +13,48 @@
 #include<sys/errno.h>
 
 #include<machine/resource.h>
-#include<dev/bhnd/bhndb/bhndb.h>
-#include<dev/bhnd/bhnd_types.h>
 
-struct bhnd_soc_softc {
-	device_t dev;
-	device_t bridge;
-};
+#include <dev/bhnd/bhnd_types.h>
+#include <dev/bhnd/bhndb/bhndb.h>
+#include <dev/bhnd/soc/bhnd_soc.h>
 
-static const struct bhndb_hwcfg * bhnd_soc_get_generic_hwcfg(device_t dev, device_t child);
-//static struct bhndb_hw * bhnd_soc_get_bhndb_hwtable(device_t dev, device_t child);
-//static bool bhnd_soc_is_core_disabled(device_t dev, device_t child, struct bhnd_core_info *core);
+/*
+ * **************************** VARIABLES ****************************
+ */
+
+extern const struct bhndb_hw bhnd_soc_generic_hw_table[];
+extern const struct bhndb_hwcfg bhnd_soc_bcma_generic_hwcfg;
+
+int attachment_mode = SOC_TO_BRIDGE;
+
+/*
+ * **************************** PROTOTYPES ****************************
+ */
+//internal methods
+static int 	bhnd_soc_attach_bridge(device_t dev, struct bhnd_soc_softc* sc);
+static int 	bhnd_soc_attach_bus(device_t dev, struct bhnd_soc_softc* sc);
+//device methods
+static int 	bhnd_soc_probe(device_t dev);
+static int 	bhnd_soc_attach(device_t dev);
+//bhndb methods
+static const struct bhndb_hwcfg * 	bhnd_soc_get_generic_hwcfg(device_t dev, device_t child);
+static const struct bhndb_hw * 			bhnd_soc_get_bhndb_hwtable(device_t dev, device_t child);
+static bool bhnd_soc_is_core_disabled(device_t dev, device_t child, struct bhnd_core_info *core);
+//TODO:
+
+
+/*
+ * **************************** IMPLEMENTATION ****************************
+ */
+
+static int bhnd_soc_attach_bridge(device_t dev, struct bhnd_soc_softc* sc){
+	int err = bhndb_attach_bridge(dev, &sc->bridge, 0);
+	if(err != 0){
+		device_printf(dev,"can't attach bridge: %d\n", err);
+		return err;
+	}
+	return 0;
+}
 
 static int bhnd_soc_probe(device_t dev){
 	device_set_desc(dev, "Broadcom SOC for HND");
@@ -44,42 +75,11 @@ static int bhnd_soc_attach(device_t dev){
 	return 0;
 }
 
-//us
-#define BHND_SOC_CCREGS_OFFSET	0x18000000
-#define	BHND_SOC_CCREGS_SIZE	0x1000
+static const struct bhndb_hw *		bhnd_soc_get_bhndb_hwtable(device_t dev, device_t child){
+	return bhnd_soc_generic_hw_table;
+}
 
-#define BHND_SOC_EROMREGS_OFFSET 0x1810e000
-#define BHND_SOC_EROMREGS_SIZE	 0x1000
-
-const struct bhndb_hwcfg bhnd_soc_bcma_generic_hwcfg = {
-	.resource_specs		= (const struct resource_spec[]) {
-		{ SYS_RES_MEMORY,	0,	RF_ACTIVE },
-		{ -1,			0,		0 }
-	},
-
-	.register_windows	= (const struct bhndb_regwin[]) {
-		/* 0x18000000: chipc core registers */
-		{
-			.win_type	= BHNDB_REGWIN_T_CORE,
-			.win_offset	= BHND_SOC_CCREGS_OFFSET,
-			.win_size	= BHND_SOC_CCREGS_SIZE,
-			.res		= {
-					.type = SYS_RES_MEMORY,
-					.rid  = 0
-			},
-			.win_spec.core 		= {
-					.class	= BHND_DEVCLASS_CC,
-					.unit	= 0,
-					.port	= 0,
-					.region	= 0,
-					.port_type = BHND_PORT_DEVICE
-			}
-		},
-		BHNDB_REGWIN_TABLE_END
-	},
-};
-
-static const struct bhndb_hwcfg * bhnd_soc_get_generic_hwcfg(device_t dev, device_t child){
+static const struct bhndb_hwcfg *	bhnd_soc_get_generic_hwcfg(device_t dev, device_t child){
 	return &bhnd_soc_bcma_generic_hwcfg;
 }
 
