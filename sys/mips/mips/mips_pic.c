@@ -201,6 +201,8 @@ mips_pic_intr(void *arg)
 	intr &= (status & MIPS_INT_MASK) >> 8;
 	while ((i = fls(intr)) != 0) {
 		i--; /* Get a 0-offset interrupt. */
+		{static int b=0; if (b < 10) {device_printf(sc->pic_dev, \
+		    "Servicing interrupt %d\n", i); b++;}}
 		intr &= ~(1 << i);
 
 		isrc = sc->pic_irqs[i];

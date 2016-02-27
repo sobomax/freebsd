@@ -95,7 +95,9 @@ static int bcma_attach(device_t dev){
 	BCMA_DEBUG(("Attaching BCMA devices..."))
 	res = bus_generic_attach(dev);
 
+#if !defined(NO_STOP_IN_BCMA)
 	kdb_enter("STOP", "stop in bcma");
+#endif
 	return res;
 }
 
@@ -171,4 +173,5 @@ static driver_t bcma_driver = {
 };
 static devclass_t bcma_devclass;
 
-DRIVER_MODULE(bcma, nexus, bcma_driver, bcma_devclass, 0, 0);
+EARLY_DRIVER_MODULE(bcma, nexus, bcma_driver, bcma_devclass, 0, 0,
+    BUS_PASS_BUS);

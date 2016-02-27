@@ -259,6 +259,7 @@ clock_intr(void *arg)
 	uint32_t cycles_per_tick;
 	uint32_t count, compare_last, compare_next, lost_ticks;
 
+	{static int b=0; if (b < 10) {printf("clock_intr(%p)\n", arg); b++;}}
 	cycles_per_tick = DPCPU_GET(cycles_per_tick);
 	/*
 	 * Set next clock edge.

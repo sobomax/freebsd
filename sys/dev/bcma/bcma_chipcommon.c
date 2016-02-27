@@ -129,4 +129,5 @@ static driver_t bcma_chipcommon_driver = {
 
 static devclass_t bcma_chipcommon_devclass;
 
-DRIVER_MODULE(bcma_chipcommon, bcma, bcma_chipcommon_driver, bcma_chipcommon_devclass, 0, 0);
+EARLY_DRIVER_MODULE(bcma_chipcommon, bcma, bcma_chipcommon_driver,
+    bcma_chipcommon_devclass, 0, 0, BUS_PASS_BUS);
