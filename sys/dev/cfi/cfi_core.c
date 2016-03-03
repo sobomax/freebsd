@@ -150,9 +150,11 @@ cfi_read_qry(struct cfi_softc *sc, u_int ofs)
 {
 	uint8_t val;
  
-	cfi_write(sc, CFI_QRY_CMD_ADDR * sc->sc_width, CFI_QRY_CMD_DATA); 
+	bus_space_write_1(sc->sc_tag, sc->sc_handle, CFI_QRY_CMD_ADDR * sc->sc_width, CFI_QRY_CMD_DATA);
+	//cfi_write(sc, CFI_QRY_CMD_ADDR * sc->sc_width, CFI_QRY_CMD_DATA);
 	val = cfi_read(sc, ofs * sc->sc_width);
-	cfi_write(sc, 0, CFI_BCS_READ_ARRAY);
+	bus_space_write_1(sc->sc_tag, sc->sc_handle, 0, CFI_BCS_READ_ARRAY);
+	//cfi_write(sc, 0, CFI_BCS_READ_ARRAY);
 	return (val);
 } 
 
@@ -193,13 +195,11 @@ cfi_probe(device_t dev)
 
 	sc = device_get_softc(dev);
 	sc->sc_dev = dev;
-
 	sc->sc_rid = 0;
 	sc->sc_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &sc->sc_rid,
 	    RF_ACTIVE);
 	if (sc->sc_res == NULL)
 		return (ENXIO);
-
 	sc->sc_tag = rman_get_bustag(sc->sc_res);
 	sc->sc_handle = rman_get_bushandle(sc->sc_res);
 
@@ -214,6 +214,7 @@ cfi_probe(device_t dev)
 		error = ENXIO;
 		goto out;
 	}
+
 	if (sc->sc_width > 4) {
 		error = ENXIO;
 		goto out;

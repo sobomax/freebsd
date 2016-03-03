@@ -1956,7 +1956,7 @@ static device_method_t bhndb_methods[] = {
 	DEVMETHOD(bhnd_bus_alloc_resource,	bhndb_alloc_bhnd_resource),
 	DEVMETHOD(bhnd_bus_release_resource,	bhndb_release_bhnd_resource),
 	DEVMETHOD(bhnd_bus_activate_resource,	bhndb_activate_bhnd_resource),
-	DEVMETHOD(bhnd_bus_activate_resource,	bhndb_deactivate_bhnd_resource),
+	DEVMETHOD(bhnd_bus_deactivate_resource,	bhndb_deactivate_bhnd_resource),
 	DEVMETHOD(bhnd_bus_read_1,		bhndb_bus_read_1),
 	DEVMETHOD(bhnd_bus_read_2,		bhndb_bus_read_2),
 	DEVMETHOD(bhnd_bus_read_4,		bhndb_bus_read_4),

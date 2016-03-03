@@ -26,8 +26,6 @@
 
 ident		BCM471x
 
-# XXX only siba should be hardwired for now; we will use
-# bus enumeration there
 hints		"BCM471x.hints"
 include		"../bcm471x/std.bcm471x"
 
@@ -38,7 +36,7 @@ options 	ALT_BREAK_TO_DEBUGGER
 options 	BREAK_TO_DEBUGGER
 options		BOOTVERBOSE=1
 
-makeoptions	DEBUG="-g3 -DMIPS_INTRNG -DBROKEN_INTERRUPTS -DNO_STOP_IN_BCMA"		#Build kernel with gdb(1) debug symbols
+makeoptions	DEBUG="-g3 -DMIPS_INTRNG -DSTOP_IN_PIC"		#Build kernel with gdb(1) debug symbols
 makeoptions	MODULES_OVERRIDE=""
 
 options 	DDB
@@ -51,6 +49,7 @@ options 	NFSCL			#Network Filesystem Client
 options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 
+
 #options		GEOM_UZIP
 #options		MD_ROOT                 # MD is a potential root device
 #options		MD_ROOT_SIZE=512        # 8MB ram disk
@@ -62,11 +61,11 @@ options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 options 	INVARIANTS
 options 	INVARIANT_SUPPORT
 
-##options 	BUS_DEBUG
-##makeoptions	BUS_DEBUG
+#options 	BUS_DEBUG
+#makeoptions	BUS_DEBUG
 #options		VERBOSE_SYSINIT
 #makeoptions	VERBOSE_SYSINIT
-			
+
 device		pci
 
 device		bhndsoc			# Broadcom SoC
@@ -76,6 +75,10 @@ device		bcma			#
 device 		bhnd_pcib		# Broadcom Host-PCI bridge
 
 device		mdio
+
+#Flash
+device		cfi			# Parallel Flash
+device		cfid
 
 # device 	bfe			# XXX will build both pci and siba
 # device 	miibus			# attachments

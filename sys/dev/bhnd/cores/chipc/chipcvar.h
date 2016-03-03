@@ -89,6 +89,11 @@ struct chipc_softc {
 	uint32_t		 quirks;	/**< CHIPC_QUIRK_* quirk flags */
 	uint32_t		 caps;		/**< CHIPC_CAP_* capability register flags */
 	uint32_t		 cst;		/**< CHIPC_CST* status register flags */
+	uint32_t		 flash_cfg; /**< CHIPC_FLASH_CFG register data */
+};
+
+struct chipc_devinfo{
+	struct resource_list resources;
 };
 
 #endif /* _BHND_CORES_CHIPC_CHIPCVAR_H_ */
