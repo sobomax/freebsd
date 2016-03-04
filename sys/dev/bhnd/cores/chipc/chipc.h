@@ -34,6 +34,7 @@
 
 #include <dev/bhnd/bhnd.h>
 #include <dev/bhnd/nvram/bhnd_nvram.h>
+#include <sys/rman.h>
 
 #include "bhnd_chipc_if.h"
 
@@ -47,5 +48,7 @@ bhnd_chipc_nvram_src(device_t dev)
 {
 	return (BHND_CHIPC_NVRAM_SRC(dev));
 }
+
+int chipc_init_pflash(device_t dev, uint32_t flash_config);
 
 #endif /* _BHND_CORES_CHIPC_CHIPC_H_ */

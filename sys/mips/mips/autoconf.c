@@ -111,6 +111,7 @@ configure_final(dummy)
 	if (bootverbose)
 		printf("      cninit_finish()... ");
 	cninit_finish();
+	if (bootverbose)
 		printf("done.\n");
 
 	if (bootverbose)

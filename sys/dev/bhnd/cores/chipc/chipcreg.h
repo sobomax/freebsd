@@ -76,6 +76,8 @@
 #define	CHIPC_CLKC_M3			0xa0
 #define	CHIPC_CLKDIV			0xa4
 #define	CHIPC_SYS_CLK_CTL		0xc0
+#define CHIPC_FLASH_CFG			0x128
+#define CHIPC_FLASH_WAIT_CNT	0x12C
 #define	CHIPC_SPROM_CTRL		0x190	/**< SPROM interface (rev >= 32) */
 #define	CHIPC_SPROM_ADDR		0x194
 #define	CHIPC_SPROM_DATA		0x198

@@ -251,6 +251,8 @@ bcma_get_port_count(device_t dev, device_t child, bhnd_port_type type)
 		return (dinfo->corecfg->num_bridge_ports);
 	case BHND_PORT_AGENT:
 		return (dinfo->corecfg->num_wrapper_ports);
+	default:
+		return 0;
 	}
 }
 
@@ -296,10 +298,17 @@ bcma_get_port_rid(device_t dev, device_t child, bhnd_port_type port_type,
 			continue;
 
 		STAILQ_FOREACH(map, &port->sp_maps, m_link)
-			if (map->m_region_num == region_num)
+			if (map->m_region_num == region_num){
+				if(bootverbose){
+					device_printf(dev, "core %d: found RID by port number( %u ) = %d\n",
+							dinfo->corecfg->core_info.core_idx, port_num, map->m_rid);
+				}
 				return map->m_rid;
+			}
+
 	}
 
+	device_printf(dev, "core %d: can't find RID by port number: %u\n", dinfo->corecfg->core_info.core_idx, port_num);
 	return -1;
 }
 

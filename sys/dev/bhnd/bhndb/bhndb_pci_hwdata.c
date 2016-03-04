@@ -82,6 +82,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3;
  *   at the default enumeration address (0x18000000).
  */
 const struct bhndb_hwcfg bhndb_pci_siba_generic_hwcfg = {
+	.is_hostb_required = true,
 	.resource_specs = (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -93,7 +94,7 @@ const struct bhndb_hwcfg bhndb_pci_siba_generic_hwcfg = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V1_BAR0_WIN0_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_WIN0_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		BHNDB_REGWIN_TABLE_END
@@ -111,6 +112,7 @@ const struct bhndb_hwcfg bhndb_pci_siba_generic_hwcfg = {
  * - Compatible with both siba(4) and bcma(4) bus enumeration.
  */
 const struct bhndb_hwcfg bhndb_pci_bcma_generic_hwcfg = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -122,7 +124,7 @@ const struct bhndb_hwcfg bhndb_pci_bcma_generic_hwcfg = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V1_BAR0_WIN0_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_WIN0_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 
@@ -131,7 +133,7 @@ const struct bhndb_hwcfg bhndb_pci_bcma_generic_hwcfg = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V1_BAR0_CCREGS_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_CCREGS_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_CC,
 				.unit	= 0,
 				.port	= 0,
@@ -316,6 +318,7 @@ const struct bhndb_hw bhndb_pci_generic_hw_table[] = {
  * - PCI (cid=0x804, revision <= 12)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v0 = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -327,7 +330,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v0 = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V0_BAR0_WIN0_OFFSET,
 			.win_size	= BHNDB_PCI_V0_BAR0_WIN0_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V0_BAR0_WIN0_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V0_BAR0_WIN0_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		
@@ -344,7 +347,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v0 = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V0_BAR0_PCIREG_OFFSET,
 			.win_size	= BHNDB_PCI_V0_BAR0_PCIREG_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_PCI,
 				.unit	= 0,
 				.port	= 0,
@@ -364,6 +367,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v0 = {
  * - PCI (cid=0x804, revision >= 13)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pci = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -375,7 +379,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pci = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V1_BAR0_WIN0_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_WIN0_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		
@@ -392,7 +396,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pci = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V1_BAR0_PCIREG_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_PCIREG_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_PCI,
 				.unit	= 0,
 				.port	= 0,
@@ -407,7 +411,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pci = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V1_BAR0_CCREGS_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_CCREGS_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_CC,
 				.unit	= 0,
 				.port	= 0,
@@ -428,6 +432,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pci = {
  * - PCIE (cid=0x820) with ChipCommon (revision <= 31)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pcie = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -439,7 +444,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pcie = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V1_BAR0_WIN0_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_WIN0_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V1_BAR0_WIN0_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		
@@ -456,7 +461,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pcie = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V1_BAR0_PCIREG_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_PCIREG_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_PCIE,
 				.unit	= 0,
 				.port	= 0,
@@ -471,7 +476,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pcie = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V1_BAR0_CCREGS_OFFSET,
 			.win_size	= BHNDB_PCI_V1_BAR0_CCREGS_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_CC,
 				.unit	= 0,
 				.port	= 0,
@@ -492,6 +497,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v1_pcie = {
  * - PCIE (cid=0x820) with ChipCommon (revision >= 32)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -503,7 +509,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V2_BAR0_WIN0_OFFSET,
 			.win_size	= BHNDB_PCI_V2_BAR0_WIN0_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V2_BAR0_WIN0_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V2_BAR0_WIN0_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		
@@ -512,7 +518,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V2_BAR0_WIN1_OFFSET,
 			.win_size	= BHNDB_PCI_V2_BAR0_WIN1_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V2_BAR0_WIN1_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V2_BAR0_WIN1_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		
@@ -521,7 +527,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V2_BAR0_PCIREG_OFFSET,
 			.win_size	= BHNDB_PCI_V2_BAR0_PCIREG_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_PCIE,
 				.unit	= 0,
 				.port	= 0,
@@ -536,7 +542,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V2_BAR0_CCREGS_OFFSET,
 			.win_size	= BHNDB_PCI_V2_BAR0_CCREGS_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_CC,
 				.unit	= 0,
 				.port	= 0,
@@ -557,6 +563,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v2 = {
  * - PCIE2 (cid=0x83c)
  */
 static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3 = {
+	.is_hostb_required = true,
 	.resource_specs		= (const struct resource_spec[]) {
 		{ SYS_RES_MEMORY,	PCIR_BAR(0),	RF_ACTIVE },
 		{ -1,			0,		0 }
@@ -568,7 +575,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3 = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V3_BAR0_WIN0_OFFSET,
 			.win_size	= BHNDB_PCI_V3_BAR0_WIN0_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V3_BAR0_WIN0_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V3_BAR0_WIN0_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		
@@ -577,7 +584,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3 = {
 			.win_type	= BHNDB_REGWIN_T_DYN,
 			.win_offset	= BHNDB_PCI_V3_BAR0_WIN1_OFFSET,
 			.win_size	= BHNDB_PCI_V3_BAR0_WIN1_SIZE,
-			.dyn.cfg_offset = BHNDB_PCI_V3_BAR0_WIN1_CONTROL,
+			.win_spec.dyn.cfg_offset = BHNDB_PCI_V3_BAR0_WIN1_CONTROL,
 			.res		= { SYS_RES_MEMORY, PCIR_BAR(0) }
 		},
 		
@@ -586,7 +593,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3 = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V3_BAR0_PCIREG_OFFSET,
 			.win_size	= BHNDB_PCI_V3_BAR0_PCIREG_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_PCIE,
 				.unit	= 0,
 				.port	= 0,
@@ -601,7 +608,7 @@ static const struct bhndb_hwcfg bhndb_pci_hwcfg_v3 = {
 			.win_type	= BHNDB_REGWIN_T_CORE,
 			.win_offset	= BHNDB_PCI_V3_BAR0_CCREGS_OFFSET,
 			.win_size	= BHNDB_PCI_V3_BAR0_CCREGS_SIZE,
-			.core = {
+			.win_spec.core = {
 				.class	= BHND_DEVCLASS_CC,
 				.unit	= 0,
 				.port	= 0,

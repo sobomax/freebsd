@@ -46,6 +46,7 @@
 extern devclass_t bhndb_devclass;
 
 int	bhndb_attach_bridge(device_t parent, device_t *bhndb, int unit);
+int bhndb_attach_by_class(device_t parent, device_t *child, int unit, devclass_t child_devclass);
 
 /**
  * bhndb register window types.
@@ -54,6 +55,7 @@ typedef enum {
 	BHNDB_REGWIN_T_CORE,		/**< Fixed mapping of a core port region. */
 	BHNDB_REGWIN_T_SPROM,		/**< Fixed mapping of device SPROM */
 	BHNDB_REGWIN_T_DYN,		/**< A dynamically configurable window */
+	BHNDB_REGWIN_T_FIXED,	/**< Memory mapped direct window */
 	BHNDB_REGWIN_T_INVALID		/**< Invalid type */
 } bhndb_regwin_type_t;
 
@@ -64,7 +66,8 @@ typedef enum {
  */
 #define	BHNDB_REGWIN_T_IS_STATIC(_rt)		\
 	((_rt) == BHNDB_REGWIN_T_CORE ||	\
-	 (_rt) == BHNDB_REGWIN_T_SPROM)
+	 (_rt) == BHNDB_REGWIN_T_SPROM ||   \
+	 (_rt) == BHNDB_REGWIN_T_FIXED)
 
 /**
  * bhndb register window definition.
@@ -80,8 +83,8 @@ struct bhndb_regwin {
 		int		rid;		/**< resource id */
 	} res;
 
-
-	union {
+	/** changed from unnamed to named to meet C99 */
+	union specific {
 		/** Core-specific register window (BHNDB_REGWIN_T_CORE). */
 		struct {
 			bhnd_devclass_t	class;		/**< mapped core's class */
@@ -91,6 +94,9 @@ struct bhndb_regwin {
 			u_int		region;		/**< mapped region number */
 		} core;
 
+		/** Fixed memory mapped bus windows */
+		struct{} direct;
+
 		/** SPROM register window (BHNDB_REGWIN_T_SPROM). */
 		struct {} sprom;
 
@@ -98,7 +104,7 @@ struct bhndb_regwin {
 		struct {
 			bus_size_t	cfg_offset;	/**< window address config offset. */
 		} dyn;
-        };
+    } win_spec;
 };
 
 #define	BHNDB_REGWIN_TABLE_END	{ BHNDB_REGWIN_T_INVALID, 0, 0, { 0, 0 } }
@@ -110,6 +116,7 @@ struct bhndb_regwin {
  * via which those mappings may be accessed.
  */
 struct bhndb_hwcfg {
+	bool is_hostb_required;
 	const struct resource_spec	*resource_specs;
 	const struct bhndb_regwin	*register_windows;
 };

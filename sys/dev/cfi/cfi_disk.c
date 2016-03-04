@@ -291,6 +291,7 @@ cfi_disk_getattr(struct bio *bp)
 	struct cfi_softc *sc;
 	device_t dev;
 
+	printf("cfi_disk_getattr for %p\n",bp);
 	if (bp->bio_disk == NULL || bp->bio_disk->d_drv1 == NULL)
 		return (ENXIO);
 
