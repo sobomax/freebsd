@@ -63,7 +63,7 @@ Decompressing...done
 
 5. Load and boot kernel:
 
-  CFE> boot -tftp -raw -addr=0x807ffff0 -max=0x770000 192.168.2.10:kernel.tramp.bin
+  CFE> boot -tftp -raw -addr=0x80800000 -max=0x770000 192.168.2.10:kernel.tramp.bin
   Loader:raw Filesys:tftp Dev:eth0 File:192.168.2.10:kernel.tramp.bin Options:(null)
   Loading: TFTP Client.
   .....TFTP_BLKLEN!!
