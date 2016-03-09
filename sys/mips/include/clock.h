@@ -32,6 +32,7 @@ void	mips_timer_early_init(uint64_t clock_hz);
 void	mips_timer_init_params(uint64_t, int);
 
 extern uint64_t	counter_freq;
+extern unsigned int counter_irq;
 extern int	clocks_running;
 
 /*
