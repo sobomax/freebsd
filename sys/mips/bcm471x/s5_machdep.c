@@ -242,9 +242,9 @@ platform_start(__register_t a0, __register_t a1, __register_t a2,
 
 	counter_freq = cpumult * refclock;
 # else
-//	platform_counter_freq = 200 * 1000 * 1000; /* Sentry5 is 200MHz */
-	platform_counter_freq = 480 * 1000 * 1000; /* BCM4718 is 200MHz */
+	platform_counter_freq = 500 * 1000 * 1000; /* BCM4718 is 500MHz */
 # endif
 
-	mips_timer_init_params(platform_counter_freq, 0);
+	/* BCM471x timer is 1/2 of Clk */
+	mips_timer_init_params(platform_counter_freq, 1);
 }
