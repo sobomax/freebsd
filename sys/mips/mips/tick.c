@@ -56,6 +56,7 @@ __FBSDID("$FreeBSD$");
 #endif
 
 uint64_t counter_freq;
+unsigned int counter_irq = 5;
 
 struct timecounter *platform_timecounter;
 
@@ -225,6 +226,10 @@ clock_start(struct eventtimer *et, sbintime_t first, sbintime_t period)
 {
 	uint32_t fdiv, div, next;
 
+#if defined(DISRUPTIVE_DEBUG)
+	printf("clock_start(%p)\n", et);
+#endif
+
 	if (period != 0) {
 		div = (et->et_frequency * period) >> 32;
 	} else
@@ -259,8 +264,10 @@ clock_intr(void *arg)
 	uint32_t cycles_per_tick;
 	uint32_t count, compare_last, compare_next, lost_ticks;
 
-	{static int b=0; if (b < 10) {printf("clock_intr(%p)\n", arg); b++;}}
 	cycles_per_tick = DPCPU_GET(cycles_per_tick);
+#if defined(DISRUPTIVE_DEBUG)
+	{static int b=0; if (b < 10) {printf("clock_intr(%p) cycles_per_tick=%u, compare=%u\n", arg, cycles_per_tick, mips_rd_compare()); b++;}}
+#endif
 	/*
 	 * Set next clock edge.
 	 */
@@ -338,12 +345,13 @@ clock_attach(device_t dev)
 
 	softc = sc = device_get_softc(dev);
 #ifdef MIPS_INTRNG
-	cpu_establish_hardintr("clock", clock_intr, NULL, sc, 5, INTR_TYPE_CLK,
-	    NULL);
+	cpu_establish_hardintr("clock", clock_intr, NULL, sc, counter_irq,
+	    INTR_TYPE_CLK, NULL);
 #else
 	sc->intr_rid = 0;
 	sc->intr_res = bus_alloc_resource(dev,
-	    SYS_RES_IRQ, &sc->intr_rid, 5, 5, 1, RF_ACTIVE);
+	    SYS_RES_IRQ, &sc->intr_rid, counter_irq, counter_irq, 1,
+	    RF_ACTIVE);
 	if (sc->intr_res == NULL) {
 		device_printf(dev, "failed to allocate irq\n");
 		return (ENXIO);
