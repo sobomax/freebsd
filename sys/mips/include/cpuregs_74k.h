@@ -83,22 +83,6 @@
 #define	MIPS_INTCTL_IRQ_HW5		(7)
 #define	MIPS_INTCTL_IRQ_VAL(i)		((i) >= MIPS_INTCTL_IRQ_HW0)
 
-typedef volatile struct {
-	uint32_t	corecontrol;
-	uint32_t	exceptionbase;
-	uint32_t	PAD1[1];
-	uint32_t	biststatus;
-	uint32_t	intstatus;
-	uint32_t	intmask[6];
-	uint32_t	nmimask;
-	uint32_t	PAD2[4];
-	uint32_t	gpioselect;
-	uint32_t	gpiooutput;
-	uint32_t	gpioenable;
-	uint32_t	PA3[101];
-	uint32_t	clkcontrolstatus;
-} mips74kregs_t;
-
 MIPS_RW32_COP0_SEL(intctl, MIPS_COP_0_INTCTL, MIPS_COP_0_INTCTL_SEL);
 
 #endif /* _MACHINE_CPUREGS_74K_H_ */

@@ -89,6 +89,22 @@ platform_cpu_init()
 
 #define	BCM4710_REG_MIPS	0xb8003000	/* MIPS core registers */
 
+typedef volatile struct {
+        uint32_t        corecontrol;
+        uint32_t        exceptionbase;
+        uint32_t        PAD1[1];
+        uint32_t        biststatus;
+        uint32_t        intstatus;
+        uint32_t        intmask[6];
+        uint32_t        nmimask;
+        uint32_t        PAD2[4];
+        uint32_t        gpioselect;
+        uint32_t        gpiooutput;
+        uint32_t        gpioenable;
+        uint32_t        PA3[101];
+        uint32_t        clkcontrolstatus;
+} bcm4710_m74kregs_t;
+
 /*
  * Fix timer interrupt on BCM471x, unless you do this after boot the timer
  * interrupt won't deassept after write into COP0[counter].
@@ -96,10 +112,10 @@ platform_cpu_init()
 static void
 bcm4710_ti_fix(void)
 {
-	mips74kregs_t *regs;
+	bcm4710_m74kregs_t *regs;
 	uint32_t volatile *intmask;
 
-	regs = (mips74kregs_t *)BCM4710_REG_MIPS;
+	regs = (bcm4710_m74kregs_t *)BCM4710_REG_MIPS;
 	/* Use intmask5 register to route the timer interrupt */
 	intmask = (uint32_t volatile *)&regs->intmask[5];
 	writel(intmask, 1 << 31);
