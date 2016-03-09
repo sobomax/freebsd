@@ -44,7 +44,7 @@
 /*
  * bits 29..31: For Interrupt Compatibility and Vectored Interrupt modes, this
  * field specifies the IP number to which the Timer Interrupt request is
- * merged, and allows software to determine whether to consider CauseTI for a
+ * merged, and allows software to determine whether to consider Cause[TI] for a
  * potential interrupt.
  */
 #define	MIPS_INTCTL_IPTI_SHIFT		(29)
