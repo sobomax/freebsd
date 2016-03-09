@@ -54,6 +54,10 @@ __FBSDID("$FreeBSD$");
 #include <machine/intr.h>
 #include <machine/smp.h>
 
+#if defined(DISRUPTIVE_DEBUG)
+#include <machine/pcb.h>
+#endif
+
 #ifdef FDT
 #include <dev/fdt/fdt_common.h>
 #include <dev/ofw/openfirm.h>
@@ -190,6 +194,10 @@ mips_pic_intr(void *arg)
 	struct intr_irqsrc *isrc;
 	int i, intr;
 
+#if defined(DISRUPTIVE_DEBUG)
+	unsigned int sccl = get_cyclecount();
+#endif
+
 	cause = mips_rd_cause();
 	status = mips_rd_status();
 	intr = (cause & MIPS_INT_MASK) >> 8;
@@ -201,8 +209,10 @@ mips_pic_intr(void *arg)
 	intr &= (status & MIPS_INT_MASK) >> 8;
 	while ((i = fls(intr)) != 0) {
 		i--; /* Get a 0-offset interrupt. */
+#if defined(DISRUPTIVE_DEBUG)
 		{static int b=0; if (b < 10) {device_printf(sc->pic_dev, \
-		    "Servicing interrupt %d\n", i); b++;}}
+		    "%u: Servicing interrupt %d\n", get_cyclecount(), i); b++;}}
+#endif
 		intr &= ~(1 << i);
 
 		isrc = sc->pic_irqs[i];
@@ -214,6 +224,9 @@ mips_pic_intr(void *arg)
 		}
 
 		intr_irq_dispatch(isrc, curthread->td_intr_frame);
+#if defined(BROKEN_INTERRUPTS)
+		{static int b=0; if (b > 10) pic_irq_mask(sc, i); b++;}
+#endif
 	}
 
 	KASSERT(i == 0, ("all interrupts handled"));
@@ -221,6 +234,10 @@ mips_pic_intr(void *arg)
 #ifdef HWPMC_HOOKS
 	if (pmc_hook && (PCPU_GET(curthread)->td_pflags & TDP_CALLCHAIN))
 		pmc_hook(PCPU_GET(curthread), PMC_FN_USER_CALLCHAIN, tf);
+#endif
+#if defined(DISRUPTIVE_DEBUG)
+	{static int b=0; struct trapframe *tf = PCPU_GET(curthread)->td_intr_frame; if (b < 10) {device_printf(sc->pic_dev, \
+	    "%u-%u:   returning from mips_pic_intr() to %p\n", sccl, get_cyclecount(), (void *)tf->pc); b++;}}
 #endif
 	return (FILTER_HANDLED);
 }
