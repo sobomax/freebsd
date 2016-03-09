@@ -107,7 +107,7 @@ typedef volatile struct {
 
 /*
  * Fix timer interrupt on BCM471x, unless you do this after boot the timer
- * interrupt won't deassept after write into COP0[counter].
+ * interrupt won't deassept after write into COP0[compare].
  */
 static void
 bcm4710_ti_fix(void)
