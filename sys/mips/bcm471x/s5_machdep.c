@@ -60,6 +60,7 @@ __FBSDID("$FreeBSD$");
 #include <machine/cpuinfo.h>
 #include <machine/cpufunc.h>
 #include <machine/cpuregs.h>
+#include <machine/cpuregs_74k.h>
 #include <machine/hwfunc.h>
 #include <machine/intr_machdep.h>
 #include <machine/locore.h>
@@ -86,10 +87,31 @@ platform_cpu_init()
 	/* Nothing special */
 }
 
+#define	BCM4710_REG_MIPS	0xb8003000	/* MIPS core registers */
+
+/*
+ * Fix timer interrupt on BCM471x, unless you do this after boot the timer
+ * interrupt won't deassept after write into COP0[counter].
+ */
+static void
+bcm4710_ti_fix(void)
+{
+	mips74kregs_t *regs;
+	uint32_t volatile *intmask;
+
+	regs = (mips74kregs_t *)BCM4710_REG_MIPS;
+	/* Use intmask5 register to route the timer interrupt */
+	intmask = (uint32_t volatile *)&regs->intmask[5];
+	writel(intmask, 1 << 31);
+}
+
 static void
 mips_init(void)
 {
 	int i, j;
+#if 0
+	unsigned int c7;
+#endif
 
 	printf("entry: mips_init()\n");
 
@@ -139,6 +161,23 @@ mips_init(void)
 		physmem += len;
 	}
 
+#if 0
+	c7 = mips_rd_config7();
+	if (c7 & (1 << 29)) {
+		mips_wr_config7(c7 & ~(1 << 29));
+		printf("config7 = %u\n", mips_rd_config7());
+	}
+
+	printf("perfcnt = %u, %u, %u, %u\n", mips_rd_perfcnt_ctrl0(),
+	    mips_rd_perfcnt_ctrl1(), mips_rd_perfcnt_ctrl2(),
+	    mips_rd_perfcnt_ctrl3());
+
+	mips_wr_perfcnt_ctrl0(mips_rd_perfcnt_ctrl0() & ~(1 << 4));
+	mips_wr_perfcnt_ctrl1(mips_rd_perfcnt_ctrl1() & ~(1 << 4));
+	mips_wr_perfcnt_ctrl2(mips_rd_perfcnt_ctrl2() & ~(1 << 4));
+	mips_wr_perfcnt_ctrl3(mips_rd_perfcnt_ctrl3() & ~(1 << 4));
+#endif
+
 #ifdef S5_TRACE
 	printf("Total phys memory is : %ld\n", physmem);
 #endif
@@ -181,6 +220,7 @@ platform_start(__register_t a0, __register_t a1, __register_t a2,
 {
 	vm_offset_t kernend;
 	uint64_t platform_counter_freq;
+	unsigned int intctl, ts_hwX;
 
 	/* clear the BSS and SBSS segments */
 	kernend = (vm_offset_t)&end;
@@ -207,6 +247,35 @@ platform_start(__register_t a0, __register_t a1, __register_t a2,
 	cninit();
 
 	mips_init();
+
+	bcm4710_ti_fix();
+
+	/*
+	 * The section below does not really belong here, it should
+	 * probably go into CPU-specific nexus or maybe into timer probe
+	 * routine. It's 74k prescribed way of finding out what IPx the TI is
+	 * routed to. The irony that the BCM471x is broken in that regard, it
+	 * lists TI as merged into HW3 line, while in fact it's HW5 just
+	 * like pretty much any other mips out there, so if we move this
+	 * code it needs to be replaced with the override.
+	 */
+	intctl = mips_rd_intctl();
+	printf("intctl = 0x%08x\n", intctl);
+	ts_hwX = (intctl & MIPS_INTCTL_IPTI_MASK) >> MIPS_INTCTL_IPTI_SHIFT;
+	if (MIPS_INTCTL_IRQ_VAL(ts_hwX)) {
+        	ts_hwX -= MIPS_INTCTL_IRQ_HW0;
+        	if (ts_hwX != counter_irq) {
+			const char *ps;
+#if 0
+			ps = "";
+			counter_irq = ts_hwX;
+#else
+			ps = "NOT ";
+#endif
+			printf("%soverriding TI irq from default %u to %u\n",
+			    ps, counter_irq, ts_hwX);
+		}
+	}
 
 # if 0
 	/*
