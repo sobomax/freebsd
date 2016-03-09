@@ -36,7 +36,7 @@ options 	ALT_BREAK_TO_DEBUGGER
 options 	BREAK_TO_DEBUGGER
 options		BOOTVERBOSE=1
 
-makeoptions	DEBUG="-g3 -DMIPS_INTRNG -DSTOP_IN_PIC"		#Build kernel with gdb(1) debug symbols
+makeoptions	DEBUG="-g3 -save-temps -DMIPS_INTRNG -DCPU_BCM4710"		#Build kernel with gdb(1) debug symbols
 makeoptions	MODULES_OVERRIDE=""
 
 options 	DDB
@@ -45,16 +45,17 @@ options 	KDB
 options 	SCHED_4BSD		#4BSD scheduler
 options 	INET			#InterNETworking
 options 	NFSCL			#Network Filesystem Client
+options		FFS			# Berkeley Fast Filesystem
 #options 	NFS_ROOT		#NFS usable as /, requires NFSCL
 options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 
 
-#options		GEOM_UZIP
-#options		MD_ROOT                 # MD is a potential root device
-#options		MD_ROOT_SIZE=512        # 8MB ram disk
-#makeoptions	MFS_IMAGE=/tmp/root.img.ulzma
-#options		ROOTDEVNAME=\"ufs:md0.uzip\"
+options		GEOM_UZIP
+options		MD_ROOT                 # MD is a potential root device
+options		MD_ROOT_SIZE=512        # 8MB ram disk
+makeoptions	MFS_IMAGE=/tmp/root.img.ulzma
+options		ROOTDEVNAME=\"ufs:md0.uzip\"
 
 # Debugging for use in -current
 #options 	DEADLKRES
