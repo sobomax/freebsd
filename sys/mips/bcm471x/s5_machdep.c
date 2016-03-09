@@ -91,6 +91,7 @@ mips_init(void)
 {
 	int i, j;
 
+	mips_wr_count(0xdeadc0bb);
 	printf("entry: mips_init()\n");
 
 #ifdef S5_TRACE
@@ -190,6 +191,9 @@ platform_start(__register_t a0, __register_t a1, __register_t a2,
 
 	/* Initialize pcpu stuff */
 	mips_pcpu0_init();
+
+	platform_counter_freq = 480 * 1000 * 1000;
+	mips_timer_early_init(platform_counter_freq);
 
 #ifdef CFE
 	/*
