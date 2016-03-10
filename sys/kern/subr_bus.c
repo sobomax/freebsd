@@ -56,10 +56,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/interrupt.h>
 #include <sys/cpuset.h>
 
-#if 0
-#include <sys/kdb.h>
-#endif
-
 #include <net/vnet.h>
 
 #include <machine/cpu.h>
@@ -911,8 +907,6 @@ bus_set_pass(int pass)
 	if (bus_current_pass > pass)
 		panic("Attempt to lower bus pass level");
 
-	PDEBUG(("pass=%d bus_current_pass=%d", pass, bus_current_pass));
-
 	TAILQ_FOREACH(dl, &passes, passlink) {
 		/* Skip pass values below the current pass level. */
 		if (dl->pass <= bus_current_pass)
@@ -1731,10 +1725,6 @@ devclass_delete_device(devclass_t dc, device_t dev)
 	dev->devclass = NULL;
 	free(dev->nameunit, M_BUS);
 	dev->nameunit = NULL;
-
-#if 0
-	kdb_enter("STOP", "stop in devclass_delete_device");
-#endif
 
 	return (0);
 }
@@ -3904,7 +3894,6 @@ bus_generic_new_pass(device_t dev)
 	devclass_t dc;
 	device_t child;
 
-	PDEBUG(("dev=%s entered", DEVICENAME(dev)));
 	dc = dev->devclass;
 	TAILQ_FOREACH(dl, &dc->drivers, link) {
 		if (dl->pass == bus_current_pass)
@@ -3916,7 +3905,6 @@ bus_generic_new_pass(device_t dev)
 		else if (child->state == DS_NOTPRESENT)
 			device_probe_and_attach(child);
 	}
-	PDEBUG(("dev=%s exited", DEVICENAME(dev)));
 }
 
 /**

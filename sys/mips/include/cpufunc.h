@@ -315,9 +315,7 @@ intr_enable(void)
 	register_t s;
 
 	s = mips_rd_status();
-#if !defined(BROKEN_INTERRUPTS)
 	mips_wr_status(s | MIPS_SR_INT_IE);
-#endif
 
 	return (s);
 }

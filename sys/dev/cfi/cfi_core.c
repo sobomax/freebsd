@@ -195,11 +195,13 @@ cfi_probe(device_t dev)
 
 	sc = device_get_softc(dev);
 	sc->sc_dev = dev;
+
 	sc->sc_rid = 0;
 	sc->sc_res = bus_alloc_resource_any(dev, SYS_RES_MEMORY, &sc->sc_rid,
 	    RF_ACTIVE);
 	if (sc->sc_res == NULL)
 		return (ENXIO);
+
 	sc->sc_tag = rman_get_bustag(sc->sc_res);
 	sc->sc_handle = rman_get_bushandle(sc->sc_res);
 
@@ -214,7 +216,6 @@ cfi_probe(device_t dev)
 		error = ENXIO;
 		goto out;
 	}
-
 	if (sc->sc_width > 4) {
 		error = ENXIO;
 		goto out;
