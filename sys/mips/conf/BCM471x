@@ -36,7 +36,8 @@ options 	ALT_BREAK_TO_DEBUGGER
 options 	BREAK_TO_DEBUGGER
 options		BOOTVERBOSE=1
 
-makeoptions	DEBUG="-g3 -save-temps -DMIPS_INTRNG -DCPU_BCM4710"		#Build kernel with gdb(1) debug symbols
+#Build kernel with gdb(1) debug symbols and other debug things
+makeoptions	DEBUG="-g3 -save-temps -DMIPS_INTRNG -DMIPS_COP0_RW_NOBAR -DCPU_BCM4710"
 makeoptions	MODULES_OVERRIDE=""
 
 options 	DDB
@@ -101,5 +102,6 @@ device		cfid
 #device		uart
 
 device		loop
+device		random          # Entropy device
 device		ether
 device		md
