@@ -87,7 +87,9 @@ platform_cpu_init()
 	/* Nothing special */
 }
 
-#define	BCM4710_REG_MIPS	0xb8003000	/* MIPS core registers */
+#define	BCM4710_REG_CHIPC		0xb8000000
+#define	  BCM4710_REG_CHIPC_PMUWD_OFFS	 0x634
+#define	BCM4710_REG_MIPS		0xb8003000	/* MIPS core registers */
 
 typedef volatile struct {
         uint32_t        corecontrol;
@@ -222,12 +224,12 @@ mips_init(void)
 void
 platform_reset(void)
 {
+	void *pmuwatchdog;
 
-#if defined(CFE)
-	cfe_exit(0, 0);
-#else
-	*((volatile uint8_t *)MIPS_PHYS_TO_KSEG1(SENTRY5_EXTIFADR)) = 0x80;
-#endif
+	printf("bcm471x::platform_reset()\n");
+	pmuwatchdog = (void *)(BCM4710_REG_CHIPC + BCM4710_REG_CHIPC_PMUWD_OFFS);
+	writel(pmuwatchdog, 2);
+	for (;;);
 }
 
 void
