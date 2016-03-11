@@ -127,7 +127,19 @@ gdbinit:
 .endif
 .endif
 
-${FULLKERNEL}: ${SYSTEM_DEP} vers.o
+.if defined(MFS_IMAGE_UZIP)
+MFS_IMAGE_IN:=	${MFS_IMAGE}
+MFS_IMAGE:=	${MFS_IMAGE_IN:T:R}.uzip
+MKUZP_CBSIZE?=	65536
+MKUZP_FLAGS?=	-Ld
+
+${MFS_IMAGE}: ${MFS_IMAGE_IN}
+	@echo compressing ${MFS_IMAGE_IN} ...
+	@mkuzip -S ${MKUZP_FLAGS} -s ${MKUZP_CBSIZE} -o ${.TARGET} \
+	    ${MFS_IMAGE_IN}
+.endif
+
+${FULLKERNEL}: ${SYSTEM_DEP} ${MFS_IMAGE} vers.o
 	@rm -f ${.TARGET}
 	@echo linking ${.TARGET}
 	${SYSTEM_LD}

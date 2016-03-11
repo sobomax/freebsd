@@ -72,9 +72,32 @@ makeoptions	MFS_IMAGE=/h/foo/ARM-MD
 options 	ROOTDEVNAME=\\"ufs:md0\\"
 .Ed
 .Pp
-The image in
+This would statically reserve 8MB area in the kernel and put data from the
+file referenced by the
+.Dv MFS_IMAGE
+at the beginning of that area.
+It is also possible to omit
+.Dv MD_ROOT_SIZE
+parameter, in which case the size of the ramdisk is to be
+determined automatically from the actual size of the 
 .Pa /h/foo/ARM-MD
-will be loaded as the initial image each boot.
+file.
+.Pp
+When available memory is limited, and read-write access to the ramdisk data
+is not required, the
+.Dv MFS_IMAGE_UZIP
+option can also be set to request automatic compression of the image at the
+kernel compile time with
+.Xr mkuzip 8
+before linking it into the kernel:
+.Bd -literal -offset indent
+makeoptions	MFS_IMAGE_UZIP
+options		ROOTDEVNAME=\\"ufs:md0.uzip\\"
+.Ed
+.Pp
+Run-time access to read-only uncompressed data is then provided by the
+.Xr geom_uzip 4 .
+.Pp
 To create the image to use, please follow the steps to create a file-backed
 disk found in the
 .Xr mdconfig 8
