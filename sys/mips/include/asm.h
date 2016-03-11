@@ -695,17 +695,21 @@ _C_LABEL(x):
  *    For Programmers Volume III: The MIPS32 Privileged Resource Architecture"
  */
 #if defined(CPU_NLM)
-#define	HAZARD_DELAY	sll $0,3
-#define	ITLBNOPFIX	sll $0,3
+#define	MIPS_EHB	sll $0,3
+#define	HAZARD_DELAY	MIPS_EHB
+#define	ITLBNOPFIX	MIPS_EHB
 #elif defined(CPU_RMI)
+#define	MIPS_EHB
 #define	HAZARD_DELAY
 #define	ITLBNOPFIX
 #elif defined(CPU_MIPS74K)
-#define	HAZARD_DELAY	sll $0,$0,3
-#define	ITLBNOPFIX	sll $0,$0,3
+#define	MIPS_EHB	sll $0,$0,3
+#define	HAZARD_DELAY	MIPS_EHB
+#define	ITLBNOPFIX	MIPS_EHB
 #else
-#define	ITLBNOPFIX	nop;nop;nop;nop;nop;nop;nop;nop;nop;sll $0,$0,3;
-#define	HAZARD_DELAY	nop;nop;nop;nop;sll $0,$0,3;
+#define	MIPS_EHB	sll $0,$0,3
+#define	ITLBNOPFIX	nop;nop;nop;nop;nop;nop;nop;nop;nop;MIPS_EHB
+#define	HAZARD_DELAY	nop;nop;nop;nop;MIPS_EHB
 #endif
 
 #endif /* !_MACHINE_ASM_H_ */
