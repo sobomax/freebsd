@@ -52,10 +52,12 @@ options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 
 
 options		GEOM_UZIP
+options		GEOM_LABEL		# Providers labelization.
 options		MD_ROOT                 # MD is a potential root device
-options		MD_ROOT_SIZE=1300       # 1.2MB ram disk
-makeoptions	MFS_IMAGE=/tmp/root.img.ulzma
-options		ROOTDEVNAME=\"ufs:md0.uzip\"
+makeoptions	MFS_IMAGE=/tmp/root.img
+makeoptions	MFS_IMAGE_UZIP		# compress image with mkuzip(8) before
+					# linking it in
+options		ROOTDEVNAME=\"ufs:ufs/asusrtn16\"
 
 # Debugging for use in -current
 #options 	DEADLKRES
