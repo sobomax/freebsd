@@ -107,6 +107,17 @@ mips_wbflush(void)
 }
 
 #ifdef _KERNEL
+
+#if !defined(MIPS_COP0_RW_NOBAR)
+#define	OLDMIPS_COP0_RW_BARRIER()	mips_barrier()
+#else
+/*
+ * This mips_barrier() is not needed on modern MIPSes that implement ehb
+ * instruction.
+ */
+#define	OLDMIPS_COP0_RW_BARRIER()
+#endif
+
 /*
  * XXX
  * It would be nice to add variants that read/write register_t, to avoid some
@@ -132,7 +143,7 @@ mips_wr_ ## n (uint64_t a0)					\
 			 "nop;"					\
 			 :					\
 			 : [a0] "r"(a0));			\
-	mips_barrier();						\
+	OLDMIPS_COP0_RW_BARRIER();				\
 } struct __hack
 
 #define	MIPS_RW64_COP0_SEL(n,r,s)				\
@@ -152,7 +163,7 @@ mips_wr_ ## n(uint64_t a0)					\
 			 __XSTRING(COP0_SYNC)";"		\
 			 :					\
 			 : [a0] "r"(a0));			\
-	mips_barrier();						\
+	OLDMIPS_COP0_RW_BARRIER();				\
 } struct __hack
 
 #if defined(__mips_n64)
@@ -196,7 +207,7 @@ mips_wr_ ## n (uint32_t a0)					\
 			 "nop;"					\
 			 :					\
 			 : [a0] "r"(a0));			\
-	mips_barrier();						\
+	OLDMIPS_COP0_RW_BARRIER();				\
 } struct __hack
 
 #define	MIPS_RW32_COP0_SEL(n,r,s)				\
@@ -218,7 +229,7 @@ mips_wr_ ## n(uint32_t a0)					\
 			 "nop;"					\
 			 :					\
 			 : [a0] "r"(a0));			\
-	mips_barrier();						\
+	OLDMIPS_COP0_RW_BARRIER();				\
 } struct __hack
 
 #ifdef CPU_CNMIPS
