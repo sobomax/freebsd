@@ -229,6 +229,7 @@ platform_reset(void)
 
 	printf("bcm471x::platform_reset()\n");
 	pmuwatchdog = (void *)(BCM4710_REG_CHIPC + BCM4710_REG_CHIPC_PMUWD_OFFS);
+	intr_disable();
 	writel(pmuwatchdog, 2);
 	for (;;);
 }
