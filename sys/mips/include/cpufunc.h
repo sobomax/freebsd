@@ -270,7 +270,6 @@ MIPS_RW32_COP0(cause, MIPS_COP_0_CAUSE);
 MIPS_RW32_COP0(excpc, MIPS_COP_0_EXC_PC);
 #endif
 MIPS_RW32_COP0(status, MIPS_COP_0_STATUS);
-MIPS_RW32_COP0_SEL(intctl, MIPS_COP_0_STATUS, 1);
 MIPS_RW32_COP0_SEL(cmgcrbase, 15, 3);
 
 /* XXX: Some of these registers are specific to MIPS32. */
