@@ -102,17 +102,9 @@ static void
 configure_final(dummy)
 	void *dummy;
 {
-	if (bootverbose)
-		printf("      intr_enable()... ");
 	intr_enable();
-	if (bootverbose)
-		printf("done.\n");
 
-	if (bootverbose)
-		printf("      cninit_finish()... ");
 	cninit_finish();
-	if (bootverbose)
-		printf("done.\n");
 
 	if (bootverbose)
 		printf("Device configuration finished.\n");

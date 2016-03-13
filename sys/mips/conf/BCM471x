@@ -36,8 +36,11 @@ options 	ALT_BREAK_TO_DEBUGGER
 options 	BREAK_TO_DEBUGGER
 options		BOOTVERBOSE=1
 
+makeoptions	MIPS_INTRNG
+options		MIPS_INTRNG
+
 #Build kernel with gdb(1) debug symbols and other debug things
-makeoptions	DEBUG="-g3 -save-temps -DMIPS_INTRNG -DMIPS_COP0_RW_NOBAR -DCPU_BCM4710"
+makeoptions	DEBUG="-g3 -save-temps -DMIPS_COP0_RW_NOBAR -DCPU_BCM4710"
 makeoptions	MODULES_OVERRIDE=""
 
 options 	DDB
@@ -83,6 +86,11 @@ device		mdio
 #Flash
 device		cfi			# Parallel Flash
 device		cfid
+
+#Performance
+#options 	HWPMC_HOOKS
+#device		hwpmc
+#device	 	hwpmc_mips74k
 
 # device 	bfe			# XXX will build both pci and siba
 # device 	miibus			# attachments

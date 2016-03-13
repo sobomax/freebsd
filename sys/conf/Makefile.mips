@@ -62,6 +62,7 @@ ASM_CFLAGS+=${CFLAGS} -D_LOCORE -DLOCORE
 
 .if !defined(WITHOUT_KERNEL_TRAMPOLINE)
 KERNEL_EXTRA=trampoline
+KERNEL_EXTRA_INSTALL=${KERNEL_KO}.tramp.bin
 trampoline: ${KERNEL_KO}.tramp.bin
 ${KERNEL_KO}.tramp.bin: ${KERNEL_KO} $S/$M/$M/elf_trampoline.c \
 	$S/$M/$M/inckern.S 

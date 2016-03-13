@@ -1117,7 +1117,7 @@ dev/bhnd/bhndb/bhndb.c			optional bhndbus | bhndb
 dev/bhnd/bhndb/bhndb_bus_if.m		optional bhndbus | bhndb
 dev/bhnd/bhndb/bhndb_hwdata.c		optional bhndbus | bhndb
 dev/bhnd/bhndb/bhndb_if.m		optional bhndbus | bhndb
-dev/bhnd/bhndb/bhndb_nexus.c optional bhndbus bhndsoc | bhndb bhndsoc
+dev/bhnd/bhndb/bhndb_nexus.c 		optional bhndbus bhndsoc | bhndb bhndsoc
 dev/bhnd/bhndb/bhndb_pci.c		optional bhndbus pci | bhndb pci
 dev/bhnd/bhndb/bhndb_pci_hwdata.c 	optional bhndbus pci | bhndb pci
 dev/bhnd/bhndb/bhndb_subr.c		optional bhndbus pci | bhndb
@@ -1125,9 +1125,12 @@ dev/bhnd/bcma/bcma.c			optional bhndbus | bcma
 dev/bhnd/bcma/bcma_bhndb.c		optional bhndbus | bcma bhndb
 dev/bhnd/bcma/bcma_erom.c		optional bhndbus | bcma
 dev/bhnd/bcma/bcma_subr.c		optional bhndbus | bcma
+dev/bhnd/cores/chipc/chipc_subr.c	optional bhndbus | bhnd
+dev/bhnd/cores/chipc/chipc_cfi.c	optional cfi bhndbus | cfi bhnd
 dev/bhnd/cores/chipc/chipc.c		optional bhndbus | bhnd
 dev/bhnd/cores/chipc/bhnd_chipc_if.m	optional bhndbus | bhnd
 dev/bhnd/cores/chipc/chipc_subr.c	optional bhndbus | bhnd
+dev/bhnd/cores/mips/mipscore.c		optional bhndsoc bhndbus | bhndsoc bhnd
 dev/bhnd/cores/pci/mdio_pcie.c		optional bhndbus pci | bhnd pci
 dev/bhnd/cores/pci/bhnd_pci.c		optional bhndbus pci | bhnd pci
 dev/bhnd/cores/pci/bhnd_pcib.c		optional bhnd_pcib bhnd pci
@@ -3054,7 +3057,7 @@ geom/geom_disk.c		standard
 geom/geom_dump.c		standard
 geom/geom_event.c		standard
 geom/geom_fox.c			optional geom_fox
-geom/geom_flashmap.c		optional fdt cfi | fdt nand | fdt mx25l
+geom/geom_flashmap.c		optional fdt cfi | fdt nand | fdt mx25l | bhnd cfi | bhndbus cfi
 geom/geom_io.c			standard
 geom/geom_kern.c		standard
 geom/geom_map.c			optional geom_map
