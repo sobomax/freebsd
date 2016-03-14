@@ -1,20 +1,20 @@
 ## About
 
-This is ongoing effort to port FreeBSD to the Broadcom 47xx series of SoCs.
+This is ongoing effort to port FreeBSD to the Broadcom BCM5358U series of SoCs.
 
 Some of the widespred hardware utilizing this SoC are:
 
- * Asus RT-N16 WiFi Router
+ * Asus RT-N53 WiFi Router
 
 ## How to build
 
- $ make TARGET=mips TARGET_ARCH=mipsel KERNCONF=BCM471x buildworld buildkernel
+ $ make TARGET=mips TARGET_ARCH=mipsel KERNCONF=RT-N53 buildworld buildkernel
 
 ## How to boot
 
 1. Setup TFPT server:
 
- tftp    dgram   udp     wait    root    /usr/libexec/tftpd      tftpd -l -s /usr/obj/mips.mipsel/usr/src/sys/BCM471x
+ tftp    dgram   udp     wait    root    /usr/libexec/tftpd      tftpd -l -s /usr/obj/mips.mipsel/usr/src/sys/RT-N53
 
 2. Connect serial console
 3. Reset or power-up, keep pressing Ctrl-C until you get into CFE prompt:
