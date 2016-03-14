@@ -52,12 +52,16 @@ options 	NFSCL			#Network Filesystem Client
 options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 
+options         FFS                     #Berkeley Fast Filesystem
+options         SOFTUPDATES             #Enable FFS soft updates support
+options         UFS_ACL                 #Support for access control lists
+options         UFS_DIRHASH             #Improve performance on big directories
 
-#options		GEOM_UZIP
+options		GEOM_UZIP
 #options		MD_ROOT                 # MD is a potential root device
 #options		MD_ROOT_SIZE=512        # 8MB ram disk
 #makeoptions	MFS_IMAGE=/tmp/root.img.ulzma
-#options		ROOTDEVNAME=\"ufs:md0.uzip\"
+#options		ROOTDEVNAME=\"ffs:/dev/md0.uzip\"
 
 # Debugging for use in -current
 #options 	DEADLKRES
@@ -88,8 +92,9 @@ device		cfid
 #device		hwpmc
 #device	 	hwpmc_mips74k
 
+#Ethernet
 # device 	bfe			# XXX will build both pci and siba
-# device 	miibus			# attachments
+device 		miibus			# attachments
 
 # pci devices
 
