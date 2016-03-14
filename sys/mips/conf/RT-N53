@@ -1,8 +1,8 @@
 #
 # $FreeBSD$
 #
-# The Broadcom 471x series of processors and boards is very commonly
-# used in COTS hardware including the ASUS RT-N16.
+# The Broadcom BCM5358U series of processors and boards is very commonly
+# used in COTS hardware including the ASUS RT-N53.
 #
 # Some tweaks are needed for use with this platform:
 #
@@ -24,9 +24,9 @@
 #   will be necessary to support multi-user boot.
 #
 
-ident		BCM471x
+ident		RT-N53
 
-hints		"BCM471x.hints"
+hints		"RT-N53.hints"
 include		"../bcm471x/std.bcm471x"
 
 # ships with cfe firmware; use the console for now
@@ -84,7 +84,7 @@ device		bhndbus			#
 device		bhndb			# Broadcom bridge
 device		bcma			#
 device 		bhnd_pcib		# Broadcom Host-PCI bridge
-device		bgmac			# Broadcom GMAC
+
 
 device		mdio
 
@@ -97,9 +97,9 @@ device		mdio
 #device		hwpmc
 #device	 	hwpmc_mips74k
 
-#Ethernet
-# device 	bfe			# XXX will build both pci and siba
-device 		miibus			# attachments
+Ethernet
+device		bfe			# XXX will build both pci and siba
+device		miibus			# attachments
 
 
 # pci devices
