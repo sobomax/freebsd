@@ -80,6 +80,7 @@ device		bhndbus			#
 device		bhndb			# Broadcom bridge
 device		bcma			#
 device 		bhnd_pcib		# Broadcom Host-PCI bridge
+device		bgmac			# Broadcom GMAC
 
 device		mdio
 
@@ -95,6 +96,7 @@ device		cfid
 #Ethernet
 # device 	bfe			# XXX will build both pci and siba
 device 		miibus			# attachments
+
 
 # pci devices
 

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#define BGMAC_TIMEOUT 1000
 #define BGMAC_MAX_RSPEC	2
 
 struct bgmac_softc{
@@ -16,3 +17,8 @@ struct bgmac_softc{
 	bus_space_handle_t 	hdl; /** main resource handle */
 	bus_space_tag_t 	tag; /** main resource tag */
 };
+
+typedef enum{
+	PHY_READ,
+	PHY_WRITE
+}  phymode ;

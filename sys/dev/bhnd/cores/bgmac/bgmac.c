@@ -18,6 +18,26 @@
 #include <sys/module.h>
 #include <sys/bus.h>
 #include <sys/rman.h>
+#include <sys/socket.h>
+
+#include <net/if.h>
+#include <net/if_var.h>
+#include <net/if_arp.h>
+#include <net/ethernet.h>
+#include <net/if_dl.h>
+#include <net/if_media.h>
+
+#include <net/bpf.h>
+
+#include <net/if_types.h>
+#include <net/if_vlan_var.h>
+
+#include <netinet/in_systm.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+
+#include "miibus_if.h"
 
 #include <dev/mii/mii.h>
 #include <dev/mii/miivar.h>
@@ -52,6 +72,9 @@ static int bgmac_attach(device_t dev);
 
 static int bgmac_readreg(device_t dev,int phy,int reg);
 static int bgmac_writereg(device_t dev,int phy,int reg, int val);
+
+int bgmac_phyreg_poll(device_t dev,uint32_t reg, uint32_t mask);
+int bgmac_phyreg_op(device_t dev, phymode op, int phy,int reg,int* val);
 
 /**
  * Implementation
@@ -93,19 +116,12 @@ static int bgmac_attach(device_t dev){
 	return 0;
 }
 
-enum{
-	PHY_READ,
-	PHY_WRITE
-} phymode;
-
-#define BGMAC_TIMEOUT 1000
-
-int bgmac_poll_reg(device_t dev,uint8_t reg, uint32_t mask){
+int bgmac_phyreg_poll(device_t dev,uint32_t reg, uint32_t mask){
 	struct bgmac_softc* sc = device_get_softc(dev);
 	/* Poll for the register to complete. */
 	for (int i = 0; i < BGMAC_TIMEOUT; i++) {
 		DELAY(10);
-		uint32_t val = bus_space_read_4(sc->hdl, sc->tag, reg);
+		uint32_t val = bus_space_read_4(sc->tag, sc->hdl, reg);
 		if ((val & mask) == 0) {
 			DELAY(5);
 			return 0;
@@ -114,33 +130,33 @@ int bgmac_poll_reg(device_t dev,uint8_t reg, uint32_t mask){
 	return -1;
 }
 
-int bgmac_phyreg(device_t dev, phymode mode, int phy,int reg,int* val){
+int bgmac_phyreg_op(device_t dev, phymode op, int phy,int reg,int* val){
 	struct bgmac_softc* sc = device_get_softc(dev);
 
 	//Set address on PHY control register
-	uint32_t tmp = bus_space_read_4(sc->hdl,sc->tag,BGMAC_REG_PHY_CONTROL);
+	uint32_t tmp = bus_space_read_4(sc->tag, sc->hdl, BGMAC_REG_PHY_CONTROL);
 	tmp = (tmp & (~BGMAC_REG_PHY_ACCESS_ADDR)) | phy;
-	bus_space_write_4(sc->hdl,sc->tag,BGMAC_REG_PHY_CONTROL);
+	bus_space_write_4(sc->tag, sc->hdl, BGMAC_REG_PHY_CONTROL, tmp);
 
 	//Send header (first 16 bytes) over MII
 	tmp = BGMAC_REG_PHY_ACCESS_START;
-	if(mode == PHY_WRITE){
+	if(op == PHY_WRITE){
 		tmp |= BGMAC_REG_PHY_ACCESS_WRITE;
 		tmp |= (*val & BGMAC_REG_PHY_ACCESS_DATA);
 	}
 	tmp |= phy << BGMAC_REG_PHY_ACCESS_ADDR_SHIFT;
 	tmp |= reg << BGMAC_REG_PHY_ACCESS_REG_SHIFT;
 
-	bus_space_write_4(sc->hdl,sc->tag,BGMAC_REG_PHY_ACCESS);
+	bus_space_write_4(sc->tag, sc->hdl, BGMAC_REG_PHY_ACCESS, tmp);
 
 	//Wait while operation is finished
-	if(bgmac_poll_reg(dev, BGMAC_REG_PHY_ACCESS, BGMAC_REG_PHY_ACCESS_START)){
+	if(bgmac_phyreg_poll(dev, BGMAC_REG_PHY_ACCESS, BGMAC_REG_PHY_ACCESS_START)){
 		return -1;
 	}
 
-	if(mode == PHY_READ){
+	if(op == PHY_READ){
 		//Read rest of 16 bytes back
-		tmp = bus_space_read_4(sc->hdl,sc->tag,BGMAC_REG_PHY_ACCESS);
+		tmp = bus_space_read_4(sc->tag, sc->hdl, BGMAC_REG_PHY_ACCESS);
 		tmp &= BGMAC_REG_PHY_ACCESS_DATA;
 		*val = tmp;
 	}
@@ -149,7 +165,7 @@ int bgmac_phyreg(device_t dev, phymode mode, int phy,int reg,int* val){
 
 static int bgmac_readreg(device_t dev,int phy,int reg){
 	int tmp;
-	if(bgmac_phyreg(dev, PHY_READ,phy,reg,&tmp)){
+	if(bgmac_phyreg_op(dev, PHY_READ,phy,reg,&tmp)){
 		return -1;
 	}
 	return tmp;
@@ -157,12 +173,11 @@ static int bgmac_readreg(device_t dev,int phy,int reg){
 
 static int bgmac_writereg(device_t dev,int phy,int reg, int val){
 	int tmp = val;
-	if(bgmac_phyreg(dev, PHY_WRITE,phy,reg,&tmp)){
+	if(bgmac_phyreg_op(dev, PHY_WRITE,phy,reg,&tmp)){
 		return -1;
 	}
 	return 0;
 }
-
 
 /**
  * Driver metadata
