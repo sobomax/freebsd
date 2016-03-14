@@ -54,6 +54,10 @@ options		FFS			# Berkeley Fast Filesystem
 options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 
+options         FFS                     #Berkeley Fast Filesystem
+options         SOFTUPDATES             #Enable FFS soft updates support
+options         UFS_ACL                 #Support for access control lists
+options         UFS_DIRHASH             #Improve performance on big directories
 
 options		GEOM_UZIP
 options		GEOM_LABEL		# Providers labelization.
@@ -61,7 +65,7 @@ options		MD_ROOT                 # MD is a potential root device
 makeoptions	MFS_IMAGE=/tmp/root.img
 makeoptions	MFS_IMAGE_UZIP		# compress image with mkuzip(8) before
 					# linking it in
-options		ROOTDEVNAME=\"ufs:ufs/asusrtn16\"
+options		ROOTDEVNAME=\"ufs:ufs/asusrtn53\"
 
 # Debugging for use in -current
 #options 	DEADLKRES
@@ -80,20 +84,23 @@ device		bhndbus			#
 device		bhndb			# Broadcom bridge
 device		bcma			#
 device 		bhnd_pcib		# Broadcom Host-PCI bridge
+device		bgmac			# Broadcom GMAC
 
 device		mdio
 
 #Flash
-device		cfi			# Parallel Flash
-device		cfid
+#device		cfi			# Parallel Flash
+#device		cfid
 
 #Performance
 #options 	HWPMC_HOOKS
 #device		hwpmc
 #device	 	hwpmc_mips74k
 
+#Ethernet
 # device 	bfe			# XXX will build both pci and siba
-# device 	miibus			# attachments
+device 		miibus			# attachments
+
 
 # pci devices
 

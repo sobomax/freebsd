@@ -29,12 +29,7 @@ static const struct resource_spec mipscore_rspec[MIPSCORE_MAX_RSPEC] = {
 	{ -1, -1, 0 }
 };
 
-struct mipscore_id {
-	uint32_t mfg;
-	uint32_t devid;
-};
-
-struct mipscore_id ids[] = {
+struct bhnd_core_id mipscore_ids[] = {
 		{BHND_MFGID_MIPS, BHND_COREID_MIPS},
 		{BHND_MFGID_MIPS, BHND_COREID_MIPS33},
 		{BHND_MFGID_MIPS, BHND_COREID_MIPS74K},
@@ -46,7 +41,7 @@ static int mipscore_probe(device_t dev){
 	uint32_t mfg = bhnd_get_vendor(dev);
 	uint32_t devid = bhnd_get_device(dev);
 
-	for( struct mipscore_id* testid = ids; testid->mfg != -1; testid++ ){
+	for( struct bhnd_core_id* testid = mipscore_ids; testid->mfg != -1; testid++ ){
 		if(mfg == testid->mfg && devid == testid->devid){
 			bhnd_set_generic_core_desc(dev);
 			return (BUS_PROBE_DEFAULT);

@@ -1125,6 +1125,7 @@ dev/bhnd/bcma/bcma.c			optional bhndbus | bcma
 dev/bhnd/bcma/bcma_bhndb.c		optional bhndbus | bcma bhndb
 dev/bhnd/bcma/bcma_erom.c		optional bhndbus | bcma
 dev/bhnd/bcma/bcma_subr.c		optional bhndbus | bcma
+dev/bhnd/cores/bgmac/bgmac.c		optional bhndbus bgmac | bhnd bgmac
 dev/bhnd/cores/chipc/chipc_subr.c	optional bhndbus | bhnd
 dev/bhnd/cores/chipc/chipc_cfi.c	optional cfi bhndbus | cfi bhnd
 dev/bhnd/cores/chipc/chipc.c		optional bhndbus | bhnd

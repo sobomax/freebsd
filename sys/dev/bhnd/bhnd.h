@@ -153,6 +153,14 @@ struct bhnd_core_info {
 	int		unit;		/**< bus-assigned core unit */
 };
 
+/**
+ * ID structure used for probing of cores
+ */
+struct bhnd_core_id {
+	uint32_t mfg;
+	uint32_t devid;
+};
+
 
 /**
  * A hardware revision match descriptor.
