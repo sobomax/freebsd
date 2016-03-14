@@ -91,7 +91,6 @@ mips_init(void)
 {
 	int i, j;
 
-	mips_wr_count(0xdeadc0bb);
 	printf("entry: mips_init()\n");
 
 #ifdef S5_TRACE
