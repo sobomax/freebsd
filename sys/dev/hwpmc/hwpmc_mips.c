@@ -203,7 +203,7 @@ pmc_mips_wr_perfctl(int ri, uint32_t x)
 }
 
 static uint32_t
-pmc_mips_rd_perfctl(int ri)
+pmc_mips_rd_perfctr(int ri)
 {
 
 	switch (ri) {
@@ -218,7 +218,7 @@ pmc_mips_rd_perfctl(int ri)
 	default:
 		break;
 	}
-	panic("pmc_mips_rd_perfctl() invalid ri argument: %d\n", ri);
+	panic("pmc_mips_rd_perfctr() invalid ri argument: %d\n", ri);
 }
 
 static int
@@ -291,7 +291,7 @@ mips_pmc_intr(int cpu, struct trapframe *tf)
 
 	/* Stop PMCs without clearing the counter */
 	for (ri = 0; ri < mips_npmcs; ri++) {
-		sr[ri] = pmc_mips_rd_perfctl(ri);
+		sr[ri] = pmc_mips_rd_perfctr(ri);
 	}
 
 	for (ri = 0; ri < mips_npmcs; ri++) {
@@ -442,7 +442,7 @@ pmc_mips_initialize()
 	 * number of counters
 	 */
 	for (ri = 0; ri < PMC_MIPS_NCNTRS_MAX; ri++) {
-		if ((pmc_mips_rd_perfctl(ri) & MIPS_PERFCTL_M) == 0) {
+		if ((pmc_mips_rd_perfctr(ri) & MIPS_PERFCTL_M) == 0) {
 			break;
 		}
 	}
