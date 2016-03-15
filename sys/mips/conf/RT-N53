@@ -87,9 +87,9 @@ device		mdio
 #device		cfid
 
 #Performance
-#options 	HWPMC_HOOKS
-#device		hwpmc
-#device	 	hwpmc_mips74k
+options 	HWPMC_HOOKS
+device		hwpmc
+device	 	hwpmc_mips74k
 
 # Ethernet
 device		bfe			# XXX will build both pci and siba
