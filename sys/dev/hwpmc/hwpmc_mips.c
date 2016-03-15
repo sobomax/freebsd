@@ -51,6 +51,8 @@ struct mips_cpu {
 
 static struct mips_cpu **mips_pcpu;
 
+#define	PMC_MIPS_NCNTRS_MAX	4
+
 #if defined(__mips_n64)
 #	define	MIPS_IS_VALID_KERNELADDR(reg)	((((reg) & 3) == 0) && \
 					((vm_offset_t)(reg) >= MIPS_XKPHYS_START))
@@ -178,6 +180,47 @@ mips_config_pmc(int cpu, int ri, struct pmc *pm)
 	return 0;
 }
 
+static void
+pmc_mips_wr_perfctl(int ri, uint32_t x)
+{
+
+	switch (ri) {
+	case 0:
+		mips_wr_perfctr0(x);
+		break;
+	case 1:
+		mips_wr_perfctr1(x);
+		break;
+	case 2:
+		mips_wr_perfctr2(x);
+		break;
+	case 3:
+		mips_wr_perfctr3(x);
+		break;
+	default:
+		panic("pmc_mips_wr_perfctl() invalid ri argument: %d\n", ri);
+	}
+}
+
+static uint32_t
+pmc_mips_rd_perfctl(int ri)
+{
+
+	switch (ri) {
+	case 0:
+		return (mips_rd_perfctr0());
+	case 1:
+		return (mips_rd_perfctr1());
+	case 2:
+		return (mips_rd_perfctr2());
+	case 3:
+		return (mips_rd_perfctr3());
+	default:
+		break;
+	}
+	panic("pmc_mips_rd_perfctl() invalid ri argument: %d\n", ri);
+}
+
 static int
 mips_start_pmc(int cpu, int ri)
 {
@@ -190,17 +233,7 @@ mips_start_pmc(int cpu, int ri)
 	config = pm->pm_md.pm_mips_evsel;
 
 	/* Enable the PMC. */
-	switch (ri) {
-	case 0:
-		mips_wr_perfcnt0(config);
-		break;
-	case 1:
-		mips_wr_perfcnt2(config);
-		break;
-	default:
-		break;
-	}
-
+	pmc_mips_wr_perfctl(ri, config);
 	return 0;
 }
 
@@ -219,16 +252,7 @@ mips_stop_pmc(int cpu, int ri)
 	 * Clearing the entire register turns the counter off as well
 	 * as removes the previously sampled event.
 	 */
-	switch (ri) {
-	case 0:
-		mips_wr_perfcnt0(0);
-		break;
-	case 1:
-		mips_wr_perfcnt2(0);
-		break;
-	default:
-		break;
-	}
+	pmc_mips_wr_perfctl(ri, 0);
 	return 0;
 }
 
@@ -256,7 +280,7 @@ mips_pmc_intr(int cpu, struct trapframe *tf)
 	int retval, ri;
 	struct pmc *pm;
 	struct mips_cpu *pc;
-	uint32_t r0, r2;
+	uint32_t sr[PMC_MIPS_NCNTRS_MAX];
 	pmc_value_t r;
 
 	KASSERT(cpu >= 0 && cpu < pmc_cpu_max(),
@@ -266,10 +290,9 @@ mips_pmc_intr(int cpu, struct trapframe *tf)
 	pc = mips_pcpu[cpu];
 
 	/* Stop PMCs without clearing the counter */
-	r0 = mips_rd_perfcnt0();
-	mips_wr_perfcnt0(r0 & ~(0x1f));
-	r2 = mips_rd_perfcnt2();
-	mips_wr_perfcnt2(r2 & ~(0x1f));
+	for (ri = 0; ri < mips_npmcs; ri++) {
+		sr[ri] = pmc_mips_rd_perfctl(ri);
+	}
 
 	for (ri = 0; ri < mips_npmcs; ri++) {
 		pm = mips_pcpu[cpu]->pc_mipspmcs[ri].phw_pmc;
@@ -291,10 +314,7 @@ mips_pmc_intr(int cpu, struct trapframe *tf)
 		    TRAPF_USERMODE(tf));
 		if (error) {
 			/* Clear/disable the relevant counter */
-			if (ri == 0)
-				r0 = 0;
-			else if (ri == 1)
-				r2 = 0;
+			sr[ri] = 0;
 			mips_stop_pmc(cpu, ri);
 		}
 
@@ -308,8 +328,9 @@ mips_pmc_intr(int cpu, struct trapframe *tf)
 	 * Any counter which overflowed will have its sample count
 	 * reloaded in the loop above.
 	 */
-	mips_wr_perfcnt0(r0);
-	mips_wr_perfcnt2(r2);
+	for (ri = 0; ri < mips_npmcs; ri++) {
+		pmc_mips_wr_perfctl(ri, sr[ri]);
+	}
 
 	return retval;
 }
@@ -414,12 +435,24 @@ pmc_mips_initialize()
 {
 	struct pmc_mdep *pmc_mdep;
 	struct pmc_classdep *pcd;
+	int ri;
 	
 	/*
-	 * TODO: Use More bit of PerfCntlX register to detect actual 
+	 * Use More bit of PerfCtlX register to detect actual 
 	 * number of counters
 	 */
-	mips_npmcs = 2;
+	for (ri = 0; ri < PMC_MIPS_NCNTRS_MAX; ri++) {
+		if ((pmc_mips_rd_perfctl(ri) & MIPS_PERFCTL_M) == 0) {
+			break;
+		}
+	}
+	if (ri == PMC_MIPS_NCNTRS_MAX) {
+		printf("pmc_mips_initialize: your CPU appears support more " \
+		    "than %d hardware perfcounters, consider increasing " \
+		    "PMC_MIPS_NCNTRS_MAX\n", PMC_MIPS_NCNTRS_MAX);
+		ri -= 1;
+	}
+	mips_npmcs = ri + 1;
 	
 	PMCDBG1(MDP,INI,1,"mips-init npmcs=%d", mips_npmcs);
 

@@ -225,9 +225,15 @@ mips_pmcn_write(unsigned int pmc, uint64_t reg)
 
 	switch (pmc) {
 	case 0:
-		mips_wr_perfcnt1(reg);
+		mips_wr_perfcnt0(reg);
 		break;
 	case 1:
+		mips_wr_perfcnt1(reg);
+		break;
+	case 2:
+		mips_wr_perfcnt2(reg);
+		break;
+	case 3:
 		mips_wr_perfcnt3(reg);
 		break;
 	default:
