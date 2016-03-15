@@ -420,6 +420,15 @@
 /* Master-Checker Mode - 1: enabled */
 #define	MIPS_CONFIG_CM		0x80000000
 
+/* Performance Counter Control register(s) bits */
+#define	MIPS_PERFCTL_EXL	(1 << 0)
+#define	MIPS_PERFCTL_K		(1 << 1)
+#define	MIPS_PERFCTL_S		(1 << 2)
+#define	MIPS_PERFCTL_U		(1 << 3)
+#define	MIPS_PERFCTL_IE		(1 << 4)
+#define	MIPS_PERFCTL_PCTD	(1 << 15)
+#define	MIPS_PERFCTL_M		(1 << 31)
+
 /*
  * The bits in the MIPS4 config register.
  */
