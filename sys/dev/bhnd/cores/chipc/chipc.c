@@ -181,13 +181,24 @@ chipc_attach(device_t dev)
 		break;
 	}
 
-	//Flash
-	if(CHIPC_CAP(sc, CAP_FLASH_MASK) == CHIPC_PFLASH){
+	int flash_type = CHIPC_CAP(sc, CAP_FLASH_MASK);
+	//Parallel Flash
+	switch(flash_type){
+	case CHIPC_PFLASH:
 		sc->flash_cfg = bhnd_bus_read_4(sc->core, CHIPC_FLASH_CFG);
 		error = chipc_init_pflash(dev, sc->flash_cfg);
 		if(error > 0){
 			device_printf(dev,"init_flash_failed with: %d\n", error);
 			goto cleanup;
+		}
+		break;
+	case CHIPC_SFLASH_AT:
+	case CHIPC_SFLASH_ST:
+		//TODO: add serial support
+		break;
+	default:
+		if(bootverbose){
+			device_printf(dev, "no flash found\n");
 		}
 	}
 
