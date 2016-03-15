@@ -186,14 +186,14 @@ mips_init(void)
 		printf("config7 = %u\n", mips_rd_config7());
 	}
 #endif
-	printf("perfcnt = %u, %u, %u, %u\n", mips_rd_perfctr0(),
-	    mips_rd_perfctr1(), mips_rd_perfctr2(),
-	    mips_rd_perfctr3());
+	printf("perfcnt = %u, %u, %u, %u\n", mips_rd_perfctl0(),
+	    mips_rd_perfctl1(), mips_rd_perfctl2(),
+	    mips_rd_perfctl3());
 #if 0
-	mips_wr_perfctr0(mips_rd_perfctr0() & ~(1 << 4));
-	mips_wr_perfctr1(mips_rd_perfctr1() & ~(1 << 4));
-	mips_wr_perfctr2(mips_rd_perfctr2() & ~(1 << 4));
-	mips_wr_perfctr3(mips_rd_perfctr3() & ~(1 << 4));
+	mips_wr_perfctl0(mips_rd_perfctl0() & ~(1 << 4));
+	mips_wr_perfctl1(mips_rd_perfctl1() & ~(1 << 4));
+	mips_wr_perfctl2(mips_rd_perfctl2() & ~(1 << 4));
+	mips_wr_perfctl3(mips_rd_perfctl3() & ~(1 << 4));
 #endif
 
 #ifdef S5_TRACE
