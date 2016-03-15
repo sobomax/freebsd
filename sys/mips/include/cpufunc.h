@@ -297,8 +297,8 @@ MIPS_RW32_COP0_SEL(perfcnt1, MIPS_COP_0_PERFCNT, 3);
 MIPS_RW32_COP0_SEL(perfcnt2, MIPS_COP_0_PERFCNT, 5);
 MIPS_RW32_COP0_SEL(perfcnt3, MIPS_COP_0_PERFCNT, 7);
 
-#undef  MIPS_RW32_COP0
-#undef  MIPS_RW32_COP0_SEL
+#undef	MIPS_RW32_COP0
+#undef	MIPS_RW32_COP0_SEL
 
 static __inline register_t
 intr_disable(void)
