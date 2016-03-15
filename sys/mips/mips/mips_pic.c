@@ -48,6 +48,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 #include <sys/smp.h>
 #include <sys/sched.h>
+#include <sys/pmc.h>
+#include <sys/pmckern.h>
 
 #include <machine/bus.h>
 #include <machine/hwfunc.h>
@@ -232,8 +234,11 @@ mips_pic_intr(void *arg)
 	KASSERT(i == 0, ("all interrupts handled"));
 
 #ifdef HWPMC_HOOKS
-	if (pmc_hook && (PCPU_GET(curthread)->td_pflags & TDP_CALLCHAIN))
+	if (pmc_hook && (PCPU_GET(curthread)->td_pflags & TDP_CALLCHAIN)) {
+		struct trapframe *tf = PCPU_GET(curthread)->td_intr_frame;
+
 		pmc_hook(PCPU_GET(curthread), PMC_FN_USER_CALLCHAIN, tf);
+	}
 #endif
 #if defined(DISRUPTIVE_DEBUG)
 	{static int b=0; struct trapframe *tf = PCPU_GET(curthread)->td_intr_frame; if (b < 10) {device_printf(sc->pic_dev, \
