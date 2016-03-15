@@ -181,44 +181,44 @@ mips_config_pmc(int cpu, int ri, struct pmc *pm)
 }
 
 static void
-pmc_mips_wr_perfctr(int ri, uint32_t x)
+pmc_mips_wr_perfctl(int ri, uint32_t x)
 {
 
 	switch (ri) {
 	case 0:
-		mips_wr_perfctr0(x);
+		mips_wr_perfctl0(x);
 		break;
 	case 1:
-		mips_wr_perfctr1(x);
+		mips_wr_perfctl1(x);
 		break;
 	case 2:
-		mips_wr_perfctr2(x);
+		mips_wr_perfctl2(x);
 		break;
 	case 3:
-		mips_wr_perfctr3(x);
+		mips_wr_perfctl3(x);
 		break;
 	default:
-		panic("pmc_mips_wr_perfctr() invalid ri argument: %d\n", ri);
+		panic("pmc_mips_wr_perfctl() invalid ri argument: %d\n", ri);
 	}
 }
 
 static uint32_t
-pmc_mips_rd_perfctr(int ri)
+pmc_mips_rd_perfctl(int ri)
 {
 
 	switch (ri) {
 	case 0:
-		return (mips_rd_perfctr0());
+		return (mips_rd_perfctl0());
 	case 1:
-		return (mips_rd_perfctr1());
+		return (mips_rd_perfctl1());
 	case 2:
-		return (mips_rd_perfctr2());
+		return (mips_rd_perfctl2());
 	case 3:
-		return (mips_rd_perfctr3());
+		return (mips_rd_perfctl3());
 	default:
 		break;
 	}
-	panic("pmc_mips_rd_perfctr() invalid ri argument: %d\n", ri);
+	panic("pmc_mips_rd_perfctl() invalid ri argument: %d\n", ri);
 }
 
 static int
@@ -233,7 +233,7 @@ mips_start_pmc(int cpu, int ri)
 	config = pm->pm_md.pm_mips_evsel;
 
 	/* Enable the PMC. */
-	pmc_mips_wr_perfctr(ri, config);
+	pmc_mips_wr_perfctl(ri, config);
 	return 0;
 }
 
@@ -252,7 +252,7 @@ mips_stop_pmc(int cpu, int ri)
 	 * Clearing the entire register turns the counter off as well
 	 * as removes the previously sampled event.
 	 */
-	pmc_mips_wr_perfctr(ri, 0);
+	pmc_mips_wr_perfctl(ri, 0);
 	return 0;
 }
 
@@ -291,7 +291,7 @@ mips_pmc_intr(int cpu, struct trapframe *tf)
 
 	/* Stop PMCs without clearing the counter */
 	for (ri = 0; ri < mips_npmcs; ri++) {
-		sr[ri] = pmc_mips_rd_perfctr(ri);
+		sr[ri] = pmc_mips_rd_perfctl(ri);
 	}
 
 	for (ri = 0; ri < mips_npmcs; ri++) {
@@ -329,7 +329,7 @@ mips_pmc_intr(int cpu, struct trapframe *tf)
 	 * reloaded in the loop above.
 	 */
 	for (ri = 0; ri < mips_npmcs; ri++) {
-		pmc_mips_wr_perfctr(ri, sr[ri]);
+		pmc_mips_wr_perfctl(ri, sr[ri]);
 	}
 
 	return retval;
@@ -442,7 +442,7 @@ pmc_mips_initialize()
 	 * number of counters
 	 */
 	for (ri = 0; ri < PMC_MIPS_NCNTRS_MAX; ri++) {
-		if ((pmc_mips_rd_perfctr(ri) & MIPS_PERFCTL_M) == 0) {
+		if ((pmc_mips_rd_perfctl(ri) & MIPS_PERFCTL_M) == 0) {
 			break;
 		}
 	}
