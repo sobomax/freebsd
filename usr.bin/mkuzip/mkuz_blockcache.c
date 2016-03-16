@@ -80,6 +80,9 @@ e0:
     return (rval);
 }
 
+#define I2J(x)	((intmax_t)(x))
+#define U2J(x)	((uintmax_t)(x))
+
 struct mkuz_blk_info *
 mkuz_blkcache_regblock(int fd, const struct mkuz_blk *bp)
 {
@@ -108,8 +111,9 @@ mkuz_blkcache_regblock(int fd, const struct mkuz_blk *bp)
             rval = verify_match(fd, bp, bcep);
             if (rval == 1) {
 #if defined(MKUZ_DEBUG)
-                fprintf(stderr, "cache hit %d, %d, %d\n",
-                  (int)bcep->hit.offset, (int)bp->info.offset, (int)bp->info.len);
+                fprintf(stderr, "cache hit %jd, %jd, %jd, %jd\n",
+                  I2J(bcep->hit.blkno), I2J(bcep->hit.offset),
+                  I2J(bp->info.offset), I2J(bp->info.len));
 #endif
                 return (&bcep->hit);
             }
