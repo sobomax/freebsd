@@ -41,9 +41,10 @@ __FBSDID("$FreeBSD$");
 #endif
 
 #include "mkuz_blockcache.h"
+#include "mkuz_blk.h"
 
 struct mkuz_blkcache {
-    struct mkuz_blkcache_hit hit;
+    struct mkuz_blk_info hit;
     off_t data_offset;
     unsigned char digest[16];
     struct mkuz_blkcache *next;
@@ -80,7 +81,7 @@ e0:
     return (rval);
 }
 
-struct mkuz_blkcache_hit *
+struct mkuz_blk_info *
 mkuz_blkcache_regblock(int fd, uint32_t blkno, off_t offset, ssize_t len,
   void *data)
 {
