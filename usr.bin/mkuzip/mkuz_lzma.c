@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 
 #include "mkuzip.h"
 #include "mkuz_lzma.h"
+#include "mkuz_blk.h"
 
 #define USED_BLOCKSIZE DEV_BSIZE
 
@@ -44,13 +45,12 @@ struct mkuz_lzma {
 	lzma_filter filters[2];
 	lzma_options_lzma opt_lzma;
 	lzma_stream strm;
-	char *obuf;
 	uint32_t blksz;
 };
 
 static struct mkuz_lzma ulzma = {.strm = LZMA_STREAM_INIT};
 
-void *
+void
 mkuz_lzma_init(uint32_t blksz)
 {
 	if (blksz % USED_BLOCKSIZE != 0) {
@@ -62,7 +62,6 @@ mkuz_lzma_init(uint32_t blksz)
 		errx(1, "cluster size is too large");
 		/* Not reached */
 	}
-	ulzma.obuf = mkuz_safe_malloc(blksz * 2);
 
 	/* Init lzma encoder */
 	if (lzma_lzma_preset(&ulzma.opt_lzma, LZMA_PRESET_DEFAULT))
@@ -73,14 +72,15 @@ mkuz_lzma_init(uint32_t blksz)
 	ulzma.filters[1].id = LZMA_VLI_UNKNOWN;
 
 	ulzma.blksz = blksz;
-
-	return (ulzma.obuf);
 }
 
-void
-mkuz_lzma_compress(const char *ibuf, uint32_t *destlen)
+struct mkuz_blk *
+mkuz_lzma_compress(const struct mkuz_blk *iblk)
 {
 	lzma_ret ret;
+        struct mkuz_blk *rval;
+
+        rval = mkuz_blk_ctor(ulzma.blksz * 2);
 
 	ret = lzma_stream_encoder(&ulzma.strm, ulzma.filters, LZMA_CHECK_CRC32);
 	if (ret != LZMA_OK) {
@@ -90,10 +90,10 @@ mkuz_lzma_compress(const char *ibuf, uint32_t *destlen)
 		errx(1, "can't compress data: LZMA compressor ERROR");
 	}
 
-	ulzma.strm.next_in = ibuf;
+	ulzma.strm.next_in = iblk->data;
 	ulzma.strm.avail_in = ulzma.blksz;
-	ulzma.strm.next_out = ulzma.obuf;
-	ulzma.strm.avail_out = ulzma.blksz * 2;
+	ulzma.strm.next_out = rval->data;
+	ulzma.strm.avail_out = rval->alen;
 
 	ret = lzma_code(&ulzma.strm, LZMA_FINISH);
 
@@ -106,5 +106,6 @@ mkuz_lzma_compress(const char *ibuf, uint32_t *destlen)
 
 	lzma_end(&ulzma.strm);
 
-	*destlen = (ulzma.blksz * 2) - ulzma.strm.avail_out;
+	rval->info.len = rval->alen - ulzma.strm.avail_out;
+	return (rval);
 }

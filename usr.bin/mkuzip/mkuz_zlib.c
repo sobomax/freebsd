@@ -36,16 +36,16 @@ __FBSDID("$FreeBSD$");
 
 #include "mkuzip.h"
 #include "mkuz_zlib.h"
+#include "mkuz_blk.h"
 
 struct mkuz_zlib {
-	char *obuf;
 	uLongf oblen;
 	uint32_t blksz;
 };
 
 static struct mkuz_zlib uzip;
 
-void *
+void
 mkuz_zlib_init(uint32_t blksz)
 {
 	if (blksz % DEV_BSIZE != 0) {
@@ -58,24 +58,25 @@ mkuz_zlib_init(uint32_t blksz)
 		/* Not reached */
 	}
 	uzip.oblen = compressBound(blksz);
-	uzip.obuf = mkuz_safe_malloc(uzip.oblen);
 	uzip.blksz = blksz;
-
-	return (uzip.obuf);
 }
 
-void
-mkuz_zlib_compress(const char *ibuf, uint32_t *destlen)
+struct mkuz_blk *
+mkuz_zlib_compress(const struct mkuz_blk *iblk)
 {
 	uLongf destlen_z;
+	struct mkuz_blk *rval;
 
-	destlen_z = uzip.oblen;
-	if (compress2(uzip.obuf, &destlen_z, ibuf, uzip.blksz,
+	rval = mkuz_blk_ctor(uzip.oblen);
+
+	destlen_z = rval->alen;
+	if (compress2(rval->data, &destlen_z, iblk->data, uzip.blksz,
 	    Z_BEST_COMPRESSION) != Z_OK) {
 		errx(1, "can't compress data: compress2() "
 		    "failed");
 		/* Not reached */
 	}
 
-	*destlen = (uint32_t)destlen_z;
+	rval->info.len = (uint32_t)destlen_z;
+	return (rval);
 }

@@ -26,5 +26,6 @@
  * $FreeBSD$
  */
 
-struct mkuz_blk_info *mkuz_blkcache_regblock(int, uint32_t, off_t, ssize_t,
-  void *);
+struct mkuz_blk;
+
+struct mkuz_blk_info *mkuz_blkcache_regblock(int, const struct mkuz_blk *);

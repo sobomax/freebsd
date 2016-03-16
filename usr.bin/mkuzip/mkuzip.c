@@ -38,6 +38,7 @@ __FBSDID("$FreeBSD$");
 #include <ctype.h>
 #include <err.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,13 +52,14 @@ __FBSDID("$FreeBSD$");
 #include "mkuz_lzma.h"
 #include "mkuz_blk.h"
 #include "mkuz_cfg.h"
+#include "mkuz_conveyer.h"
 
 #define DEFINE_RAW_METHOD(func, rval, args...) typedef rval (*func##_t)(args)
 
 #define DEFAULT_CLSTSIZE	16384
 
-DEFINE_RAW_METHOD(f_init, void *, uint32_t);
-DEFINE_RAW_METHOD(f_compress, void, const char *, uint32_t *);
+DEFINE_RAW_METHOD(f_init, void, uint32_t);
+DEFINE_RAW_METHOD(f_compress, struct mkuz_blk *, const struct mkuz_blk *);
 
 struct mkuz_format {
 	const char *magic;
@@ -80,17 +82,24 @@ static struct mkuz_format ulzma_fmt = {
         .f_compress = &mkuz_lzma_compress
 };
 
-static char *readblock(int, char *, u_int32_t);
+static struct mkuz_blk *readblock(int, u_int32_t);
 static void usage(void);
 static void cleanup(void);
 static int  memvcmp(const void *, unsigned char, size_t);
 
 static char *cleanfile = NULL;
 
+static struct mkuz_blk *
+mkuz_blk_queue(struct mkuz_cfg *cfp, const struct mkuz_blk *qbp)
+{
+
+    return (cfp->handler->f_compress(qbp));
+}
+
 int main(int argc, char **argv)
 {
 	struct mkuz_cfg cfs;
-	char *iname, *oname, *obuf, *ibuf;
+	char *iname, *oname;
 	uint64_t *toc;
 	int i, opt, tmp;
 	struct {
@@ -99,12 +108,14 @@ int main(int argc, char **argv)
 	} summary;
 	struct iovec iov[2];
 	struct stat sb;
-	uint32_t destlen;
 	uint64_t offset, last_offset;
 	struct cloop_header hdr;
 	struct mkuz_blk_info *chit;
+	struct mkuz_conveyer cbelt;
+	int nworkers;
 
 	memset(&hdr, 0, sizeof(hdr));
+	mkuz_conveyer_init(&cbelt);
 	hdr.blksz = DEFAULT_CLSTSIZE;
 	oname = NULL;
 	cfs.verbose = 0;
@@ -113,6 +124,8 @@ int main(int argc, char **argv)
 	summary.en = 0;
 	summary.f = stderr;
 	cfs.handler = &uzip_fmt;
+        nworkers = 1;
+	struct mkuz_blk *iblk, *oblk;
 
 	while((opt = getopt(argc, argv, "o:s:vZdLS")) != -1) {
 		switch(opt) {
@@ -172,7 +185,7 @@ int main(int argc, char **argv)
 		    tolower(hdr.magic[CLOOP_OFS_COMPR]);
 	}
 
-	obuf = cfs.handler->f_init(hdr.blksz);
+	cfs.handler->f_init(hdr.blksz);
 
 	iname = argv[0];
 	if (oname == NULL) {
@@ -182,8 +195,6 @@ int main(int argc, char **argv)
 			/* Not reached */
 		}
 	}
-
-	ibuf = mkuz_safe_malloc(hdr.blksz);
 
 	signal(SIGHUP, exit);
 	signal(SIGINT, exit);
@@ -247,63 +258,72 @@ int main(int argc, char **argv)
 		    hdr.nblocks, iov[1].iov_len);
 
 	last_offset = 0;
-	for(i = 0; i == 0 || ibuf != NULL; i++) {
-		ibuf = readblock(cfs.fdr, ibuf, hdr.blksz);
-		if (ibuf != NULL) {
-			if (cfs.no_zcomp == 0 && \
-			    memvcmp(ibuf, '\0', hdr.blksz) != 0) {
+        iblk = oblk = NULL;
+	for(i = 0; iblk != MKUZ_BLK_EOF; i++) {
+getmore:
+		iblk = readblock(cfs.fdr, hdr.blksz);
+		chit = NULL;
+		if (iblk != MKUZ_BLK_EOF) {
+			if (cfs.no_zcomp == 0 &&
+			    memvcmp(iblk->data, '\0', iblk->info.len) != 0) {
 				/* All zeroes block */
-				destlen = 0;
+				oblk = mkuz_blk_ctor(0);
 			} else {
-				cfs.handler->f_compress(ibuf, &destlen);
+				oblk = mkuz_blk_queue(&cfs, iblk);
+				if (oblk == MKUZ_BLK_MORE) {
+                                	goto getmore;
+				}
+				oblk->info.offset = offset;
+				oblk->info.blkno = i;
+				if (cfs.en_dedup != 0) {
+					chit = mkuz_blkcache_regblock(cfs.fdw, oblk);
+					/*
+					 * There should be at least one non-empty block
+					 * between us and the backref'ed offset, otherwise
+					 * we won't be able to parse that sequence correctly
+					 * as it would be indistinguishible from another
+					 * empty block.
+					 */
+					if (chit != NULL && 
+					    chit->offset == last_offset) {
+						chit = NULL;
+					}
+				}
+
 			}
 		} else {
-			destlen = DEV_BSIZE - (offset % DEV_BSIZE);
-			memset(obuf, 0, destlen);
+			oblk = mkuz_blk_ctor(DEV_BSIZE - (offset % DEV_BSIZE));
+			oblk->info.len = oblk->alen;
 			if (cfs.verbose != 0)
 				fprintf(stderr, "padding data with %lu bytes "
 				    "so that file size is multiple of %d\n",
-				    (u_long)destlen, DEV_BSIZE);
-		}
-		if (destlen > 0 && cfs.en_dedup != 0) {
-			chit = mkuz_blkcache_regblock(cfs.fdw, i, offset, destlen,
-			    obuf);
-			/*
-			 * There should be at least one non-empty block
-			 * between us and the backref'ed offset, otherwise
-			 * we won't be able to parse that sequence correctly
-			 * as it would be indistinguishible from another
-			 * empty block.
-			 */
-			if (chit != NULL && chit->offset == last_offset) {
-				chit = NULL;
-			}
-		} else {
-			chit = NULL;
+				    (u_long)oblk->alen, DEV_BSIZE);
 		}
 		if (chit != NULL) {
 			toc[i] = htobe64(chit->offset);
 		} else {
-			if (destlen > 0 && write(cfs.fdw, obuf, destlen) < 0) {
+			if (oblk->info.len > 0 && write(cfs.fdw, oblk->data,
+			    oblk->info.len) < 0) {
 				err(1, "write(%s)", oname);
 				/* Not reached */
 			}
 			toc[i] = htobe64(offset);
 			last_offset = offset;
-			offset += destlen;
+			offset += oblk->info.len;
 		}
-		if (ibuf != NULL && cfs.verbose != 0) {
+		if (iblk != MKUZ_BLK_EOF && cfs.verbose != 0) {
 			fprintf(stderr, "cluster #%d, in %u bytes, "
 			    "out len=%lu offset=%lu", i, hdr.blksz,
-			    chit == NULL ? (u_long)destlen : 0,
+			    chit == NULL ? (u_long)oblk->info.len : 0,
 			    (u_long)be64toh(toc[i]));
 			if (chit != NULL) {
 				fprintf(stderr, " (backref'ed to #%d)",
 				    chit->blkno);
 			}
 			fprintf(stderr, "\n");
-
+			free(iblk);
 		}
+		free(oblk);
 	}
 	close(cfs.fdr);
 
@@ -329,21 +349,36 @@ int main(int argc, char **argv)
 	exit(0);
 }
 
-static char *
-readblock(int fd, char *ibuf, u_int32_t clstsize)
+static struct mkuz_blk *
+readblock(int fd, u_int32_t clstsize)
 {
 	int numread;
+	struct mkuz_blk *rval;
+	static int blockcnt;
+	off_t cpos;
 
-	bzero(ibuf, clstsize);
-	numread = read(fd, ibuf, clstsize);
+	rval = mkuz_blk_ctor(clstsize);
+
+	rval->info.blkno = blockcnt;
+	blockcnt += 1;
+	cpos = lseek(fd, 0, SEEK_CUR);
+	if (cpos < 0) {
+		err(1, "readblock: lseek() failed");
+		/* Not reached */
+	}
+	rval->info.offset = cpos;
+
+	numread = read(fd, rval->data, clstsize);
 	if (numread < 0) {
-		err(1, "read() failed");
+		err(1, "readblock: read() failed");
 		/* Not reached */
 	}
 	if (numread == 0) {
-		return NULL;
+		free(rval);
+		return MKUZ_BLK_EOF;
 	}
-	return ibuf;
+	rval->info.len = numread;
+	return rval;
 }
 
 static void

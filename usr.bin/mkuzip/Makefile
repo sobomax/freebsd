@@ -2,7 +2,9 @@
 
 PROG=	mkuzip
 MAN=	mkuzip.8
-SRCS=	mkuzip.c mkuz_blockcache.c mkuz_lzma.c mkuz_zlib.c
+SRCS=	mkuzip.c mkuz_blockcache.c mkuz_lzma.c mkuz_zlib.c mkuz_conveyer.c \
+	    mkuz_blk.c
+CFLAGS+=	-DMKUZ_DEBUG
 
 LIBADD=	z md lzma
 
