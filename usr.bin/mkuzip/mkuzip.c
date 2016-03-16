@@ -49,6 +49,8 @@ __FBSDID("$FreeBSD$");
 #include "mkuz_blockcache.h"
 #include "mkuz_zlib.h"
 #include "mkuz_lzma.h"
+#include "mkuz_blk.h"
+#include "mkuz_cfg.h"
 
 #define DEFINE_RAW_METHOD(func, rval, args...) typedef rval (*func##_t)(args)
 
@@ -87,9 +89,10 @@ static char *cleanfile = NULL;
 
 int main(int argc, char **argv)
 {
+	struct mkuz_cfg cfs;
 	char *iname, *oname, *obuf, *ibuf;
 	uint64_t *toc;
-	int fdr, fdw, i, opt, verbose, no_zcomp, tmp, en_dedup;
+	int i, opt, tmp;
 	struct {
 		int en;
 		FILE *f;
@@ -99,18 +102,17 @@ int main(int argc, char **argv)
 	uint32_t destlen;
 	uint64_t offset, last_offset;
 	struct cloop_header hdr;
-	struct mkuz_blkcache_hit *chit;
-	const struct mkuz_format *handler;
+	struct mkuz_blk_info *chit;
 
 	memset(&hdr, 0, sizeof(hdr));
 	hdr.blksz = DEFAULT_CLSTSIZE;
 	oname = NULL;
-	verbose = 0;
-	no_zcomp = 0;
-	en_dedup = 0;
+	cfs.verbose = 0;
+	cfs.no_zcomp = 0;
+	cfs.en_dedup = 0;
 	summary.en = 0;
 	summary.f = stderr;
-	handler = &uzip_fmt;
+	cfs.handler = &uzip_fmt;
 
 	while((opt = getopt(argc, argv, "o:s:vZdLS")) != -1) {
 		switch(opt) {
@@ -129,19 +131,19 @@ int main(int argc, char **argv)
 			break;
 
 		case 'v':
-			verbose = 1;
+			cfs.verbose = 1;
 			break;
 
 		case 'Z':
-			no_zcomp = 1;
+			cfs.no_zcomp = 1;
 			break;
 
 		case 'd':
-			en_dedup = 1;
+			cfs.en_dedup = 1;
 			break;
 
 		case 'L':
-			handler = &ulzma_fmt;
+			cfs.handler = &ulzma_fmt;
 			break;
 
 		case 'S':
@@ -162,19 +164,19 @@ int main(int argc, char **argv)
 		/* Not reached */
 	}
 
-	strcpy(hdr.magic, handler->magic);
+	strcpy(hdr.magic, cfs.handler->magic);
 
-	if (en_dedup != 0) {
+	if (cfs.en_dedup != 0) {
 		hdr.magic[CLOOP_OFS_VERSN] = CLOOP_MAJVER_3;
 		hdr.magic[CLOOP_OFS_COMPR] =
 		    tolower(hdr.magic[CLOOP_OFS_COMPR]);
 	}
 
-	obuf = handler->f_init(hdr.blksz);
+	obuf = cfs.handler->f_init(hdr.blksz);
 
 	iname = argv[0];
 	if (oname == NULL) {
-		asprintf(&oname, "%s%s", iname, handler->default_sufx);
+		asprintf(&oname, "%s%s", iname, cfs.handler->default_sufx);
 		if (oname == NULL) {
 			err(1, "can't allocate memory");
 			/* Not reached */
@@ -190,19 +192,19 @@ int main(int argc, char **argv)
 	signal(SIGXFSZ, exit);
 	atexit(cleanup);
 
-	fdr = open(iname, O_RDONLY);
-	if (fdr < 0) {
+	cfs.fdr = open(iname, O_RDONLY);
+	if (cfs.fdr < 0) {
 		err(1, "open(%s)", iname);
 		/* Not reached */
 	}
-	if (fstat(fdr, &sb) != 0) {
+	if (fstat(cfs.fdr, &sb) != 0) {
 		err(1, "fstat(%s)", iname);
 		/* Not reached */
 	}
 	if (S_ISCHR(sb.st_mode)) {
 		off_t ms;
 
-		if (ioctl(fdr, DIOCGMEDIASIZE, &ms) < 0) {
+		if (ioctl(cfs.fdr, DIOCGMEDIASIZE, &ms) < 0) {
 			err(1, "ioctl(DIOCGMEDIASIZE)");
 			/* Not reached */
 		}
@@ -214,16 +216,16 @@ int main(int argc, char **argv)
 	}
 	hdr.nblocks = sb.st_size / hdr.blksz;
 	if ((sb.st_size % hdr.blksz) != 0) {
-		if (verbose != 0)
+		if (cfs.verbose != 0)
 			fprintf(stderr, "file size is not multiple "
 			"of %d, padding data\n", hdr.blksz);
 		hdr.nblocks++;
 	}
 	toc = mkuz_safe_malloc((hdr.nblocks + 1) * sizeof(*toc));
 
-	fdw = open(oname, (en_dedup ? O_RDWR : O_WRONLY) | O_TRUNC | O_CREAT,
+	cfs.fdw = open(oname, (cfs.en_dedup ? O_RDWR : O_WRONLY) | O_TRUNC | O_CREAT,
 		   S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
-	if (fdw < 0) {
+	if (cfs.fdw < 0) {
 		err(1, "open(%s)", oname);
 		/* Not reached */
 	}
@@ -237,34 +239,34 @@ int main(int argc, char **argv)
 	offset = iov[0].iov_len + iov[1].iov_len;
 
 	/* Reserve space for header */
-	lseek(fdw, offset, SEEK_SET);
+	lseek(cfs.fdw, offset, SEEK_SET);
 
-	if (verbose != 0)
+	if (cfs.verbose != 0)
 		fprintf(stderr, "data size %ju bytes, number of clusters "
 		    "%u, index length %zu bytes\n", sb.st_size,
 		    hdr.nblocks, iov[1].iov_len);
 
 	last_offset = 0;
 	for(i = 0; i == 0 || ibuf != NULL; i++) {
-		ibuf = readblock(fdr, ibuf, hdr.blksz);
+		ibuf = readblock(cfs.fdr, ibuf, hdr.blksz);
 		if (ibuf != NULL) {
-			if (no_zcomp == 0 && \
+			if (cfs.no_zcomp == 0 && \
 			    memvcmp(ibuf, '\0', hdr.blksz) != 0) {
 				/* All zeroes block */
 				destlen = 0;
 			} else {
-				handler->f_compress(ibuf, &destlen);
+				cfs.handler->f_compress(ibuf, &destlen);
 			}
 		} else {
 			destlen = DEV_BSIZE - (offset % DEV_BSIZE);
 			memset(obuf, 0, destlen);
-			if (verbose != 0)
+			if (cfs.verbose != 0)
 				fprintf(stderr, "padding data with %lu bytes "
 				    "so that file size is multiple of %d\n",
 				    (u_long)destlen, DEV_BSIZE);
 		}
-		if (destlen > 0 && en_dedup != 0) {
-			chit = mkuz_blkcache_regblock(fdw, i, offset, destlen,
+		if (destlen > 0 && cfs.en_dedup != 0) {
+			chit = mkuz_blkcache_regblock(cfs.fdw, i, offset, destlen,
 			    obuf);
 			/*
 			 * There should be at least one non-empty block
@@ -282,7 +284,7 @@ int main(int argc, char **argv)
 		if (chit != NULL) {
 			toc[i] = htobe64(chit->offset);
 		} else {
-			if (destlen > 0 && write(fdw, obuf, destlen) < 0) {
+			if (destlen > 0 && write(cfs.fdw, obuf, destlen) < 0) {
 				err(1, "write(%s)", oname);
 				/* Not reached */
 			}
@@ -290,7 +292,7 @@ int main(int argc, char **argv)
 			last_offset = offset;
 			offset += destlen;
 		}
-		if (ibuf != NULL && verbose != 0) {
+		if (ibuf != NULL && cfs.verbose != 0) {
 			fprintf(stderr, "cluster #%d, in %u bytes, "
 			    "out len=%lu offset=%lu", i, hdr.blksz,
 			    chit == NULL ? (u_long)destlen : 0,
@@ -303,9 +305,9 @@ int main(int argc, char **argv)
 
 		}
 	}
-	close(fdr);
+	close(cfs.fdr);
 
-	if (verbose != 0 || summary.en != 0)
+	if (cfs.verbose != 0 || summary.en != 0)
 		fprintf(summary.f, "compressed data to %ju bytes, saved %lld "
 		    "bytes, %.2f%% decrease.\n", offset,
 		    (long long)(sb.st_size - offset),
@@ -316,13 +318,13 @@ int main(int argc, char **argv)
 	hdr.blksz = htonl(hdr.blksz);
 	hdr.nblocks = htonl(hdr.nblocks);
 	/* Write headers into pre-allocated space */
-	lseek(fdw, 0, SEEK_SET);
-	if (writev(fdw, iov, 2) < 0) {
+	lseek(cfs.fdw, 0, SEEK_SET);
+	if (writev(cfs.fdw, iov, 2) < 0) {
 		err(1, "writev(%s)", oname);
 		/* Not reached */
 	}
 	cleanfile = NULL;
-	close(fdw);
+	close(cfs.fdw);
 
 	exit(0);
 }
