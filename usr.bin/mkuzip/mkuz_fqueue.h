@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Maxim Sobolev <sobomax@FreeBSD.org>
+ * Copyright (c) 2004-2016 Maxim Sobolev <sobomax@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,15 +26,12 @@
  * $FreeBSD$
  */
 
-struct mkuz_conveyer;
+struct mkuz_fifo_queue;
+struct mkuz_blk;
+struct mkuz_bchain_link;
 
-struct mkuz_cfg {
-    int fdr;
-    int fdw;
-    int verbose;
-    int no_zcomp;
-    int en_dedup;
-    int nworkers;
-    int blksz;
-    const struct mkuz_format *handler;
-};
+void mkuz_fqueue_init(struct mkuz_fifo_queue *);
+void mkuz_fqueue_enq(struct mkuz_fifo_queue *, struct mkuz_blk *);
+struct mkuz_blk *mkuz_fqueue_deq(struct mkuz_fifo_queue *);
+struct mkuz_blk *mkuz_fqueue_deq_no(struct mkuz_fifo_queue *, uint32_t);
+void mkuz_fqueue_deq_all(struct mkuz_fifo_queue *, struct mkuz_bchain_link *);

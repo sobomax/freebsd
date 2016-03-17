@@ -22,7 +22,6 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
  */
 
 #include <sys/cdefs.h>
@@ -35,6 +34,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
+#include <assert.h>
 #include <ctype.h>
 #include <err.h>
 #include <fcntl.h>
@@ -54,20 +54,10 @@ __FBSDID("$FreeBSD$");
 #include "mkuz_blk.h"
 #include "mkuz_cfg.h"
 #include "mkuz_conveyer.h"
-
-#define DEFINE_RAW_METHOD(func, rval, args...) typedef rval (*func##_t)(args)
+#include "mkuz_format.h"
+#include "mkuz_fqueue.h"
 
 #define DEFAULT_CLSTSIZE	16384
-
-DEFINE_RAW_METHOD(f_init, void *, uint32_t);
-DEFINE_RAW_METHOD(f_compress, struct mkuz_blk *, void *, const struct mkuz_blk *);
-
-struct mkuz_format {
-	const char *magic;
-	const char *default_sufx;
-	f_init_t f_init;
-	f_compress_t f_compress;
-};
 
 static struct mkuz_format uzip_fmt = {
 	.magic = CLOOP_MAGIC_ZLIB,
@@ -90,37 +80,12 @@ static int  memvcmp(const void *, unsigned char, size_t);
 
 static char *cleanfile = NULL;
 
-static struct mkuz_blk *
-mkuz_blk_queue(struct mkuz_cfg *cfp, void *c_ctx, uint64_t offset,
-    const struct mkuz_blk *qbp)
-{
-	struct mkuz_blk_info *chit;
-	struct mkuz_blk *oblk;
-
-	oblk = cfp->handler->f_compress(c_ctx, qbp);
-	oblk->info.offset = offset;
-	if (cfp->en_dedup != 0) {
-		chit = mkuz_blkcache_regblock(cfp->fdw, oblk);
-		/*
-		 * There should be at least one non-empty block
-		 * between us and the backref'ed offset, otherwise
-		 * we won't be able to parse that sequence correctly
-		 * as it would be indistinguishible from another
-		 * empty block.
-		 */
-		if (chit != NULL) {
-			oblk->br_offset = chit->offset;
-		}
-	}
-	return (oblk);
-}
-
 int main(int argc, char **argv)
 {
 	struct mkuz_cfg cfs;
 	char *iname, *oname;
 	uint64_t *toc;
-	int i, opt, tmp;
+	int i, io, opt, tmp;
 	struct {
 		int en;
 		FILE *f;
@@ -129,13 +94,14 @@ int main(int argc, char **argv)
 	struct stat sb;
 	uint64_t offset, last_offset;
 	struct cloop_header hdr;
-	struct mkuz_conveyer cbelt;
-	int nworkers;
+	struct mkuz_conveyer *cvp;
         void *c_ctx;
+	struct mkuz_blk_info *chit;
+
+	malloc_conf = "lg_dirty_mult:-1";
 
 	memset(&hdr, 0, sizeof(hdr));
-	mkuz_conveyer_init(&cbelt);
-	hdr.blksz = DEFAULT_CLSTSIZE;
+	cfs.blksz = DEFAULT_CLSTSIZE;
 	oname = NULL;
 	cfs.verbose = 0;
 	cfs.no_zcomp = 0;
@@ -143,7 +109,7 @@ int main(int argc, char **argv)
 	summary.en = 0;
 	summary.f = stderr;
 	cfs.handler = &uzip_fmt;
-        nworkers = 1;
+        cfs.nworkers = 2;
 	struct mkuz_blk *iblk, *oblk;
 
 	while((opt = getopt(argc, argv, "o:s:vZdLS")) != -1) {
@@ -159,7 +125,7 @@ int main(int argc, char **argv)
 				    optarg);
 				/* Not reached */
 			}
-			hdr.blksz = tmp;
+			cfs.blksz = tmp;
 			break;
 
 		case 'v':
@@ -204,7 +170,7 @@ int main(int argc, char **argv)
 		    tolower(hdr.magic[CLOOP_OFS_COMPR]);
 	}
 
-	c_ctx = cfs.handler->f_init(hdr.blksz);
+	c_ctx = cfs.handler->f_init(cfs.blksz);
 
 	iname = argv[0];
 	if (oname == NULL) {
@@ -244,11 +210,11 @@ int main(int argc, char **argv)
 			iname);
 		exit(1);
 	}
-	hdr.nblocks = sb.st_size / hdr.blksz;
-	if ((sb.st_size % hdr.blksz) != 0) {
+	hdr.nblocks = sb.st_size / cfs.blksz;
+	if ((sb.st_size % cfs.blksz) != 0) {
 		if (cfs.verbose != 0)
 			fprintf(stderr, "file size is not multiple "
-			"of %d, padding data\n", hdr.blksz);
+			"of %d, padding data\n", cfs.blksz);
 		hdr.nblocks++;
 	}
 	toc = mkuz_safe_malloc((hdr.nblocks + 1) * sizeof(*toc));
@@ -271,39 +237,53 @@ int main(int argc, char **argv)
 	/* Reserve space for header */
 	lseek(cfs.fdw, offset, SEEK_SET);
 
-	if (cfs.verbose != 0)
+	if (cfs.verbose != 0) {
 		fprintf(stderr, "data size %ju bytes, number of clusters "
 		    "%u, index length %zu bytes\n", sb.st_size,
 		    hdr.nblocks, iov[1].iov_len);
+	}
+
+	cvp = mkuz_conveyer_ctor(&cfs);
 
 	last_offset = 0;
         iblk = oblk = NULL;
-	for(i = 0; iblk != MKUZ_BLK_EOF; i++) {
-getmore:
-		iblk = readblock(cfs.fdr, hdr.blksz);
+	for(i = io = 0; iblk != MKUZ_BLK_EOF; i++) {
+		iblk = readblock(cfs.fdr, cfs.blksz);
 		if (iblk != MKUZ_BLK_EOF) {
 			if (cfs.no_zcomp == 0 &&
 			    memvcmp(iblk->data, '\0', iblk->info.len) != 0) {
 				/* All zeroes block */
 				oblk = mkuz_blk_ctor(0);
+				oblk->info.blkno = iblk->info.blkno;
+				mkuz_fqueue_enq(&cvp->results, oblk);
+				free(iblk);
 			} else {
-				oblk = mkuz_blk_queue(&cfs, c_ctx, offset, iblk);
-				if (oblk == MKUZ_BLK_MORE) {
-                                	goto getmore;
-				}
-				oblk->info.blkno = i;
-
+				mkuz_fqueue_enq(&cvp->wrk_queue, iblk);
 			}
-		} else {
-			oblk = mkuz_blk_ctor(DEV_BSIZE - (offset % DEV_BSIZE));
-			oblk->info.len = oblk->alen;
-			if (cfs.verbose != 0)
-				fprintf(stderr, "padding data with %lu bytes "
-				    "so that file size is multiple of %d\n",
-				    (u_long)oblk->alen, DEV_BSIZE);
 		}
-		if (oblk->br_offset != OFFSET_UNDEF && oblk->br_offset != last_offset) {
-			toc[i] = htobe64(oblk->br_offset);
+		if (i < cfs.nworkers * 2) {
+			continue;
+		}
+drain:
+		oblk = mkuz_fqueue_deq_no(&cvp->results, io);
+		assert(oblk->info.blkno == (unsigned)io);
+		oblk->info.offset = offset;
+		chit = NULL;
+		if (cfs.en_dedup != 0 && oblk->info.len > 0) {
+			chit = mkuz_blkcache_regblock(cfs.fdw, oblk);
+			/*
+			 * There should be at least one non-empty block
+			 * between us and the backref'ed offset, otherwise
+			 * we won't be able to parse that sequence correctly
+			 * as it would be indistinguishible from another
+			 * empty block.
+			 */
+			if (chit != NULL && chit->offset == last_offset) {
+				chit = NULL;
+			}
+		}
+		if (chit != NULL) {
+			toc[io] = htobe64(chit->offset);
 			oblk->info.len = 0;
 		} else {
 			if (oblk->info.len > 0 && write(cfs.fdw, oblk->data,
@@ -311,36 +291,53 @@ getmore:
 				err(1, "write(%s)", oname);
 				/* Not reached */
 			}
-			toc[i] = htobe64(offset);
+			toc[io] = htobe64(offset);
 			last_offset = offset;
 			offset += oblk->info.len;
 		}
-		if (iblk != MKUZ_BLK_EOF && cfs.verbose != 0) {
+		if (cfs.verbose != 0) {
 			fprintf(stderr, "cluster #%d, in %u bytes, "
-			    "out len=%lu offset=%lu", i, hdr.blksz,
-			    (u_long)oblk->info.len, (u_long)be64toh(toc[i]));
-#if 0
+			    "out len=%lu offset=%lu", io, cfs.blksz,
+			    (u_long)oblk->info.len, (u_long)be64toh(toc[io]));
 			if (chit != NULL) {
 				fprintf(stderr, " (backref'ed to #%d)",
 				    chit->blkno);
 			}
-#endif
 			fprintf(stderr, "\n");
-			free(iblk);
 		}
 		free(oblk);
+		io += 1;
+		if (iblk == MKUZ_BLK_EOF) {
+			if (io < i)
+				goto drain;
+			/* Last block, see if we need to add some padding */
+			if ((offset % DEV_BSIZE) == 0)
+				continue;
+			oblk = mkuz_blk_ctor(DEV_BSIZE - (offset % DEV_BSIZE));
+			oblk->info.blkno = io;
+			oblk->info.len = oblk->alen;
+			if (cfs.verbose != 0) {
+				fprintf(stderr, "padding data with %lu bytes "
+				    "so that file size is multiple of %d\n",
+				    (u_long)oblk->alen, DEV_BSIZE);
+			}
+			mkuz_fqueue_enq(&cvp->results, oblk);
+			goto drain;
+		}
 	}
+
 	close(cfs.fdr);
 
-	if (cfs.verbose != 0 || summary.en != 0)
+	if (cfs.verbose != 0 || summary.en != 0) {
 		fprintf(summary.f, "compressed data to %ju bytes, saved %lld "
 		    "bytes, %.2f%% decrease.\n", offset,
 		    (long long)(sb.st_size - offset),
 		    100.0 * (long long)(sb.st_size - offset) /
 		    (float)sb.st_size);
+	}
 
 	/* Convert to big endian */
-	hdr.blksz = htonl(hdr.blksz);
+	hdr.blksz = htonl(cfs.blksz);
 	hdr.nblocks = htonl(hdr.nblocks);
 	/* Write headers into pre-allocated space */
 	lseek(cfs.fdw, 0, SEEK_SET);

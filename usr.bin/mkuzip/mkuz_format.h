@@ -26,15 +26,14 @@
  * $FreeBSD$
  */
 
-struct mkuz_conveyer;
+#define DEFINE_RAW_METHOD(func, rval, args...) typedef rval (*func##_t)(args)
 
-struct mkuz_cfg {
-    int fdr;
-    int fdw;
-    int verbose;
-    int no_zcomp;
-    int en_dedup;
-    int nworkers;
-    int blksz;
-    const struct mkuz_format *handler;
+DEFINE_RAW_METHOD(f_init, void *, uint32_t);
+DEFINE_RAW_METHOD(f_compress, struct mkuz_blk *, void *, const struct mkuz_blk *);
+
+struct mkuz_format {
+        const char *magic;
+        const char *default_sufx;
+        f_init_t f_init;
+        f_compress_t f_compress;
 };

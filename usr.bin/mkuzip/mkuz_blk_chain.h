@@ -26,15 +26,10 @@
  * $FreeBSD$
  */
 
-struct mkuz_conveyer;
+struct mkuz_blk;
+struct mkuz_bchain_link;
 
-struct mkuz_cfg {
-    int fdr;
-    int fdw;
-    int verbose;
-    int no_zcomp;
-    int en_dedup;
-    int nworkers;
-    int blksz;
-    const struct mkuz_format *handler;
+struct mkuz_bchain_link {
+    struct mkuz_blk *this;
+    struct mkuz_bchain_link *prev;
 };
