@@ -33,12 +33,17 @@ __FBSDID("$FreeBSD$");
 #include <stdlib.h>
 #include <strings.h>
 
+#if defined(MKUZ_DEBUG)
+# include <stdio.h>
+#endif
+
 #include "mkuz_conveyer.h"
 #include "mkuz_cfg.h"
 #include "mkuzip.h"
 #include "mkuz_format.h"
 #include "mkuz_blk.h"
 #include "mkuz_fqueue.h"
+#include "mkuz_blk_chain.h"
 
 struct cw_args {
     struct mkuz_conveyer *cvp;
@@ -60,13 +65,13 @@ cworker(void *p)
     free(cwp);
     c_ctx = cfp->handler->f_init(cfp->blksz);
     for (;;) {
-        iblk = mkuz_fqueue_deq(&cvp->wrk_queue);
+        iblk = mkuz_fqueue_deq(cvp->wrk_queue);
         if (iblk == MKUZ_BLK_EOF) {
             break;
         }
         oblk = cfp->handler->f_compress(c_ctx, iblk);
         oblk->info.blkno = iblk->info.blkno;
-        mkuz_fqueue_enq(&cvp->results, oblk);
+        mkuz_fqueue_enq(cvp->results, oblk);
 	free(iblk);
     }
     return (NULL);
@@ -82,8 +87,8 @@ mkuz_conveyer_ctor(struct mkuz_cfg *cfp)
     cp = mkuz_safe_zmalloc(sizeof(struct mkuz_conveyer) +
       (sizeof(pthread_t) * cfp->nworkers));
 
-    mkuz_fqueue_init(&cp->wrk_queue);
-    mkuz_fqueue_init(&cp->results);
+    cp->wrk_queue = mkuz_fqueue_ctor(1);
+    cp->results = mkuz_fqueue_ctor(1);
 
     for (i = 0; i < cfp->nworkers; i++) {
         cwp = mkuz_safe_zmalloc(sizeof(struct cw_args));
@@ -96,12 +101,4 @@ mkuz_conveyer_ctor(struct mkuz_cfg *cfp)
         }
     }
     return (cp);
-}
-
-void
-mkuz_fqueue_init(struct mkuz_fifo_queue *fqp)
-{
-
-    pthread_mutex_init(&fqp->mtx, NULL);
-    pthread_cond_init(&fqp->cvar, NULL);
 }

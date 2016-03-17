@@ -26,12 +26,22 @@
  * $FreeBSD$
  */
 
-struct mkuz_fifo_queue;
+struct mkuz_fifo_queue {
+    pthread_mutex_t mtx;
+    pthread_cond_t cvar;
+    struct mkuz_bchain_link *first;
+    struct mkuz_bchain_link *last;
+    int length;
+    int wakeup_len;
+};
+
 struct mkuz_blk;
 struct mkuz_bchain_link;
 
-void mkuz_fqueue_init(struct mkuz_fifo_queue *);
+struct mkuz_fifo_queue *mkuz_fqueue_ctor(int);
 void mkuz_fqueue_enq(struct mkuz_fifo_queue *, struct mkuz_blk *);
 struct mkuz_blk *mkuz_fqueue_deq(struct mkuz_fifo_queue *);
 struct mkuz_blk *mkuz_fqueue_deq_no(struct mkuz_fifo_queue *, uint32_t);
-void mkuz_fqueue_deq_all(struct mkuz_fifo_queue *, struct mkuz_bchain_link *);
+struct mkuz_bchain_link *mkuz_fqueue_deq_all(struct mkuz_fifo_queue *, int *);
+int mkuz_fqueue_enq_all(struct mkuz_fifo_queue *, struct mkuz_bchain_link *,
+  struct mkuz_bchain_link *, int);

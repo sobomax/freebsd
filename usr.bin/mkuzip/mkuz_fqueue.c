@@ -31,11 +31,27 @@ __FBSDID("$FreeBSD$");
 #include <stdint.h>
 #include <stdlib.h>
 
+#if defined(MKUZ_DEBUG)
+# include <assert.h>
+#endif
+
 #include "mkuzip.h"
 #include "mkuz_fqueue.h"
 #include "mkuz_conveyer.h"
 #include "mkuz_blk.h"
 #include "mkuz_blk_chain.h"
+
+struct mkuz_fifo_queue *
+mkuz_fqueue_ctor(int wakeup_len)
+{
+    struct mkuz_fifo_queue *fqp;
+
+    fqp = mkuz_safe_zmalloc(sizeof(struct mkuz_fifo_queue));
+    fqp->wakeup_len = wakeup_len;
+    pthread_mutex_init(&fqp->mtx, NULL);
+    pthread_cond_init(&fqp->cvar, NULL);
+    return (fqp);
+}
 
 void
 mkuz_fqueue_enq(struct mkuz_fifo_queue *fqp, struct mkuz_blk *bp)
@@ -52,8 +68,33 @@ mkuz_fqueue_enq(struct mkuz_fifo_queue *fqp, struct mkuz_blk *bp)
         fqp->last = ip;
     }
     fqp->first = ip;
-    pthread_cond_signal(&fqp->cvar);
+    fqp->length += 1;
+    if (fqp->length >= fqp->wakeup_len) {
+        pthread_cond_signal(&fqp->cvar);
+    }
     pthread_mutex_unlock(&fqp->mtx);
+}
+
+int
+mkuz_fqueue_enq_all(struct mkuz_fifo_queue *fqp, struct mkuz_bchain_link *cip_f,
+  struct mkuz_bchain_link *cip_l, int clen)
+{
+    int rval;
+
+    pthread_mutex_lock(&fqp->mtx);
+    if (fqp->first != NULL) {
+        fqp->first->prev = cip_l;
+    } else {
+        fqp->last = cip_l;
+    }
+    fqp->first = cip_f;
+    fqp->length += clen;
+    rval = fqp->length;
+    if (fqp->length >= fqp->wakeup_len) {
+        pthread_cond_signal(&fqp->cvar);
+    }
+    pthread_mutex_unlock(&fqp->mtx);
+    return (rval);
 }
 
 static int
@@ -83,9 +124,15 @@ mkuz_fqueue_deq_no(struct mkuz_fifo_queue *fqp, uint32_t blkno)
         mip = fqp->last;
         fqp->last = mip->prev;
         if (fqp->last == NULL) {
+#if defined(MKUZ_DEBUG)
+            assert(fqp->length == 1);
+#endif
             fqp->first = NULL;
         }
     } else {
+#if defined(MKUZ_DEBUG)
+        assert(fqp->length > 1);
+#endif
         newfirst = newlast = fqp->last;
         mip = NULL;
         for (ip = fqp->last->prev; ip != NULL; ip = ip->prev) {
@@ -100,6 +147,7 @@ mkuz_fqueue_deq_no(struct mkuz_fifo_queue *fqp, uint32_t blkno)
         fqp->first = newfirst;
         fqp->last = newlast;
     }
+    fqp->length -= 1;
     pthread_mutex_unlock(&fqp->mtx);
     bp = mip->this;
     free(mip);
@@ -117,11 +165,18 @@ mkuz_fqueue_deq(struct mkuz_fifo_queue *fqp)
     while (fqp->last == NULL) {
         pthread_cond_wait(&fqp->cvar, &fqp->mtx);
     }
+#if defined(MKUZ_DEBUG)
+    assert(fqp->length > 0);
+#endif
     ip = fqp->last;
     fqp->last = ip->prev;
     if (fqp->last == NULL) {
+#if defined(MKUZ_DEBUG)
+        assert(fqp->length == 1);
+#endif
         fqp->first = NULL;
     }
+    fqp->length -= 1;
     pthread_mutex_unlock(&fqp->mtx);
     bp = ip->this;
     free(ip);
@@ -129,15 +184,22 @@ mkuz_fqueue_deq(struct mkuz_fifo_queue *fqp)
     return bp;
 }
 
-void
-mkuz_fqueue_deq_all(struct mkuz_fifo_queue *fqp, struct mkuz_bchain_link *rchain)
+struct mkuz_bchain_link *
+mkuz_fqueue_deq_all(struct mkuz_fifo_queue *fqp, int *rclen)
 {
+    struct mkuz_bchain_link *rchain;
 
     pthread_mutex_lock(&fqp->mtx);
     while (fqp->last == NULL) {
         pthread_cond_wait(&fqp->cvar, &fqp->mtx);
     }
-    *rchain = *fqp->last;
+#if defined(MKUZ_DEBUG)
+    assert(fqp->length > 0);
+#endif
+    rchain = fqp->last;
     fqp->first = fqp->last = NULL;
+    *rclen = fqp->length;
+    fqp->length = 0;
     pthread_mutex_unlock(&fqp->mtx);
+    return (rchain);
 }

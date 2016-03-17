@@ -26,12 +26,7 @@
  * $FreeBSD$
  */
 
-struct mkuz_fifo_queue {
-    pthread_mutex_t mtx;
-    pthread_cond_t cvar;
-    struct mkuz_bchain_link *first;
-    struct mkuz_bchain_link *last;
-};
+struct mkuz_fifo_queue;
 
 #define MKUZ_WRK_ITM_EOF	(void *)0x1
 
@@ -40,12 +35,12 @@ struct mkuz_conveyer {
      * Work items are places in here, and picked up by workers in a FIFO
      * fashion.
      */
-    struct mkuz_fifo_queue wrk_queue;
+    struct mkuz_fifo_queue *wrk_queue;
     /*
      * Results are dropped into this FIFO and consumer is buzzed to pick them
      * up
      */
-    struct mkuz_fifo_queue results;
+    struct mkuz_fifo_queue *results;
 
     pthread_t wthreads[];
 };

@@ -255,17 +255,17 @@ int main(int argc, char **argv)
 				/* All zeroes block */
 				oblk = mkuz_blk_ctor(0);
 				oblk->info.blkno = iblk->info.blkno;
-				mkuz_fqueue_enq(&cvp->results, oblk);
+				mkuz_fqueue_enq(cvp->results, oblk);
 				free(iblk);
 			} else {
-				mkuz_fqueue_enq(&cvp->wrk_queue, iblk);
+				mkuz_fqueue_enq(cvp->wrk_queue, iblk);
 			}
 		}
-		if (i < cfs.nworkers * 2) {
+		if (i < (cfs.nworkers * 100 * 2)) {
 			continue;
 		}
 drain:
-		oblk = mkuz_fqueue_deq_no(&cvp->results, io);
+		oblk = mkuz_fqueue_deq_no(cvp->results, io);
 		assert(oblk->info.blkno == (unsigned)io);
 		oblk->info.offset = offset;
 		chit = NULL;
@@ -321,7 +321,7 @@ drain:
 				    "so that file size is multiple of %d\n",
 				    (u_long)oblk->alen, DEV_BSIZE);
 			}
-			mkuz_fqueue_enq(&cvp->results, oblk);
+			mkuz_fqueue_enq(cvp->results, oblk);
 			goto drain;
 		}
 	}
