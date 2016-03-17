@@ -43,11 +43,11 @@ struct mkuz_zlib {
 	uint32_t blksz;
 };
 
-static struct mkuz_zlib uzip;
-
-void
+void *
 mkuz_zlib_init(uint32_t blksz)
 {
+	struct mkuz_zlib *zp;
+
 	if (blksz % DEV_BSIZE != 0) {
 		errx(1, "cluster size should be multiple of %d",
 		    DEV_BSIZE);
@@ -57,20 +57,26 @@ mkuz_zlib_init(uint32_t blksz)
 		errx(1, "cluster size is too large");
 		/* Not reached */
 	}
-	uzip.oblen = compressBound(blksz);
-	uzip.blksz = blksz;
+	zp = mkuz_safe_zmalloc(sizeof(struct mkuz_zlib));
+	zp->oblen = compressBound(blksz);
+	zp->blksz = blksz;
+
+	return (void *)zp;
 }
 
 struct mkuz_blk *
-mkuz_zlib_compress(const struct mkuz_blk *iblk)
+mkuz_zlib_compress(void *p, const struct mkuz_blk *iblk)
 {
 	uLongf destlen_z;
 	struct mkuz_blk *rval;
+	struct mkuz_zlib *zp;
 
-	rval = mkuz_blk_ctor(uzip.oblen);
+	zp = (struct mkuz_zlib *)p;
+
+	rval = mkuz_blk_ctor(zp->oblen);
 
 	destlen_z = rval->alen;
-	if (compress2(rval->data, &destlen_z, iblk->data, uzip.blksz,
+	if (compress2(rval->data, &destlen_z, iblk->data, zp->blksz,
 	    Z_BEST_COMPRESSION) != Z_OK) {
 		errx(1, "can't compress data: compress2() "
 		    "failed");

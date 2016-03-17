@@ -48,11 +48,13 @@ struct mkuz_lzma {
 	uint32_t blksz;
 };
 
-static struct mkuz_lzma ulzma = {.strm = LZMA_STREAM_INIT};
+static const lzma_stream lzma_stream_init = LZMA_STREAM_INIT;
 
-void
+void *
 mkuz_lzma_init(uint32_t blksz)
 {
+	struct mkuz_lzma *ulp;
+
 	if (blksz % USED_BLOCKSIZE != 0) {
 		errx(1, "cluster size should be multiple of %d",
 		    USED_BLOCKSIZE);
@@ -62,27 +64,34 @@ mkuz_lzma_init(uint32_t blksz)
 		errx(1, "cluster size is too large");
 		/* Not reached */
 	}
+	ulp = mkuz_safe_zmalloc(sizeof(struct mkuz_lzma));
 
 	/* Init lzma encoder */
-	if (lzma_lzma_preset(&ulzma.opt_lzma, LZMA_PRESET_DEFAULT))
+	ulp->strm = lzma_stream_init;
+	if (lzma_lzma_preset(&ulp->opt_lzma, LZMA_PRESET_DEFAULT))
 		errx(1, "Error loading LZMA preset");
 
-	ulzma.filters[0].id = LZMA_FILTER_LZMA2;
-	ulzma.filters[0].options = &ulzma.opt_lzma;
-	ulzma.filters[1].id = LZMA_VLI_UNKNOWN;
+	ulp->filters[0].id = LZMA_FILTER_LZMA2;
+	ulp->filters[0].options = &ulp->opt_lzma;
+	ulp->filters[1].id = LZMA_VLI_UNKNOWN;
 
-	ulzma.blksz = blksz;
+	ulp->blksz = blksz;
+
+	return (void *)ulp;
 }
 
 struct mkuz_blk *
-mkuz_lzma_compress(const struct mkuz_blk *iblk)
+mkuz_lzma_compress(void *p, const struct mkuz_blk *iblk)
 {
 	lzma_ret ret;
         struct mkuz_blk *rval;
+	struct mkuz_lzma *ulp;
 
-        rval = mkuz_blk_ctor(ulzma.blksz * 2);
+	ulp = (struct mkuz_lzma *)p;
 
-	ret = lzma_stream_encoder(&ulzma.strm, ulzma.filters, LZMA_CHECK_CRC32);
+        rval = mkuz_blk_ctor(ulp->blksz * 2);
+
+	ret = lzma_stream_encoder(&ulp->strm, ulp->filters, LZMA_CHECK_CRC32);
 	if (ret != LZMA_OK) {
 		if (ret == LZMA_MEMLIMIT_ERROR)
 			errx(1, "can't compress data: LZMA_MEMLIMIT_ERROR");
@@ -90,22 +99,22 @@ mkuz_lzma_compress(const struct mkuz_blk *iblk)
 		errx(1, "can't compress data: LZMA compressor ERROR");
 	}
 
-	ulzma.strm.next_in = iblk->data;
-	ulzma.strm.avail_in = ulzma.blksz;
-	ulzma.strm.next_out = rval->data;
-	ulzma.strm.avail_out = rval->alen;
+	ulp->strm.next_in = iblk->data;
+	ulp->strm.avail_in = ulp->blksz;
+	ulp->strm.next_out = rval->data;
+	ulp->strm.avail_out = rval->alen;
 
-	ret = lzma_code(&ulzma.strm, LZMA_FINISH);
+	ret = lzma_code(&ulp->strm, LZMA_FINISH);
 
 	if (ret != LZMA_STREAM_END) {
 		/* Error */
 		errx(1, "lzma_code FINISH failed, code=%d, pos(in=%zd, "
-		    "out=%zd)", ret, (ulzma.blksz - ulzma.strm.avail_in),
-		    (ulzma.blksz * 2 - ulzma.strm.avail_out));
+		    "out=%zd)", ret, (ulp->blksz - ulp->strm.avail_in),
+		    (ulp->blksz * 2 - ulp->strm.avail_out));
 	}
 
-	lzma_end(&ulzma.strm);
+	lzma_end(&ulp->strm);
 
-	rval->info.len = rval->alen - ulzma.strm.avail_out;
+	rval->info.len = rval->alen - ulp->strm.avail_out;
 	return (rval);
 }

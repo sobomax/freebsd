@@ -40,6 +40,7 @@ __FBSDID("$FreeBSD$");
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,8 +59,8 @@ __FBSDID("$FreeBSD$");
 
 #define DEFAULT_CLSTSIZE	16384
 
-DEFINE_RAW_METHOD(f_init, void, uint32_t);
-DEFINE_RAW_METHOD(f_compress, struct mkuz_blk *, const struct mkuz_blk *);
+DEFINE_RAW_METHOD(f_init, void *, uint32_t);
+DEFINE_RAW_METHOD(f_compress, struct mkuz_blk *, void *, const struct mkuz_blk *);
 
 struct mkuz_format {
 	const char *magic;
@@ -90,10 +91,28 @@ static int  memvcmp(const void *, unsigned char, size_t);
 static char *cleanfile = NULL;
 
 static struct mkuz_blk *
-mkuz_blk_queue(struct mkuz_cfg *cfp, const struct mkuz_blk *qbp)
+mkuz_blk_queue(struct mkuz_cfg *cfp, void *c_ctx, uint64_t offset,
+    const struct mkuz_blk *qbp)
 {
+	struct mkuz_blk_info *chit;
+	struct mkuz_blk *oblk;
 
-    return (cfp->handler->f_compress(qbp));
+	oblk = cfp->handler->f_compress(c_ctx, qbp);
+	oblk->info.offset = offset;
+	if (cfp->en_dedup != 0) {
+		chit = mkuz_blkcache_regblock(cfp->fdw, oblk);
+		/*
+		 * There should be at least one non-empty block
+		 * between us and the backref'ed offset, otherwise
+		 * we won't be able to parse that sequence correctly
+		 * as it would be indistinguishible from another
+		 * empty block.
+		 */
+		if (chit != NULL) {
+			oblk->br_offset = chit->offset;
+		}
+	}
+	return (oblk);
 }
 
 int main(int argc, char **argv)
@@ -110,9 +129,9 @@ int main(int argc, char **argv)
 	struct stat sb;
 	uint64_t offset, last_offset;
 	struct cloop_header hdr;
-	struct mkuz_blk_info *chit;
 	struct mkuz_conveyer cbelt;
 	int nworkers;
+        void *c_ctx;
 
 	memset(&hdr, 0, sizeof(hdr));
 	mkuz_conveyer_init(&cbelt);
@@ -185,7 +204,7 @@ int main(int argc, char **argv)
 		    tolower(hdr.magic[CLOOP_OFS_COMPR]);
 	}
 
-	cfs.handler->f_init(hdr.blksz);
+	c_ctx = cfs.handler->f_init(hdr.blksz);
 
 	iname = argv[0];
 	if (oname == NULL) {
@@ -262,33 +281,17 @@ int main(int argc, char **argv)
 	for(i = 0; iblk != MKUZ_BLK_EOF; i++) {
 getmore:
 		iblk = readblock(cfs.fdr, hdr.blksz);
-		chit = NULL;
 		if (iblk != MKUZ_BLK_EOF) {
 			if (cfs.no_zcomp == 0 &&
 			    memvcmp(iblk->data, '\0', iblk->info.len) != 0) {
 				/* All zeroes block */
 				oblk = mkuz_blk_ctor(0);
 			} else {
-				oblk = mkuz_blk_queue(&cfs, iblk);
+				oblk = mkuz_blk_queue(&cfs, c_ctx, offset, iblk);
 				if (oblk == MKUZ_BLK_MORE) {
                                 	goto getmore;
 				}
-				oblk->info.offset = offset;
 				oblk->info.blkno = i;
-				if (cfs.en_dedup != 0) {
-					chit = mkuz_blkcache_regblock(cfs.fdw, oblk);
-					/*
-					 * There should be at least one non-empty block
-					 * between us and the backref'ed offset, otherwise
-					 * we won't be able to parse that sequence correctly
-					 * as it would be indistinguishible from another
-					 * empty block.
-					 */
-					if (chit != NULL && 
-					    chit->offset == last_offset) {
-						chit = NULL;
-					}
-				}
 
 			}
 		} else {
@@ -299,8 +302,9 @@ getmore:
 				    "so that file size is multiple of %d\n",
 				    (u_long)oblk->alen, DEV_BSIZE);
 		}
-		if (chit != NULL) {
-			toc[i] = htobe64(chit->offset);
+		if (oblk->br_offset != OFFSET_UNDEF && oblk->br_offset != last_offset) {
+			toc[i] = htobe64(oblk->br_offset);
+			oblk->info.len = 0;
 		} else {
 			if (oblk->info.len > 0 && write(cfs.fdw, oblk->data,
 			    oblk->info.len) < 0) {
@@ -314,12 +318,13 @@ getmore:
 		if (iblk != MKUZ_BLK_EOF && cfs.verbose != 0) {
 			fprintf(stderr, "cluster #%d, in %u bytes, "
 			    "out len=%lu offset=%lu", i, hdr.blksz,
-			    chit == NULL ? (u_long)oblk->info.len : 0,
-			    (u_long)be64toh(toc[i]));
+			    (u_long)oblk->info.len, (u_long)be64toh(toc[i]));
+#if 0
 			if (chit != NULL) {
 				fprintf(stderr, " (backref'ed to #%d)",
 				    chit->blkno);
 			}
+#endif
 			fprintf(stderr, "\n");
 			free(iblk);
 		}
@@ -400,6 +405,16 @@ mkuz_safe_malloc(size_t size)
 		err(1, "can't allocate memory");
 		/* Not reached */
 	}
+	return retval;
+}
+
+void *
+mkuz_safe_zmalloc(size_t size)
+{
+	void *retval;
+
+	retval = mkuz_safe_malloc(size);
+	bzero(retval, size);
 	return retval;
 }
 

@@ -1,3 +1,5 @@
+#define OFFSET_UNDEF      UINT64_MAX
+
 struct mkuz_blk_info {
     uint64_t offset;
     size_t len;
@@ -10,6 +12,7 @@ struct mkuz_blk_info {
 struct mkuz_blk {
     struct mkuz_blk_info info;
     size_t alen;
+    uint64_t br_offset;
     unsigned char data[];
 };
 

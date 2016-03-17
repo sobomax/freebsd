@@ -27,3 +27,4 @@
  */
 
 void *mkuz_safe_malloc(size_t);
+void *mkuz_safe_zmalloc(size_t);
