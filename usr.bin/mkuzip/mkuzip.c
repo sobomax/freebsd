@@ -31,6 +31,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/disk.h>
 #include <sys/endian.h>
 #include <sys/param.h>
+#include <sys/sysctl.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
@@ -76,9 +77,19 @@ static struct mkuz_format ulzma_fmt = {
 static struct mkuz_blk *readblock(int, u_int32_t);
 static void usage(void);
 static void cleanup(void);
-static int  memvcmp(const void *, unsigned char, size_t);
+int mkuz_memvcmp(const void *, unsigned char, size_t);
 
 static char *cleanfile = NULL;
+
+static int
+cmp_blkno(const struct mkuz_blk *bp, void *p)
+{
+	uint32_t *ap;
+
+	ap = (uint32_t *)p;
+
+	return (bp->info.blkno == *ap);
+}
 
 int main(int argc, char **argv)
 {
@@ -97,8 +108,11 @@ int main(int argc, char **argv)
 	struct mkuz_conveyer *cvp;
         void *c_ctx;
 	struct mkuz_blk_info *chit;
+	size_t ncpusz, ncpu;
 
-	malloc_conf = "lg_dirty_mult:-1";
+	ncpusz = sizeof(size_t);
+	if (sysctlbyname("hw.ncpu", &ncpu, &ncpusz, NULL, 0) < 0)
+		ncpu = 1;
 
 	memset(&hdr, 0, sizeof(hdr));
 	cfs.blksz = DEFAULT_CLSTSIZE;
@@ -109,10 +123,10 @@ int main(int argc, char **argv)
 	summary.en = 0;
 	summary.f = stderr;
 	cfs.handler = &uzip_fmt;
-        cfs.nworkers = 2;
+	cfs.nworkers = ncpu;
 	struct mkuz_blk *iblk, *oblk;
 
-	while((opt = getopt(argc, argv, "o:s:vZdLS")) != -1) {
+	while((opt = getopt(argc, argv, "o:s:vZdLSj:")) != -1) {
 		switch(opt) {
 		case 'o':
 			oname = optarg;
@@ -147,6 +161,16 @@ int main(int argc, char **argv)
 		case 'S':
 			summary.en = 1;
 			summary.f = stdout;
+			break;
+
+		case 'j':
+			tmp = atoi(optarg);
+			if (tmp <= 0) {
+				errx(1, "invalid number of compression threads"
+                                    " specified: %s", optarg);
+				/* Not reached */
+			}
+			cfs.nworkers = tmp;
 			break;
 
 		default:
@@ -249,23 +273,13 @@ int main(int argc, char **argv)
         iblk = oblk = NULL;
 	for(i = io = 0; iblk != MKUZ_BLK_EOF; i++) {
 		iblk = readblock(cfs.fdr, cfs.blksz);
-		if (iblk != MKUZ_BLK_EOF) {
-			if (cfs.no_zcomp == 0 &&
-			    memvcmp(iblk->data, '\0', iblk->info.len) != 0) {
-				/* All zeroes block */
-				oblk = mkuz_blk_ctor(0);
-				oblk->info.blkno = iblk->info.blkno;
-				mkuz_fqueue_enq(cvp->results, oblk);
-				free(iblk);
-			} else {
-				mkuz_fqueue_enq(cvp->wrk_queue, iblk);
-			}
-		}
-		if (i < (cfs.nworkers * 100 * 2)) {
+		mkuz_fqueue_enq(cvp->wrk_queue, iblk);
+		if (iblk != MKUZ_BLK_EOF &&
+		    (i < (cfs.nworkers * ITEMS_PER_WORKER))) {
 			continue;
 		}
 drain:
-		oblk = mkuz_fqueue_deq_no(cvp->results, io);
+		oblk = mkuz_fqueue_deq_when(cvp->results, cmp_blkno, &io);
 		assert(oblk->info.blkno == (unsigned)io);
 		oblk->info.offset = offset;
 		chit = NULL;
@@ -388,7 +402,7 @@ usage(void)
 {
 
 	fprintf(stderr, "usage: mkuzip [-vZdLS] [-o outfile] [-s cluster_size] "
-	    "infile\n");
+	    "[-j ncompr] infile\n");
 	exit(1);
 }
 
@@ -423,8 +437,8 @@ cleanup(void)
 		unlink(cleanfile);
 }
 
-static int
-memvcmp(const void *memory, unsigned char val, size_t size)
+int
+mkuz_memvcmp(const void *memory, unsigned char val, size_t size)
 {
     const u_char *mm;
 
