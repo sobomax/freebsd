@@ -28,7 +28,7 @@
 
 struct mkuz_fifo_queue;
 
-#define MKUZ_WRK_ITM_EOF	(void *)0x1
+#define ITEMS_PER_WORKER	4
 
 struct mkuz_conveyer {
     /*
