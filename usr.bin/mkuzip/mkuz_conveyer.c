@@ -69,7 +69,13 @@ cworker(void *p)
         if (iblk == MKUZ_BLK_EOF) {
             break;
         }
-        oblk = cfp->handler->f_compress(c_ctx, iblk);
+        if (cfp->no_zcomp == 0 &&
+          mkuz_memvcmp(iblk->data, '\0', iblk->info.len) != 0) {
+            /* All zeroes block */
+            oblk = mkuz_blk_ctor(0);
+        } else {
+            oblk = cfp->handler->f_compress(c_ctx, iblk);
+        }
         oblk->info.blkno = iblk->info.blkno;
         mkuz_fqueue_enq(cvp->results, oblk);
 	free(iblk);
