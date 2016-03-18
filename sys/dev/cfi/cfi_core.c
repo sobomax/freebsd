@@ -151,10 +151,8 @@ cfi_read_qry(struct cfi_softc *sc, u_int ofs)
 	uint8_t val;
  
 	bus_space_write_1(sc->sc_tag, sc->sc_handle, CFI_QRY_CMD_ADDR * sc->sc_width, CFI_QRY_CMD_DATA);
-	//cfi_write(sc, CFI_QRY_CMD_ADDR * sc->sc_width, CFI_QRY_CMD_DATA);
 	val = cfi_read(sc, ofs * sc->sc_width);
 	bus_space_write_1(sc->sc_tag, sc->sc_handle, 0, CFI_BCS_READ_ARRAY);
-	//cfi_write(sc, 0, CFI_BCS_READ_ARRAY);
 	return (val);
 } 
 
