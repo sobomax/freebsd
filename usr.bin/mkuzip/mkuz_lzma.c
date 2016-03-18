@@ -112,7 +112,9 @@ mkuz_lzma_compress(void *p, const struct mkuz_blk *iblk)
 		    (ulp->blksz * 2 - ulp->strm.avail_out));
 	}
 
+#if 0
 	lzma_end(&ulp->strm);
+#endif
 
 	rval->info.len = rval->alen - ulp->strm.avail_out;
 	return (rval);
