@@ -98,12 +98,12 @@ mkuz_fqueue_enq_all(struct mkuz_fifo_queue *fqp, struct mkuz_bchain_link *cip_f,
 }
 
 static int
-mkuz_fqueue_has_blkno(struct mkuz_fifo_queue *fqp, uint32_t blkno)
+mkuz_fqueue_check(struct mkuz_fifo_queue *fqp, cmp_cb_t cmp_cb, void *cap)
 {
     struct mkuz_bchain_link *ip;
 
     for (ip = fqp->last; ip != NULL; ip = ip->prev) {
-        if (ip->this->info.blkno == blkno) {
+        if (cmp_cb(ip->this, cap)) {
             return (1);
         }
     }
@@ -111,16 +111,16 @@ mkuz_fqueue_has_blkno(struct mkuz_fifo_queue *fqp, uint32_t blkno)
 }
 
 struct mkuz_blk *
-mkuz_fqueue_deq_no(struct mkuz_fifo_queue *fqp, uint32_t blkno)
+mkuz_fqueue_deq_when(struct mkuz_fifo_queue *fqp, cmp_cb_t cmp_cb, void *cap)
 {
     struct mkuz_bchain_link *ip, *newlast, *newfirst, *mip;
     struct mkuz_blk *bp;
 
     pthread_mutex_lock(&fqp->mtx);
-    while (fqp->last == NULL || !mkuz_fqueue_has_blkno(fqp, blkno)) {
+    while (fqp->last == NULL || !mkuz_fqueue_check(fqp, cmp_cb, cap)) {
         pthread_cond_wait(&fqp->cvar, &fqp->mtx);
     }
-    if (fqp->last->this->info.blkno == blkno) {
+    if (cmp_cb(fqp->last->this, cap)) {
         mip = fqp->last;
         fqp->last = mip->prev;
         if (fqp->last == NULL) {
@@ -136,7 +136,7 @@ mkuz_fqueue_deq_no(struct mkuz_fifo_queue *fqp, uint32_t blkno)
         newfirst = newlast = fqp->last;
         mip = NULL;
         for (ip = fqp->last->prev; ip != NULL; ip = ip->prev) {
-            if (ip->this->info.blkno == blkno) {
+            if (cmp_cb(ip->this, cap)) {
                 mip = ip;
                 continue;
             }

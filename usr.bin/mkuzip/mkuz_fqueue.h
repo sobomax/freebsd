@@ -38,10 +38,12 @@ struct mkuz_fifo_queue {
 struct mkuz_blk;
 struct mkuz_bchain_link;
 
+DEFINE_RAW_METHOD(cmp_cb, int, const struct mkuz_blk *, void *);
+
 struct mkuz_fifo_queue *mkuz_fqueue_ctor(int);
 void mkuz_fqueue_enq(struct mkuz_fifo_queue *, struct mkuz_blk *);
 struct mkuz_blk *mkuz_fqueue_deq(struct mkuz_fifo_queue *);
-struct mkuz_blk *mkuz_fqueue_deq_no(struct mkuz_fifo_queue *, uint32_t);
+struct mkuz_blk *mkuz_fqueue_deq_when(struct mkuz_fifo_queue *, cmp_cb_t, void *);
 struct mkuz_bchain_link *mkuz_fqueue_deq_all(struct mkuz_fifo_queue *, int *);
 int mkuz_fqueue_enq_all(struct mkuz_fifo_queue *, struct mkuz_bchain_link *,
   struct mkuz_bchain_link *, int);
