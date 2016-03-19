@@ -735,7 +735,7 @@ bhnd_generic_release_bhnd_resource(device_t dev, device_t child, int type,
 		    "bhnd parent bus");
 	}
 
-	error = BUS_RELEASE_RESOURCE(dev, child, type, rid, r->res);
+	error = BUS_RELEASE_RESOURCE(device_get_parent(child), child, type, rid, r->res);
 	if (error)
 		return (error);
 
@@ -767,7 +767,7 @@ bhnd_generic_activate_bhnd_resource(device_t dev, device_t child, int type,
 		    "bhnd parent bus");
 	}
 
-	return (BUS_ACTIVATE_RESOURCE(dev, child, type, rid, r->res));
+	return (BUS_ACTIVATE_RESOURCE(device_get_parent(child), child, type, rid, r->res));
 };
 
 /**
@@ -793,7 +793,7 @@ bhnd_generic_deactivate_bhnd_resource(device_t dev, device_t child, int type,
 		    "bhnd parent bus");
 	}
 
-	return (BUS_DEACTIVATE_RESOURCE(dev, child, type, rid, r->res));
+	return (BUS_DEACTIVATE_RESOURCE(device_get_parent(child), child, type, rid, r->res));
 };
 
 /*
