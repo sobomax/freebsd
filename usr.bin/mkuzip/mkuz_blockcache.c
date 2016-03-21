@@ -27,9 +27,7 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <sys/types.h>
 #include <err.h>
-#include <md5.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,7 +43,6 @@ __FBSDID("$FreeBSD$");
 
 struct mkuz_blkcache_itm {
     struct mkuz_blk_info hit;
-    unsigned char digest[16];
     struct mkuz_blkcache_itm *next;
 };
 
@@ -101,25 +98,21 @@ struct mkuz_blk_info *
 mkuz_blkcache_regblock(int fd, const struct mkuz_blk *bp)
 {
     struct mkuz_blkcache_itm *bcep;
-    MD5_CTX mcontext;
-    unsigned char mdigest[16];
     int rval;
     unsigned char h;
 
 #if defined(MKUZ_DEBUG)
     assert((unsigned)lseek(fd, 0, SEEK_CUR) == bp->info.offset);
 #endif
-    MD5Init(&mcontext);
-    MD5Update(&mcontext, bp->data, bp->info.len);
-    MD5Final(mdigest, &mcontext);
-    h = digest_fold(mdigest);
+    h = digest_fold(bp->info.digest);
     if (blkcache.first[h].hit.len == 0) {
         bcep = &blkcache.first[h];
     } else {
         for (bcep = &blkcache.first[h]; bcep != NULL; bcep = bcep->next) {
             if (bcep->hit.len != bp->info.len)
                 continue;
-            if (memcmp(mdigest, bcep->digest, sizeof(mdigest)) == 0) {
+            if (memcmp(bp->info.digest, bcep->hit.digest,
+              sizeof(bp->info.digest)) == 0) {
                 break;
             }
         }
@@ -150,9 +143,6 @@ mkuz_blkcache_regblock(int fd, const struct mkuz_blk *bp)
         bcep->next = blkcache.first[h].next;
         blkcache.first[h].next = bcep;
     }
-    memcpy(bcep->digest, mdigest, sizeof(mdigest));
-    bcep->hit.offset = bp->info.offset;
-    bcep->hit.len = bp->info.len;
-    bcep->hit.blkno = bp->info.blkno;
+    bcep->hit = bp->info;
     return (NULL);
 }

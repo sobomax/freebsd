@@ -27,8 +27,10 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <sys/types.h>
 #include <err.h>
 #include <inttypes.h>
+#include <md5.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -44,6 +46,8 @@ __FBSDID("$FreeBSD$");
 #include "mkuz_blk.h"
 #include "mkuz_fqueue.h"
 #include "mkuz_blk_chain.h"
+
+static void compute_digest(struct mkuz_blk *);
 
 struct cw_args {
     struct mkuz_conveyer *cvp;
@@ -75,12 +79,25 @@ cworker(void *p)
             oblk = mkuz_blk_ctor(0);
         } else {
             oblk = cfp->handler->f_compress(c_ctx, iblk);
+            if (cfp->en_dedup != 0) {
+                compute_digest(oblk);
+            }
         }
         oblk->info.blkno = iblk->info.blkno;
         mkuz_fqueue_enq(cvp->results, oblk);
 	free(iblk);
     }
     return (NULL);
+}
+
+static void
+compute_digest(struct mkuz_blk *bp)
+{
+    MD5_CTX mcontext;
+
+    MD5Init(&mcontext);
+    MD5Update(&mcontext, bp->data, bp->info.len);
+    MD5Final(bp->info.digest, &mcontext);
 }
 
 struct mkuz_conveyer *

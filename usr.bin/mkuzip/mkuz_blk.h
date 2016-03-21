@@ -32,6 +32,7 @@ struct mkuz_blk_info {
     uint64_t offset;
     size_t len;
     uint32_t blkno;
+    unsigned char digest[16];
 };
 
 #define MKUZ_BLK_EOF        (void *)0x1
