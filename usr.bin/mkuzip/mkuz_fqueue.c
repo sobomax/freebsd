@@ -27,6 +27,7 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <err.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -48,8 +49,12 @@ mkuz_fqueue_ctor(int wakeup_len)
 
     fqp = mkuz_safe_zmalloc(sizeof(struct mkuz_fifo_queue));
     fqp->wakeup_len = wakeup_len;
-    pthread_mutex_init(&fqp->mtx, NULL);
-    pthread_cond_init(&fqp->cvar, NULL);
+    if (pthread_mutex_init(&fqp->mtx, NULL) != 0) {
+        errx(1, "pthread_mutex_init() failed");
+    }
+    if (pthread_cond_init(&fqp->cvar, NULL) != 0) {
+        errx(1, "pthread_cond_init() failed");
+    }
     return (fqp);
 }
 
