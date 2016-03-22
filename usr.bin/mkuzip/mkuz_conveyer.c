@@ -119,7 +119,7 @@ mkuz_conveyer_ctor(struct mkuz_cfg *cfp)
         cwp->cvp = cp;
         r = pthread_create(&cp->wthreads[i], NULL, cworker, (void *)cwp);
         if (r != 0) {
-            err(1, "mkuz_conveyer_ctor: pthread_create() failed");
+            errx(1, "mkuz_conveyer_ctor: pthread_create() failed");
             /* Not reached */
         }
     }
