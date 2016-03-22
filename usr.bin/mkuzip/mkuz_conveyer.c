@@ -71,6 +71,8 @@ cworker(void *p)
     for (;;) {
         iblk = mkuz_fqueue_deq(cvp->wrk_queue);
         if (iblk == MKUZ_BLK_EOF) {
+            /* Let other threads to see the EOF block */
+            mkuz_fqueue_enq(cvp->wrk_queue, iblk);
             break;
         }
         if (cfp->no_zcomp == 0 &&
