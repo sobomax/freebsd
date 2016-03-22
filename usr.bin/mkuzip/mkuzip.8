@@ -126,6 +126,11 @@ file size after file has been processed.
 Specify the number of compression jobs that
 .Nm
 runs in parallel to speed up compression.
+When option is not specified the number of jobs set to be equal
+to the value of
+.Va hw.ncpu
+.Xr sysctl 8
+variable.
 .El
 .Sh NOTES
 The compression ratio largely depends on the cluster size used.
