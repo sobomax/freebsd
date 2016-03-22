@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Maxim Sobolev <sobomax@FreeBSD.org>
+ * Copyright (c) 2004-2016 Maxim Sobolev <sobomax@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -22,31 +22,24 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
- * $FreeBSD$
  */
 
-struct mkuz_fifo_queue;
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
 
-#define ITEMS_PER_WORKER	4
+#include <math.h>
+#include <stdint.h>
+#include <time.h>
 
-#define MAX_WORKERS_AUTO	24
+#include "mkuz_time.h"
 
-struct mkuz_conveyer {
-    /*
-     * Work items are places in here, and picked up by workers in a FIFO
-     * fashion.
-     */
-    struct mkuz_fifo_queue *wrk_queue;
-    /*
-     * Results are dropped into this FIFO and consumer is buzzed to pick them
-     * up
-     */
-    struct mkuz_fifo_queue *results;
+double
+getdtime(void)
+{
+    struct timespec tp;
 
-    pthread_t wthreads[];
-};
+    if (clock_gettime(CLOCK_MONOTONIC, &tp) == -1)
+        return (-1);
 
-struct mkuz_cfg;
-
-struct mkuz_conveyer *mkuz_conveyer_ctor(struct mkuz_cfg *);
+    return timespec2dtime(&tp);
+}

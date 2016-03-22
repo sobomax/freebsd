@@ -57,6 +57,7 @@ __FBSDID("$FreeBSD$");
 #include "mkuz_conveyer.h"
 #include "mkuz_format.h"
 #include "mkuz_fqueue.h"
+#include "mkuz_time.h"
 
 #define DEFAULT_CLSTSIZE	16384
 
@@ -109,10 +110,16 @@ int main(int argc, char **argv)
         void *c_ctx;
 	struct mkuz_blk_info *chit;
 	size_t ncpusz, ncpu;
+	double st, et;
+
+	st = getdtime();
 
 	ncpusz = sizeof(size_t);
-	if (sysctlbyname("hw.ncpu", &ncpu, &ncpusz, NULL, 0) < 0)
+	if (sysctlbyname("hw.ncpu", &ncpu, &ncpusz, NULL, 0) < 0) {
 		ncpu = 1;
+	} else if (ncpu > MAX_WORKERS_AUTO) {
+		ncpu = MAX_WORKERS_AUTO;
+	}
 
 	memset(&hdr, 0, sizeof(hdr));
 	cfs.blksz = DEFAULT_CLSTSIZE;
@@ -343,11 +350,12 @@ drain:
 	close(cfs.fdr);
 
 	if (cfs.verbose != 0 || summary.en != 0) {
+		et = getdtime();
 		fprintf(summary.f, "compressed data to %ju bytes, saved %lld "
-		    "bytes, %.2f%% decrease.\n", offset,
+		    "bytes, %.2f%% decrease, %.2f bytes/sec.\n", offset,
 		    (long long)(sb.st_size - offset),
 		    100.0 * (long long)(sb.st_size - offset) /
-		    (float)sb.st_size);
+		    (float)sb.st_size, (float)sb.st_size / (et - st));
 	}
 
 	/* Convert to big endian */

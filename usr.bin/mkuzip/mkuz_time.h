@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Maxim Sobolev <sobomax@FreeBSD.org>
+ * Copyright (c) 2004-2016 Maxim Sobolev <sobomax@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,27 +26,16 @@
  * $FreeBSD$
  */
 
-struct mkuz_fifo_queue;
+#ifndef _RTPP_TIME_H_
+#define _RTPP_TIME_H_
 
-#define ITEMS_PER_WORKER	4
+#define SEC(x)   ((x)->tv_sec)
+#define NSEC(x)  ((x)->tv_nsec)
 
-#define MAX_WORKERS_AUTO	24
+#define timespec2dtime(s) ((double)SEC(s) + \
+  (double)NSEC(s) / 1000000000.0)
 
-struct mkuz_conveyer {
-    /*
-     * Work items are places in here, and picked up by workers in a FIFO
-     * fashion.
-     */
-    struct mkuz_fifo_queue *wrk_queue;
-    /*
-     * Results are dropped into this FIFO and consumer is buzzed to pick them
-     * up
-     */
-    struct mkuz_fifo_queue *results;
+/* Function prototypes */
+double getdtime(void);
 
-    pthread_t wthreads[];
-};
-
-struct mkuz_cfg;
-
-struct mkuz_conveyer *mkuz_conveyer_ctor(struct mkuz_cfg *);
+#endif
