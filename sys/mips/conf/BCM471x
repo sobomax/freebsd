@@ -85,6 +85,8 @@ device		bgmac			# Broadcom GMAC
 device		mdio
 
 #Flash
+device		spibus
+device		mx25l			# Serial Flash
 device		cfi			# Parallel Flash
 device		cfid
 

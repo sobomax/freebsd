@@ -45,9 +45,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 #include <sys/module.h>
 #include <sys/systm.h>
+#include <sys/rman.h>
 
 #include <machine/bus.h>
-#include <sys/rman.h>
 #include <machine/resource.h>
 
 #include <dev/bhnd/bhnd.h>
@@ -187,19 +187,22 @@ chipc_attach(device_t dev)
 	case CHIPC_PFLASH:
 		sc->flash_cfg = bhnd_bus_read_4(sc->core, CHIPC_FLASH_CFG);
 		error = chipc_init_pflash(dev, sc->flash_cfg);
-		if(error > 0){
-			device_printf(dev,"init_flash_failed with: %d\n", error);
-			goto cleanup;
-		}
 		break;
 	case CHIPC_SFLASH_AT:
+		error = chipc_init_sflash(dev, "at45d"); //not tested yet
+		break;
 	case CHIPC_SFLASH_ST:
-		//TODO: add serial support
+		error = chipc_init_sflash(dev, "mx25l");
 		break;
 	default:
 		if(bootverbose){
 			device_printf(dev, "no flash found\n");
 		}
+	}
+
+	if(error > 0){
+		device_printf(dev,"init_flash_failed with: %d\n", error);
+		goto cleanup;
 	}
 
 	error = bus_generic_attach(dev);
@@ -327,12 +330,17 @@ chipc_nvram_src(device_t dev)
 	return (BHND_NVRAM_SRC_NONE);
 }
 
+
 static struct resource_list *
 chipc_get_resource_list(device_t dev, device_t child)
 {
 	struct chipc_devinfo *dinfo = device_get_ivars(child);
 	return (&dinfo->resources);
 }
+
+static void chipc_probe_nomatch(device_t dev, device_t child){
+	device_printf(dev, "no found driver for %s\n", device_get_name(child));
+};
 
 static device_method_t chipc_methods[] = {
 	/* Device interface */
@@ -348,14 +356,13 @@ static device_method_t chipc_methods[] = {
 	DEVMETHOD(bus_delete_resource,		bus_generic_rl_delete_resource),
 	DEVMETHOD(bus_alloc_resource, 	 	bus_generic_rl_alloc_resource),
 	DEVMETHOD(bus_release_resource,		bus_generic_rl_release_resource),
-
 	DEVMETHOD(bus_activate_resource, 	bus_generic_activate_resource),
 	DEVMETHOD(bus_deactivate_resource, 	bus_generic_deactivate_resource),
 	DEVMETHOD(bus_get_resource_list,	chipc_get_resource_list),
-	
-	/* ChipCommon interface */
-	DEVMETHOD(bhnd_chipc_nvram_src,	chipc_nvram_src),
+	DEVMETHOD(bus_probe_nomatch,		chipc_probe_nomatch),
 
+	/* ChipCommon interface */
+	DEVMETHOD(bhnd_chipc_nvram_src,		chipc_nvram_src),
 
 	DEVMETHOD_END
 };

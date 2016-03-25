@@ -60,6 +60,29 @@
 #define	CHIPC_JTAGIR			0x34
 #define	CHIPC_JTAGDR			0x38
 #define	CHIPC_JTAGCTRL			0x3c
+
+#define CHIPC_FLASHCTL			0x40
+#define		CHIPC_FLASHCTL_OPCODE	0x000000ff
+#define		CHIPC_FLASHCTL_ACTION	0x00000700 //
+/*
+ * For readers: we don't use action. Experimentaly found, that
+ *  action 0 - read current MISO byte to data register
+ *  action 1 = read 2nd byte to data register
+ *  action 2 = read 4th byte to data register (surprise! see action 6)
+ *  action 3 = read 5th byte to data register
+ *  action 4 = read bytes 5-8 to data register in swapped order
+ *  action 5 = read bytes 9-12 to data register in swapped order
+ *  action 6 = read 3rd byte to data register
+ *  action 7 = read bytes 6-9 to data register in swapped order
+ * It may be wrong if CS bit is 1.
+ * If CS bit is 1, you should write cmd / data to opcode byte-to-byte.
+ */
+#define		CHIPC_FLASHCTL_CSACTIVE	0x00001000
+#define		CHIPC_FLASHCTL_START	0x80000000 //same as BUSY
+#define		CHIPC_FLASHCTL_BUSY		0x80000000 //same as BUSY
+#define CHIPC_FLASHADDR			0x44
+#define CHIPC_FLASHDATA			0x48
+
 #define	CHIPC_GPIOPU			0x58
 #define	CHIPC_GPIOPD			0x5c
 #define	CHIPC_GPIOIN			0x60
