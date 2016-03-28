@@ -16,7 +16,14 @@
 struct chipc_spi_softc{
 	device_t dev;
 	struct bhnd_resource* bhnd_res[CHIPC_SPI_MAXRES];
+	// SPI registers
 	struct resource* sc_mem_res;
+
+	// MMIO flash
+	struct resource	*sc_res;
+	bus_space_handle_t sc_handle;
+	bus_space_tag_t	sc_tag;
+	int		sc_rid;
 };
 
 /*

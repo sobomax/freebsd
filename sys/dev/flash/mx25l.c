@@ -42,6 +42,8 @@ __FBSDID("$FreeBSD$");
 
 #include <dev/spibus/spi.h>
 #include "spibus_if.h"
+#include "flash_if.h"
+
 
 #include <dev/flash/mx25lreg.h>
 
@@ -138,6 +140,12 @@ mx25l_get_status(device_t dev)
 	cmd.tx_cmd_sz = 2;
 	err = SPIBUS_TRANSFER(device_get_parent(dev), dev, &cmd);
 	return (rxBuf[1]);
+}
+
+static uint64_t
+mx25l_get_size(device_t dev){
+	struct mx25l_softc* sc = device_get_softc(dev);
+	return sc->sc_disk->d_mediasize;
 }
 
 static void
@@ -515,6 +523,7 @@ static device_method_t mx25l_methods[] = {
 	DEVMETHOD(device_attach,	mx25l_attach),
 	DEVMETHOD(device_detach,	mx25l_detach),
 
+	DEVMETHOD(flash_get_size,   mx25l_get_size),
 	{ 0, 0 }
 };
 

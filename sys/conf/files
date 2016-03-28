@@ -1488,6 +1488,7 @@ dev/firewire/sbp.c		optional sbp
 dev/firewire/sbp_targ.c		optional sbp_targ
 dev/flash/at45d.c		optional at45d
 dev/flash/mx25l.c		optional mx25l
+dev/flash/flash_if.m		optional mx25l | at45d
 dev/fxp/if_fxp.c		optional fxp
 dev/fxp/inphy.c			optional fxp
 dev/gem/if_gem.c		optional gem
@@ -3059,7 +3060,7 @@ geom/geom_disk.c		standard
 geom/geom_dump.c		standard
 geom/geom_event.c		standard
 geom/geom_fox.c			optional geom_fox
-geom/geom_flashmap.c		optional fdt cfi | fdt nand | fdt mx25l | bhnd cfi | bhndbus cfi
+geom/geom_flashmap.c		optional fdt cfi | fdt nand | fdt mx25l | bhnd cfi | bhndbus cfi | bhndbus mx25l
 geom/geom_io.c			standard
 geom/geom_kern.c		standard
 geom/geom_map.c			optional geom_map

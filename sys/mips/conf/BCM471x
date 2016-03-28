@@ -57,11 +57,9 @@ options         SOFTUPDATES             #Enable FFS soft updates support
 options         UFS_ACL                 #Support for access control lists
 options         UFS_DIRHASH             #Improve performance on big directories
 
+device		geom_uzip
 options		GEOM_UZIP
-#options		MD_ROOT                 # MD is a potential root device
-#options		MD_ROOT_SIZE=512        # 8MB ram disk
-#makeoptions	MFS_IMAGE=/tmp/root.img.ulzma
-#options		ROOTDEVNAME=\"ffs:/dev/md0.uzip\"
+options		GEOM_LABEL		# Providers labelization.
 
 # Debugging for use in -current
 #options 	DEADLKRES
@@ -70,7 +68,7 @@ options 	INVARIANT_SUPPORT
 
 #options 	BUS_DEBUG
 #makeoptions	BUS_DEBUG
-#options		VERBOSE_SYSINIT
+#options	VERBOSE_SYSINIT
 #makeoptions	VERBOSE_SYSINIT
 
 device		pci
