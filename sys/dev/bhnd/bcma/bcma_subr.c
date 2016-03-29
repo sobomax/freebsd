@@ -173,7 +173,7 @@ bcma_dinfo_init_resource_info(device_t bus, struct bcma_devinfo *dinfo,
 				    map->m_base, end, map->m_size);
 				if(bootverbose)
 					device_printf(bus,
-						"core%u %s%u.%u: region %llx-%llx added"
+						"core%u %s%u.%u: region %llx-%llx added "
 						"as resource with id=%d\n",
 						dinfo->corecfg->core_info.core_idx,
 						bhnd_port_type_name(port->sp_type),

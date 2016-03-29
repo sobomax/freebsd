@@ -83,8 +83,10 @@ device 		bhnd_pcib		# Broadcom Host-PCI bridge
 device		mdio
 
 #Flash
-#device		cfi			# Parallel Flash
-#device		cfid
+device		spibus
+device		mx25l			# Serial Flash
+device		cfi			# Parallel Flash
+device		cfid
 
 #Performance
 options 	HWPMC_HOOKS

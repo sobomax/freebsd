@@ -50,5 +50,6 @@ bhnd_chipc_nvram_src(device_t dev)
 }
 
 int chipc_init_pflash(device_t dev, uint32_t flash_config);
+int chipc_init_sflash(device_t dev, char* flash_name);
 
 #endif /* _BHND_CORES_CHIPC_CHIPC_H_ */
