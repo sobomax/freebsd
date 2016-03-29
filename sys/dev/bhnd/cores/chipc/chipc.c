@@ -123,10 +123,6 @@ chipc_attach(device_t dev)
 	sc = device_get_softc(dev);
 	sc->dev = dev;
 
-#ifndef NOTYET
-	return (1);
-#endif
-
 	/* Allocate bus resources */
 	memcpy(sc->rspec, chipc_rspec, sizeof(sc->rspec));
 	if ((error = bhnd_alloc_resources(dev, sc->rspec, sc->res)))
