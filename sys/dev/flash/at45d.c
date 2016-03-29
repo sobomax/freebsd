@@ -43,6 +43,7 @@ __FBSDID("$FreeBSD$");
 #include <geom/geom_disk.h>
 
 #include <dev/spibus/spi.h>
+#include "flash_if.h"
 #include "spibus_if.h"
 
 struct at45d_flash_ident
