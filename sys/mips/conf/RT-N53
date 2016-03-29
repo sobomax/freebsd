@@ -53,6 +53,7 @@ options 	PSEUDOFS		#Pseudo-filesystem framework
 options 	_KPOSIX_PRIORITY_SCHEDULING #Posix P1003_1B real-time extensions
 options         UFS_DIRHASH             #Improve performance on big directories
 
+device		geom_uzip
 options		GEOM_UZIP
 options		GEOM_LABEL		# Providers labelization.
 options		MD_ROOT                 # MD is a potential root device
@@ -68,7 +69,7 @@ options 	INVARIANT_SUPPORT
 
 #options 	BUS_DEBUG
 #makeoptions	BUS_DEBUG
-#options		VERBOSE_SYSINIT
+#options	VERBOSE_SYSINIT
 #makeoptions	VERBOSE_SYSINIT
 
 device		pci

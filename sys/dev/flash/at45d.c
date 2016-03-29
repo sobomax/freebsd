@@ -137,6 +137,12 @@ at45d_get_status(device_t dev, uint8_t *status)
 	return (err);
 }
 
+static uint64_t
+at45d_get_size(device_t dev){
+	struct at45d_softc* sc = device_get_softc(dev);
+	return sc->disk->d_mediasize;
+}
+
 static int
 at45d_get_mfg_info(device_t dev, uint8_t *resp)
 {
@@ -438,6 +444,7 @@ static device_method_t at45d_methods[] = {
 	DEVMETHOD(device_attach,	at45d_attach),
 	DEVMETHOD(device_detach,	at45d_detach),
 
+	DEVMETHOD(flash_get_size, 	at45d_get_size),
 	DEVMETHOD_END
 };
 

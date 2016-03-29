@@ -71,7 +71,8 @@ chipc_cfi_trx_slicer(device_t dev, struct flash_slice *slices, int *nslices)
 
 			slices[*nslices].base = ofs + fs_ofs;
 			//XXX: fully sized? any other partition?
-			slices[*nslices].size = sc->sc_size - slices[0].base;
+			uint32_t fw_len = bus_space_read_4(sc->sc_tag, sc->sc_handle, ofs + 4);
+			slices[*nslices].size = fw_len - fs_ofs;
 			slices[*nslices].label = "rootfs";
 			*nslices += 1;
 			break;
