@@ -80,12 +80,14 @@ device		bhndb			# Broadcom bridge
 device		bcma			#
 device 		bhnd_pcib		# Broadcom Host-PCI bridge
 
+device		bgmac			# Broadcom GMAC
 
 device		mdio
 
 #Flash
 device		spibus
 device		mx25l			# Serial Flash
+device		at45d
 device		cfi			# Parallel Flash
 device		cfid
 
