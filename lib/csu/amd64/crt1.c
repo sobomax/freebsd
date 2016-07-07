@@ -71,11 +71,11 @@ __asm__("eprol:");
 
 	handle_static_init(argc, argv, env);
 	if (&_DYNAMIC != NULL) {
-		int (*main_over)(int, char **, char **, int(*)(int, char **, char **));
+		int (*main_over)(int, char **, char **);
 
 		main_over = (void *)dlfunc(RTLD_NEXT, "main");
 		if (main_over != NULL) {
-			exit(main_over(argc, argv, env, &main));
+			exit(main_over(argc, argv, env));
 		}
 	}
 
