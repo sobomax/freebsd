@@ -8,7 +8,7 @@ OBJS+=		gcrt1.o crt1.o Scrt1.o
 CFLAGS+=	-I${.CURDIR}/../common \
 		-I${.CURDIR}/../../libc/include
 
-FILES=		${OBJS}
+FILES=		${OBJS} ${.CURDIR}/../common/crt.export
 FILESMODE=	${LIBMODE}
 FILESOWN=	${LIBOWN}
 FILESGRP=	${LIBGRP}

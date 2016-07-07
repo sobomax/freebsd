@@ -7438,9 +7438,13 @@ void solaris::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
-    if (!Args.hasArg(options::OPT_shared))
+    if (!Args.hasArg(options::OPT_shared)) {
       CmdArgs.push_back(
           Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
+      CmdArgs.push_back("--dynamic-list");
+      CmdArgs.push_back(
+          Args.MakeArgString(getToolChain().GetFilePath("crt.export")));
+    }
 
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crti.o")));
     CmdArgs.push_back(
@@ -7983,8 +7987,12 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       else
         crt1 = "crt1.o";
     }
-    if (crt1)
+    if (crt1) {
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
+      CmdArgs.push_back("--dynamic-list");
+      CmdArgs.push_back(
+          Args.MakeArgString(ToolChain.GetFilePath("crt.export")));
+    }
 
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
@@ -8862,9 +8870,12 @@ void gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
         else
           crt1 = "crt1.o";
       }
-      if (crt1)
+      if (crt1) {
         CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
-
+        CmdArgs.push_back("--dynamic-list");
+        CmdArgs.push_back(
+            Args.MakeArgString(ToolChain.GetFilePath("crt.export")));
+      }
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
     }
 
@@ -9069,8 +9080,12 @@ void nacltools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
-    if (!Args.hasArg(options::OPT_shared))
+    if (!Args.hasArg(options::OPT_shared)) {
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crt1.o")));
+      CmdArgs.push_back("--dynamic-list");
+      CmdArgs.push_back(
+          Args.MakeArgString(ToolChain.GetFilePath("crt.export")));
+    }
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin;
@@ -9194,6 +9209,9 @@ void minix::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
+    CmdArgs.push_back("--dynamic-list");
+    CmdArgs.push_back(
+        Args.MakeArgString(getToolChain().GetFilePath("crt.export")));
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crti.o")));
     CmdArgs.push_back(
         Args.MakeArgString(getToolChain().GetFilePath("crtbegin.o")));
@@ -9311,6 +9329,9 @@ void dragonfly::Linker::ConstructJob(Compilation &C, const JobAction &JA,
           CmdArgs.push_back(
               Args.MakeArgString(getToolChain().GetFilePath("crt1.o")));
       }
+      CmdArgs.push_back("--dynamic-list");
+      CmdArgs.push_back(
+          Args.MakeArgString(getToolChain().GetFilePath("crt.export")));
     }
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetFilePath("crti.o")));
     if (Args.hasArg(options::OPT_shared) || Args.hasArg(options::OPT_pie))
@@ -10463,8 +10484,12 @@ static void ConstructGoldLinkJob(const Tool &T, Compilation &C,
       else
         crt1 = "crt1.o";
     }
-    if (crt1)
+    if (crt1) {
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
+      CmdArgs.push_back("--dynamic-list");
+      CmdArgs.push_back(
+          Args.MakeArgString(ToolChain.GetFilePath("crt.export")));
+    }
 
     CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
