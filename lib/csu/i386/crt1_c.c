@@ -29,6 +29,7 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <dlfcn.h>
 #include <stdlib.h>
 
 #include "libc_private.h"
@@ -68,6 +69,15 @@ __asm__("eprol:");
 #endif
 
 	handle_static_init(argc, argv, env);
+	if (&_DYNAMIC != NULL) {
+		int (*main_over)(int, char **, char **);
+
+		main_over = (void *)dlfunc(RTLD_NEXT, "main");
+		if (main_over != NULL) {
+			exit(main_over(argc, argv, env));
+		}
+	}
+
 	exit(main(argc, argv, env));
 }
 
