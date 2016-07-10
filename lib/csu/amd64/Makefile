@@ -9,7 +9,7 @@ CFLAGS+=	-I${.CURDIR}/../common \
 		-I${.CURDIR}/../../libc/include
 CFLAGS+=	-fno-omit-frame-pointer
 
-FILES=		${OBJS} ${.CURDIR}/../common/crt.export
+FILES=		${OBJS}
 FILESMODE=	${LIBMODE}
 FILESOWN=	${LIBOWN}
 FILESGRP=	${LIBGRP}
