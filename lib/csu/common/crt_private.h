@@ -1,6 +1,5 @@
-/* LINTLIBRARY */
 /*-
- * Copyright 1996-1998 John D. Polstra.
+ * Copyright 2016 Maksym Sobolyev <sobomax@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,60 +23,9 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+#ifndef CSU_COMMON_CRT_PRIVATE_H
+#define CSU_COMMON_CRT_PRIVATE_H
 
-#include <dlfcn.h>
-#include <stdlib.h>
+typedef int (*main_t)(int, char **, char **);
 
-#include "libc_private.h"
-#include "crt_private.h"
-#include "crtbrand.c"
-#include "ignore_init.c"
-
-typedef void (*fptr)(void);
-
-#ifdef GCRT
-extern void _mcleanup(void);
-extern void monstartup(void *, void *);
-extern int eprol;
-extern int etext;
 #endif
-
-void _start(char **, void (*)(void));
-
-/* The entry function. */
-void
-_start(char **ap, void (*cleanup)(void))
-{
-	int argc;
-	char **argv;
-	char **env;
-	main_t main_over;
-
-	argc = *(long *)(void *)ap;
-	argv = ap + 1;
-	env = ap + 2 + argc;
-	handle_argv(argc, argv, env);
-
-	if (&_DYNAMIC != NULL)
-		atexit(cleanup);
-	else
-		_init_tls();
-
-#ifdef GCRT
-	atexit(_mcleanup);
-	monstartup(&eprol, &etext);
-__asm__("eprol:");
-#endif
-
-	handle_static_init(argc, argv, env);
-	if (&_DYNAMIC != NULL) {
-		main_over = (main_t)dlfunc(RTLD_NEXT, "main");
-		if (main_over != NULL) {
-			exit(main_over(argc, argv, env));
-		}
-	}
-
-	exit(main(argc, argv, env));
-}

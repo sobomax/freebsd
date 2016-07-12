@@ -46,6 +46,7 @@ __FBSDID("$FreeBSD$");
 #include <stdlib.h>
 
 #include "libc_private.h"
+#include "crt_private.h"
 #include "crtbrand.c"
 #include "ignore_init.c"
 
@@ -92,6 +93,7 @@ void
 __start(int argc, char **argv, char **env, struct ps_strings *ps_strings,
     const struct Struct_Obj_Entry *obj __unused, void (*cleanup)(void))
 {
+	main_t main_over;
 
 	handle_argv(argc, argv, env);
 
@@ -108,9 +110,7 @@ __start(int argc, char **argv, char **env, struct ps_strings *ps_strings,
 #endif
 	handle_static_init(argc, argv, env);
 	if (&_DYNAMIC != NULL) {
-		int (*main_over)(int, char **, char **);
-
-		main_over = (void *)dlfunc(RTLD_NEXT, "main");
+		main_over = (main_t)dlfunc(RTLD_NEXT, "main");
 		if (main_over != NULL) {
 			exit(main_over(argc, argv, env));
 		}

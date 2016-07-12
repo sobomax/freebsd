@@ -33,6 +33,7 @@ __FBSDID("$FreeBSD$");
 #include <stdlib.h>
 
 #include "libc_private.h"
+#include "crt_private.h"
 #include "crtbrand.c"
 #include "ignore_init.c"
 
@@ -54,6 +55,7 @@ void
 _start1(fptr cleanup, int argc, char *argv[])
 {
 	char **env;
+	main_t main_over;
 
 	env = argv + argc + 1;
 	handle_argv(argc, argv, env);
@@ -70,9 +72,7 @@ __asm__("eprol:");
 
 	handle_static_init(argc, argv, env);
 	if (&_DYNAMIC != NULL) {
-		int (*main_over)(int, char **, char **);
-
-		main_over = (void *)dlfunc(RTLD_NEXT, "main");
+		main_over = (main_t)dlfunc(RTLD_NEXT, "main");
 		if (main_over != NULL) {
 			exit(main_over(argc, argv, env));
 		}
