@@ -143,10 +143,10 @@ static int xhci_debug = 0;
 #define	MASK_64_HI(x)			((x) & ~0xFFFFFFFFULL)
 #define	MASK_64_LO(x)			((x) & 0xFFFFFFFFULL)
 
-#define	FIELD_REPLACE(a,b,m,s)		((a) & ~((m) << (s)) | \
-					((b) & (m)) << (s))
-#define	FIELD_COPY(a,b,m,s)		((a) & ~((m) << (s)) | \
-					((b) & ((m) << (s))))
+#define	FIELD_REPLACE(a,b,m,s)		(((a) & ~((m) << (s))) | \
+					(((b) & (m)) << (s)))
+#define	FIELD_COPY(a,b,m,s)		(((a) & ~((m) << (s))) | \
+					(((b) & ((m) << (s)))))
 
 struct pci_xhci_trb_ring {
 	uint64_t ringaddr;		/* current dequeue guest address */
@@ -1700,7 +1700,7 @@ pci_xhci_handle_transfer(struct pci_xhci_softc *sc,
 	struct xhci_trb *setup_trb;
 	struct usb_data_xfer *xfer;
 	struct usb_data_xfer_block *xfer_block;
-	uint64_t	val, setup_addr, status_addr;
+	uint64_t	val;
 	uint32_t	trbflags;
 	int		do_intr, err;
 	int		do_retry;
@@ -1718,8 +1718,6 @@ retry:
 	do_retry = 0;
 	do_intr = 0;
 	setup_trb = NULL;
-	setup_addr = 0;
-	status_addr = 0;
 
 	while (1) {
 		pci_xhci_dump_trb(trb);
@@ -1754,7 +1752,6 @@ retry:
 				goto errout;
 			}
 			setup_trb = trb;
-			setup_addr = addr;
 
 			val = trb->qwTrb0;
 			if (!xfer->ureq)
@@ -1786,7 +1783,6 @@ retry:
 			break;
 
 		case XHCI_TRB_TYPE_STATUS_STAGE:
-			status_addr = addr;
 			xfer_block = usb_data_xfer_append(xfer, NULL, 0,
 			                                  (void *)addr, ccs);
 			break;
@@ -1842,7 +1838,6 @@ retry:
 		err = USB_ERR_NOT_STARTED;
 		if (dev->dev_ue->ue_request != NULL)
 			err = dev->dev_ue->ue_request(dev->dev_sc, xfer);
-		status_addr = 0;
 		setup_trb = NULL;
 	} else {
 		/* handle data transfer */
@@ -2542,9 +2537,11 @@ static int
 pci_xhci_dev_intr(struct usb_hci *hci, int epctx)
 {
 	struct pci_xhci_dev_emu *dev;
+	struct xhci_dev_ctx	*dev_ctx;
 	struct xhci_trb		evtrb;
 	struct pci_xhci_softc	*sc;
 	struct pci_xhci_portregs *p;
+	struct xhci_endp_ctx	*ep_ctx;
 	int	error;
 	int	dir_in;
 	int	epid;
@@ -2562,7 +2559,8 @@ pci_xhci_dev_intr(struct usb_hci *hci, int epctx)
 
 	/* check if device is ready; OS has to initialise it */
 	if (sc->rtsregs.erstba_p == NULL ||
-	    (sc->opregs.usbcmd & XHCI_CMD_RS) == 0)
+	    (sc->opregs.usbcmd & XHCI_CMD_RS) == 0 ||
+	    dev->dev_ctx == NULL)
 		return (0);
 
 	p = XHCI_PORTREG_PTR(sc, hci->hci_port);
@@ -2581,6 +2579,14 @@ pci_xhci_dev_intr(struct usb_hci *hci, int epctx)
 		error = pci_xhci_insert_event(sc, &evtrb, 0);
 		if (error != XHCI_TRB_ERROR_SUCCESS)
 			goto done;
+	}
+
+	dev_ctx = dev->dev_ctx;
+	ep_ctx = &dev_ctx->ctx_ep[epid];
+	if ((ep_ctx->dwEpCtx0 & 0x7) == XHCI_ST_EPCTX_DISABLED) {
+		DPRINTF(("xhci device interrupt on disabled endpoint %d\r\n",
+		         epid));
+		return (0);
 	}
 
 	DPRINTF(("xhci device interrupt on endpoint %d\r\n", epid));

@@ -471,7 +471,7 @@ vm_object_vndeallocate(vm_object_t object)
 	KASSERT(vp != NULL, ("vm_object_vndeallocate: missing vp"));
 #ifdef INVARIANTS
 	if (object->ref_count == 0) {
-		vprint("vm_object_vndeallocate", vp);
+		vn_printf(vp, "vm_object_vndeallocate ");
 		panic("vm_object_vndeallocate: bad object reference count");
 	}
 #endif
@@ -740,6 +740,10 @@ vm_object_terminate(vm_object_t object)
 		VM_OBJECT_WUNLOCK(object);
 
 		vinvalbuf(vp, V_SAVE, 0, 0);
+
+		BO_LOCK(&vp->v_bufobj);
+		vp->v_bufobj.bo_flag |= BO_DEAD;
+		BO_UNLOCK(&vp->v_bufobj);
 
 		VM_OBJECT_WLOCK(object);
 	}
@@ -1182,7 +1186,7 @@ shadowlookup:
 			if (object != tobject)
 				VM_OBJECT_WUNLOCK(object);
 			VM_OBJECT_WUNLOCK(tobject);
-			vm_page_busy_sleep(m, "madvpo");
+			vm_page_busy_sleep(m, "madvpo", false);
 			VM_OBJECT_WLOCK(object);
   			goto relookup;
 		}
@@ -1361,7 +1365,7 @@ retry:
 			VM_OBJECT_WUNLOCK(new_object);
 			vm_page_lock(m);
 			VM_OBJECT_WUNLOCK(orig_object);
-			vm_page_busy_sleep(m, "spltwt");
+			vm_page_busy_sleep(m, "spltwt", false);
 			VM_OBJECT_WLOCK(orig_object);
 			VM_OBJECT_WLOCK(new_object);
 			goto retry;
@@ -1449,7 +1453,7 @@ vm_object_collapse_scan_wait(vm_object_t object, vm_page_t p, vm_page_t next,
 	if (p == NULL)
 		VM_WAIT;
 	else
-		vm_page_busy_sleep(p, "vmocol");
+		vm_page_busy_sleep(p, "vmocol", false);
 	VM_OBJECT_WLOCK(object);
 	VM_OBJECT_WLOCK(backing_object);
 	return (TAILQ_FIRST(&backing_object->memq));
@@ -1908,7 +1912,7 @@ again:
 		vm_page_lock(p);
 		if (vm_page_xbusied(p)) {
 			VM_OBJECT_WUNLOCK(object);
-			vm_page_busy_sleep(p, "vmopax");
+			vm_page_busy_sleep(p, "vmopax", true);
 			VM_OBJECT_WLOCK(object);
 			goto again;
 		}
@@ -1923,7 +1927,7 @@ again:
 		}
 		if (vm_page_busied(p)) {
 			VM_OBJECT_WUNLOCK(object);
-			vm_page_busy_sleep(p, "vmopar");
+			vm_page_busy_sleep(p, "vmopar", false);
 			VM_OBJECT_WLOCK(object);
 			goto again;
 		}

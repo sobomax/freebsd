@@ -220,9 +220,6 @@ OLD_DIRS+=usr/share/examples/bhyve
 OLD_FILES+=usr/bin/as
 OLD_FILES+=usr/bin/ld
 OLD_FILES+=usr/bin/ld.bfd
-.if ${MK_ELFCOPY_AS_OBJCOPY} == no
-OLD_FILES+=usr/bin/objcopy
-.endif
 OLD_FILES+=usr/bin/objdump
 OLD_FILES+=usr/libdata/ldscripts/armelf_fbsd.x
 OLD_FILES+=usr/libdata/ldscripts/armelf_fbsd.xbn
@@ -421,9 +418,6 @@ OLD_FILES+=usr/libdata/ldscripts/elf_x86_64_fbsd.xu
 OLD_FILES+=usr/libdata/ldscripts/elf_x86_64_fbsd.xw
 OLD_FILES+=usr/share/man/man1/as.1.gz
 OLD_FILES+=usr/share/man/man1/ld.1.gz
-.if ${MK_ELFCOPY_AS_OBJCOPY} == no
-OLD_FILES+=usr/share/man/man1/objcopy.1.gz
-.endif
 OLD_FILES+=usr/share/man/man1/objdump.1.gz
 OLD_FILES+=usr/share/man/man7/as.7.gz
 OLD_FILES+=usr/share/man/man7/ld.7.gz
@@ -1095,6 +1089,7 @@ OLD_FILES+=boot/gptzfsboot
 OLD_FILES+=boot/zfsboot
 OLD_FILES+=boot/zfsloader
 OLD_FILES+=etc/rc.d/zfs
+OLD_FILES+=etc/rc.d/zfsbe
 OLD_FILES+=etc/rc.d/zvol
 OLD_FILES+=etc/devd/zfs.conf
 OLD_FILES+=etc/periodic/daily/404.status-zfs
@@ -1338,6 +1333,27 @@ OLD_FILES+=usr/bin/CC
 OLD_FILES+=usr/bin/c++
 OLD_FILES+=usr/bin/g++
 OLD_FILES+=usr/libexec/cc1plus
+.endif
+
+.if ${MK_DIALOG} == no
+OLD_FILES+=usr/bin/dialog
+OLD_FILES+=usr/bin/dpv
+OLD_FILES+=usr/lib/libdialog.a
+OLD_FILES+=usr/lib/libdialog.so
+OLD_FILES+=usr/lib/libdialog.so.8
+OLD_FILES+=usr/lib/libdialog_p.a
+OLD_FILES+=usr/lib/libdpv.a
+OLD_FILES+=usr/lib/libdpv.so
+OLD_FILES+=usr/lib/libdpv.so.1
+OLD_FILES+=usr/lib/libdpv_p.a
+OLD_FILES+=usr/sbin/bsdconfig
+OLD_FILES+=usr/sbin/tzsetup
+OLD_FILES+=usr/share/man/man1/dialog.1.gz
+OLD_FILES+=usr/share/man/man1/dpv.1.gz
+OLD_FILES+=usr/share/man/man3/dialog.3.gz
+OLD_FILES+=usr/share/man/man3/dpv.3.gz
+OLD_FILES+=usr/share/man/man8/tzsetup.8.gz
+OLD_FILES+=usr/share/man/man8/bsdconfig.8.gz
 .endif
 
 .if ${MK_FMTREE} == no
@@ -5999,6 +6015,10 @@ OLD_FILES+=usr/share/man/whatis
 OLD_FILES+=usr/share/openssl/man/whatis
 .endif
 
+.if ${MK_MANDOCDB} != no
+OLD_FILES+=usr/share/man/man1/makewhatis.1.gz
+.endif
+
 .if ${MK_NDIS} == no
 OLD_FILES+=usr/sbin/ndiscvt
 OLD_FILES+=usr/sbin/ndisgen
@@ -6790,40 +6810,6 @@ OLD_FILES+=usr/share/man/man8/rshd.8.gz
 OLD_FILES+=usr/share/man/man8/rwhod.8.gz
 .endif
 
-.if ${MK_RCS} == no
-OLD_FILES+=usr/bin/ci
-OLD_FILES+=usr/bin/co
-OLD_FILES+=usr/bin/merge
-OLD_FILES+=usr/bin/rcs
-OLD_FILES+=usr/bin/rcsclean
-OLD_FILES+=usr/bin/rcsdiff
-OLD_FILES+=usr/bin/rcsfreeze
-OLD_FILES+=usr/bin/rcsmerge
-OLD_FILES+=usr/bin/rlog
-OLD_FILES+=usr/sbin/etcupdate
-OLD_FILES+=usr/share/man/man1/ci.1.gz
-OLD_FILES+=usr/share/man/man1/co.1.gz
-OLD_FILES+=usr/share/man/man1/merge.1.gz
-OLD_FILES+=usr/share/man/man1/rcs.1.gz
-OLD_FILES+=usr/share/man/man1/rcsclean.1.gz
-OLD_FILES+=usr/share/man/man1/rcsdiff.1.gz
-OLD_FILES+=usr/share/man/man1/rcsfreeze.1.gz
-OLD_FILES+=usr/share/man/man1/rcsintro.1.gz
-OLD_FILES+=usr/share/man/man1/rcsmerge.1.gz
-OLD_FILES+=usr/share/man/man1/rlog.1.gz
-OLD_FILES+=usr/share/man/man5/rcsfile.5.gz
-OLD_FILES+=usr/share/man/man8/etcupdate.8.gz
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/Kyuafile
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/always_test
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/conflicts_test
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/fbsdid_test
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/ignore_test
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/preworld_test
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/tests_test
-OLD_FILES+=usr/tests/usr.sbin/etcupdate/tzsetup_test
-OLD_DIRS+=usr/tests/usr.sbin/etcupdate
-.endif
-
 #.if ${MK_RESCUE} == no
 # to be filled in or replaced with a special target
 #.endif
@@ -7419,6 +7405,9 @@ OLD_FILES+=usr/share/aclocal/atf-c.m4
 OLD_FILES+=usr/share/aclocal/atf-common.m4
 OLD_FILES+=usr/share/aclocal/atf-sh.m4
 OLD_DIRS+=usr/share/aclocal
+OLD_DIRS+=usr/tests/bin/chown
+OLD_FILES+=usr/tests/bin/chown/Kyuafile
+OLD_FILES+=usr/tests/bin/chown/chown-f_test
 OLD_FILES+=usr/tests/bin/chown/units_basics
 OLD_FILES+=usr/tests/bin/date/legacy_test
 OLD_FILES+=usr/tests/bin/sh/legacy_test
@@ -8011,6 +8000,7 @@ OLD_FILES+=usr/bin/c++filt
 OLD_FILES+=usr/bin/ld
 OLD_FILES+=usr/bin/ld.bfd
 OLD_FILES+=usr/bin/nm
+OLD_FILES+=usr/bin/objcopy
 OLD_FILES+=usr/bin/readelf
 OLD_FILES+=usr/bin/size
 OLD_FILES+=usr/bin/strings
@@ -8023,10 +8013,7 @@ OLD_FILES+=usr/share/man/man1/readelf.1.gz
 OLD_FILES+=usr/share/man/man1/size.1.gz
 OLD_FILES+=usr/share/man/man1/strings.1.gz
 OLD_FILES+=usr/share/man/man1/strip.1.gz
-.if ${MK_ELFCOPY_AS_OBJCOPY} != no
-OLD_FILES+=usr/bin/objcopy
 OLD_FILES+=usr/share/man/man1/objcopy.1.gz
-.endif
 OLD_FILES+=usr/tests/usr.bin/yacc/Kyuafile
 OLD_FILES+=usr/tests/usr.bin/yacc/btyacc_calc1.y
 OLD_FILES+=usr/tests/usr.bin/yacc/btyacc_demo.y
@@ -8336,10 +8323,6 @@ OLD_FILES+=usr/tests/usr.bin/yacc/yacc/varsyntax_calc1.tab.h
 OLD_FILES+=usr/tests/usr.bin/yacc/yacc_tests
 OLD_DIRS+=usr/tests/usr.bin/yacc
 .endif
-.if ${MK_TOOLCHAIN} == no || ${MK_ELFCOPY_AS_OBJCOPY} != no
-OLD_FILES+=usr/bin/elfcopy
-OLD_FILES+=usr/share/man/man1/elfcopy.1.gz
-.endif
 
 .if ${MK_UNBOUND} == no
 OLD_FILES+=etc/rc.d/local_unbound
@@ -8617,6 +8600,7 @@ OLD_FILES+=usr/share/man/man4/otus.4.gz
 OLD_FILES+=usr/share/man/man4/otusfw.4.gz
 OLD_FILES+=usr/share/man/man4/rsu.4.gz
 OLD_FILES+=usr/share/man/man4/rsufw.4.gz
+OLD_FILES+=usr/share/man/man4/rtwn_usb.4.gz
 OLD_FILES+=usr/share/man/man4/u3g.4.gz
 OLD_FILES+=usr/share/man/man4/u3gstub.4.gz
 OLD_FILES+=usr/share/man/man4/uark.4.gz
@@ -8658,8 +8642,6 @@ OLD_FILES+=usr/share/man/man4/ural.4.gz
 OLD_FILES+=usr/share/man/man4/urio.4.gz
 OLD_FILES+=usr/share/man/man4/urndis.4.gz
 OLD_FILES+=usr/share/man/man4/urtw.4.gz
-OLD_FILES+=usr/share/man/man4/urtwn.4.gz
-OLD_FILES+=usr/share/man/man4/urtwnfw.4.gz
 OLD_FILES+=usr/share/man/man4/usb.4.gz
 OLD_FILES+=usr/share/man/man4/usb_quirk.4.gz
 OLD_FILES+=usr/share/man/man4/usb_template.4.gz
@@ -8752,9 +8734,6 @@ OLD_FILES+=usr/sbin/hostapd
 OLD_FILES+=usr/sbin/hostapd_cli
 OLD_FILES+=usr/sbin/ndis_events
 OLD_FILES+=usr/sbin/wlandebug
-.if ${TARGET_ARCH} == "i386"
-OLD_FILES+=usr/sbin/wlconfig
-.endif
 OLD_FILES+=usr/sbin/wpa_cli
 OLD_FILES+=usr/sbin/wpa_passphrase
 OLD_FILES+=usr/sbin/wpa_supplicant
@@ -8769,9 +8748,6 @@ OLD_FILES+=usr/share/man/man5/wpa_supplicant.conf.5.gz
 OLD_FILES+=usr/share/man/man8/ancontrol.8.gz
 OLD_FILES+=usr/share/man/man8/hostapd.8.gz
 OLD_FILES+=usr/share/man/man8/hostapd_cli.8.gz
-.if ${TARGET_ARCH} == "i386"
-OLD_FILES+=usr/share/man/man8/i386/wlconfig.8.gz
-.endif
 OLD_FILES+=usr/share/man/man8/ndis_events.8.gz
 OLD_FILES+=usr/share/man/man8/wlandebug.8.gz
 OLD_FILES+=usr/share/man/man8/wpa_cli.8.gz

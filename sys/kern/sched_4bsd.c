@@ -15,7 +15,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -1241,7 +1241,7 @@ sched_pickcpu(struct thread *td)
 
 	mtx_assert(&sched_lock, MA_OWNED);
 
-	if (THREAD_CAN_SCHED(td, td->td_lastcpu))
+	if (td->td_lastcpu != NOCPU && THREAD_CAN_SCHED(td, td->td_lastcpu))
 		best = td->td_lastcpu;
 	else
 		best = NOCPU;
