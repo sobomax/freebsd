@@ -81,6 +81,7 @@ static void	rtwn_usb_start_xfers(struct rtwn_softc *);
 static void	rtwn_usb_abort_xfers(struct rtwn_softc *);
 static int	rtwn_usb_fw_write_block(struct rtwn_softc *,
 		    const uint8_t *, uint16_t, int);
+static void	rtwn_usb_drop_incorrect_tx(struct rtwn_softc *);
 static void	rtwn_usb_attach_methods(struct rtwn_softc *);
 
 #define RTWN_CONFIG_INDEX	0
@@ -132,8 +133,9 @@ rtwn_usb_alloc_rx_list(struct rtwn_softc *sc)
 	struct rtwn_usb_softc *uc = RTWN_USB_SOFTC(sc);
 	int error, i;
 
+	/* XXX recheck */
 	error = rtwn_usb_alloc_list(sc, uc->uc_rx, RTWN_USB_RX_LIST_COUNT,
-	    RTWN_RXBUFSZ);
+	    sc->rx_dma_size + 1024);
 	if (error != 0)
 		return (error);
 
@@ -273,8 +275,10 @@ rtwn_usb_abort_xfers(struct rtwn_softc *sc)
 	RTWN_ASSERT_LOCKED(sc);
 
 	/* abort any pending transfers */
+	RTWN_UNLOCK(sc);
 	for (i = 0; i < RTWN_N_TRANSFER; i++)
-		usbd_transfer_stop(uc->uc_xfer[i]);
+		usbd_transfer_drain(uc->uc_xfer[i]);
+	RTWN_LOCK(sc);
 }
 
 static int
@@ -316,6 +320,11 @@ rtwn_usb_attach_methods(struct rtwn_softc *sc)
 	sc->sc_get_qmap		= rtwn_usb_get_qmap;
 	sc->sc_set_desc_addr	= rtwn_nop_softc;
 	sc->sc_drop_incorrect_tx = rtwn_usb_drop_incorrect_tx;
+	sc->sc_beacon_update_begin = rtwn_nop_softc_vap;
+	sc->sc_beacon_update_end = rtwn_nop_softc_vap;
+	sc->sc_beacon_unload	= rtwn_nop_softc_int;
+
+	sc->bcn_check_interval	= 100;
 }
 
 static int

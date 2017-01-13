@@ -396,6 +396,10 @@
         ..
         file
         ..
+        fs
+            tmpfs
+            ..
+        ..
         geom
             class
                 concat
@@ -590,8 +594,8 @@
                 ..
             ..
         ..
-	bsdcat
-	..
+        bsdcat
+        ..
         calendar
         ..
         cmp
@@ -639,6 +643,8 @@
             ..
         ..
         soelim
+        ..
+        tail
         ..
         tar
         ..

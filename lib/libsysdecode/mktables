@@ -37,11 +37,16 @@ LC_ALL=C; export LC_ALL
 
 if [ -z "$1" ]
 then
-	echo "usage: sh $0 include-dir"
+	echo "usage: sh $0 include-dir [output-file]"
 	exit 1
 fi
 include_dir=$1
+if [ -n "$2" ]; then
+	output_file="$2"
+	exec > "$output_file"
+fi
 
+all_headers=
 #
 # Generate a table C #definitions.  The including file can define the
 # TABLE_NAME(n), TABLE_ENTRY(x), and TABLE_END macros to define what
@@ -60,6 +65,7 @@ gen_table()
 	else
 		filter="egrep -v"
 	fi
+	all_headers="${all_headers:+${all_headers} }${file}"
 	cat <<_EOF_
 TABLE_START(${name})
 _EOF_
@@ -88,7 +94,6 @@ gen_table "extattrns"       "EXTATTR_NAMESPACE_[A-Z]+[[:space:]]+0x[0-9]+" "sys/
 gen_table "fadvisebehav"    "POSIX_FADV_[A-Z]+[[:space:]]+[0-9]+"          "sys/fcntl.h"
 gen_table "openflags"       "O_[A-Z]+[[:space:]]+0x[0-9A-Fa-f]+"           "sys/fcntl.h"	"O_RDONLY|O_RDWR|O_WRONLY"
 gen_table "flockops"        "LOCK_[A-Z]+[[:space:]]+0x[0-9]+"              "sys/fcntl.h"
-gen_table "getfsstatflags"  "MNT_[A-Z]+[[:space:]]+[1-9][0-9]*"            "sys/mount.h"
 gen_table "kldsymcmd"       "KLDSYM_[A-Z]+[[:space:]]+[0-9]+"              "sys/linker.h"
 gen_table "kldunloadfflags" "LINKER_UNLOAD_[A-Z]+[[:space:]]+[0-9]+"       "sys/linker.h"
 gen_table "lio_listiomodes" "LIO_(NO)?WAIT[[:space:]]+[0-9]+"              "aio.h"
@@ -137,8 +142,17 @@ gen_table "seekwhence"      "SEEK_[A-Z]+[[:space:]]+[0-9]+"                "sys/
 gen_table "fcntlcmd"        "F_[A-Z0-9_]+[[:space:]]+[0-9]+[[:space:]]+"   "sys/fcntl.h"	"F_CANCEL|F_..LCK"
 gen_table "mmapflags"       "MAP_[A-Z_]+[[:space:]]+0x[0-9A-Fa-f]+"        "sys/mman.h"
 gen_table "rtpriofuncs"     "RTP_[A-Z]+[[:space:]]+[0-9]+"                 "sys/rtprio.h"
-gen_table "msgflags"        "MSG_[A-Z]+[[:space:]]+0x[0-9]+"               "sys/socket.h"	"MSG_SOCALLBCK"
+gen_table "msgflags"        "MSG_[A-Z]+[[:space:]]+0x[0-9]+"               "sys/socket.h"	"MSG_SOCALLBCK|MSG_MORETOCOME"
 gen_table "sigcode"         "SI_[A-Z]+[[:space:]]+0(x[0-9abcdef]+)?"       "sys/signal.h"
 gen_table "umtxcvwaitflags" "CVWAIT_[A-Z_]+[[:space:]]+0x[0-9]+"           "sys/umtx.h"
 gen_table "umtxrwlockflags" "URWLOCK_PREFER_READER[[:space:]]+0x[0-9]+"    "sys/umtx.h"
 gen_table "caprights"       "CAP_[A-Z_]+[[:space:]]+CAPRIGHT\([0-9],[[:space:]]+0x[0-9]{16}ULL\)"   "sys/capsicum.h"
+
+# Generate a .depend file for our output file
+if [ -n "$output_file" ]; then
+	echo "$output_file: \\" > ".depend.$output_file"
+	echo "$all_headers" | tr ' ' '\n' | sort -u |
+	    sed -e "s,^,	$include_dir/," -e 's,$, \\,' >> \
+	    ".depend.$output_file"
+	echo >> ".depend.$output_file"
+fi

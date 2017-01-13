@@ -174,6 +174,9 @@
 /* Assert that file contents match a string. */
 #define assertFileContents(data, data_size, pathname) \
   assertion_file_contents(__FILE__, __LINE__, data, data_size, pathname)
+/* Verify that a file does not contain invalid strings */
+#define assertFileContainsNoInvalidStrings(pathname, strings) \
+  assertion_file_contains_no_invalid_strings(__FILE__, __LINE__, pathname, strings)
 #define assertFileMtime(pathname, sec, nsec)	\
   assertion_file_mtime(__FILE__, __LINE__, pathname, sec, nsec)
 #define assertFileMtimeRecent(pathname) \
@@ -241,6 +244,7 @@ int assertion_file_atime_recent(const char *, int, const char *);
 int assertion_file_birthtime(const char *, int, const char *, long, long);
 int assertion_file_birthtime_recent(const char *, int, const char *);
 int assertion_file_contains_lines_any_order(const char *, int, const char *, const char **);
+int assertion_file_contains_no_invalid_strings(const char *, int, const char *, const char **);
 int assertion_file_contents(const char *, int, const void *, int, const char *);
 int assertion_file_exists(const char *, int, const char *);
 int assertion_file_mode(const char *, int, const char *, int);
@@ -341,6 +345,23 @@ extern const char *testworkdir;
 
 #include "archive.h"
 #include "archive_entry.h"
+
+/* ACL structure */
+struct archive_test_acl_t {
+	int type;  /* Type of ACL */
+	int permset; /* Permissions for this class of users. */
+	int tag; /* Owner, User, Owning group, group, other, etc. */
+	int qual; /* GID or UID of user/group, depending on tag. */
+	const char *name; /* Name of user/group, depending on tag. */
+};
+
+/* Set ACLs */
+void archive_test_set_acls(struct archive_entry *, struct archive_test_acl_t *,
+    int);
+
+/* Compare ACLs */
+void archive_test_compare_acls(struct archive_entry *,
+    struct archive_test_acl_t *, int, int, int);
 
 /* Special customized read-from-memory interface. */
 int read_open_memory(struct archive *, const void *, size_t, size_t);

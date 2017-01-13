@@ -514,20 +514,30 @@ zfs_probe_dev(const char *devname, uint64_t *pool_guid)
 /*
  * Print information about ZFS pools
  */
-static void
+static int
 zfs_dev_print(int verbose)
 {
 	spa_t *spa;
 	char line[80];
+	int ret = 0;
+
+	if (STAILQ_EMPTY(&zfs_pools))
+		return (0);
+
+	printf("%s devices:", zfs_dev.dv_name);
+	if ((ret = pager_output("\n")) != 0)
+		return (ret);
 
 	if (verbose) {
-		spa_all_status();
-		return;
+		return (spa_all_status());
 	}
 	STAILQ_FOREACH(spa, &zfs_pools, spa_link) {
-		sprintf(line, "    zfs:%s\n", spa->spa_name);
-		pager_output(line);
+		snprintf(line, sizeof(line), "    zfs:%s\n", spa->spa_name);
+		ret = pager_output(line);
+		if (ret != 0)
+			break;
 	}
+	return (ret);
 }
 
 /*
@@ -579,7 +589,7 @@ zfs_dev_close(struct open_file *f)
 }
 
 static int
-zfs_dev_strategy(void *devdata, int rw, daddr_t dblk, size_t offset, size_t size, char *buf, size_t *rsize)
+zfs_dev_strategy(void *devdata, int rw, daddr_t dblk, size_t size, char *buf, size_t *rsize)
 {
 
 	return (ENOSYS);

@@ -472,11 +472,15 @@ sysdecode_flock_operation(FILE *fp, int operation, int *rem)
 	return (print_mask_int(fp, flockops, operation, rem));
 }
 
-bool
-sysdecode_getfsstat_flags(FILE *fp, int flags, int *rem)
+static struct name_table getfsstatmode[] = {
+	X(MNT_WAIT) X(MNT_NOWAIT) XEND
+};
+
+const char *
+sysdecode_getfsstat_mode(int mode)
 {
 
-	return (print_mask_int(fp, getfsstatflags, flags, rem));
+	return (lookup_value(getfsstatmode, mode));
 }
 
 const char *
@@ -959,7 +963,7 @@ sysdecode_umtx_rwlock_flags(FILE *fp, u_long flags, u_long *rem)
 }
 
 /* XXX: This should be in <sys/capsicum.h> */
-#define	CAPMASK(right)	((right) && (((uint64_t)1 << 57) - 1))
+#define	CAPMASK(right)	((right) & (((uint64_t)1 << 57) - 1))
 
 void
 sysdecode_cap_rights(FILE *fp, cap_rights_t *rightsp)

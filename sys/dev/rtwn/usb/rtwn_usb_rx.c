@@ -158,8 +158,12 @@ rtwn_rxeof(struct rtwn_softc *sc, uint8_t *buf, int len)
 
 		/* Make sure everything fits in xfer. */
 		totlen = sizeof(*stat) + infosz + pktlen;
-		if (totlen > len)
+		if (totlen > len) {
+			device_printf(sc->sc_dev,
+			    "%s: totlen (%d) > len (%d)!\n",
+			    __func__, totlen, len);
 			break;
+		}
 
 		if (m0 == NULL)
 			m0 = m = rtwn_rx_copy_to_mbuf(sc, stat, totlen);
@@ -326,7 +330,8 @@ finish:
 	 * flush the FF staging queue if we're approaching idle.
 	 */
 #ifdef	IEEE80211_SUPPORT_SUPERG
-	if (!(sc->sc_flags & RTWN_FW_LOADED))
+	if (!(sc->sc_flags & RTWN_FW_LOADED) ||
+	    sc->sc_ratectl != RTWN_RATECTL_NET80211)
 		rtwn_cmd_sleepable(sc, NULL, 0, rtwn_ff_flush_all);
 #endif
 

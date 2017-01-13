@@ -41,13 +41,11 @@ __FBSDID("$FreeBSD$");
 static EFI_GUID blkio_guid = BLOCK_IO_PROTOCOL;
 
 static int efipart_init(void);
-static int efipart_strategy(void *, int, daddr_t, size_t, size_t, char *,
-    size_t *);
-static int efipart_realstrategy(void *, int, daddr_t, size_t, size_t, char *,
-    size_t *);
+static int efipart_strategy(void *, int, daddr_t, size_t, char *, size_t *);
+static int efipart_realstrategy(void *, int, daddr_t, size_t, char *, size_t *);
 static int efipart_open(struct open_file *, ...);
 static int efipart_close(struct open_file *);
-static void efipart_print(int);
+static int efipart_print(int);
 
 struct devsw efipart_dev = {
 	.dv_name = "part",
@@ -162,7 +160,7 @@ efipart_init(void)
 	return (err);
 }
 
-static void
+static int
 efipart_print(int verbose)
 {
 	char line[80];
@@ -170,28 +168,33 @@ efipart_print(int verbose)
 	EFI_HANDLE h;
 	EFI_STATUS status;
 	u_int unit;
+	int ret = 0;
 
-	pager_open();
+	printf("%s devices:", efipart_dev.dv_name);
+	if ((ret = pager_output("\n")) != 0)
+		return (ret);
+
 	for (unit = 0, h = efi_find_handle(&efipart_dev, 0);
 	    h != NULL; h = efi_find_handle(&efipart_dev, ++unit)) {
-		sprintf(line, "    %s%d:", efipart_dev.dv_name, unit);
-		if (pager_output(line))
+		snprintf(line, sizeof(line), "    %s%d:",
+		    efipart_dev.dv_name, unit);
+		if ((ret = pager_output(line)) != 0)
 			break;
 
 		status = BS->HandleProtocol(h, &blkio_guid, (void **)&blkio);
 		if (!EFI_ERROR(status)) {
-			sprintf(line, "    %llu blocks",
+			snprintf(line, sizeof(line), "    %llu blocks",
 			    (unsigned long long)(blkio->Media->LastBlock + 1));
-			if (pager_output(line))
+			if ((ret = pager_output(line)) != 0)
 				break;
 			if (blkio->Media->RemovableMedia)
-				if (pager_output(" (removable)"))
+				if ((ret = pager_output(" (removable)")) != 0)
 					break;
 		}
-		if (pager_output("\n"))
+		if ((ret = pager_output("\n")) != 0)
 			break;
 	}
-	pager_close();
+	return (ret);
 }
 
 static int
@@ -284,8 +287,8 @@ efipart_readwrite(EFI_BLOCK_IO *blkio, int rw, daddr_t blk, daddr_t nblks,
 }
 
 static int
-efipart_strategy(void *devdata, int rw, daddr_t blk, size_t offset,
-    size_t size, char *buf, size_t *rsize)
+efipart_strategy(void *devdata, int rw, daddr_t blk, size_t size,
+    char *buf, size_t *rsize)
 {
 	struct bcache_devdata bcd;
 	struct devdesc *dev;
@@ -294,13 +297,12 @@ efipart_strategy(void *devdata, int rw, daddr_t blk, size_t offset,
 	bcd.dv_strategy = efipart_realstrategy;
 	bcd.dv_devdata = devdata;
 	bcd.dv_cache = PD(dev).pd_bcache;
-	return (bcache_strategy(&bcd, rw, blk, offset, size,
-	    buf, rsize));
+	return (bcache_strategy(&bcd, rw, blk, size, buf, rsize));
 }
 
 static int
-efipart_realstrategy(void *devdata, int rw, daddr_t blk, size_t offset,
-    size_t size, char *buf, size_t *rsize)
+efipart_realstrategy(void *devdata, int rw, daddr_t blk, size_t size,
+    char *buf, size_t *rsize)
 {
 	struct devdesc *dev = (struct devdesc *)devdata;
 	EFI_BLOCK_IO *blkio;

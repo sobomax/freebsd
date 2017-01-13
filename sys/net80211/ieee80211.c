@@ -70,6 +70,8 @@ const char *ieee80211_phymode_name[IEEE80211_MODE_MAX] = {
 	[IEEE80211_MODE_QUARTER]  = "quarter",
 	[IEEE80211_MODE_11NA]	  = "11na",
 	[IEEE80211_MODE_11NG]	  = "11ng",
+	[IEEE80211_MODE_VHT_2GHZ]	  = "11acg",
+	[IEEE80211_MODE_VHT_5GHZ]	  = "11ac",
 };
 /* map ieee80211_opmode to the corresponding capability bit */
 const int ieee80211_opcap[IEEE80211_OPMODE_MAX] = {
@@ -90,6 +92,7 @@ const uint8_t ieee80211broadcastaddr[IEEE80211_ADDR_LEN] =
 static	void ieee80211_syncflag_locked(struct ieee80211com *ic, int flag);
 static	void ieee80211_syncflag_ht_locked(struct ieee80211com *ic, int flag);
 static	void ieee80211_syncflag_ext_locked(struct ieee80211com *ic, int flag);
+static	void ieee80211_syncflag_vht_locked(struct ieee80211com *ic, int flag);
 static	int ieee80211_media_setup(struct ieee80211com *ic,
 		struct ifmedia *media, int caps, int addsta,
 		ifm_change_cb_t media_change, ifm_stat_cb_t media_stat);
@@ -180,6 +183,10 @@ ieee80211_chan_init(struct ieee80211com *ic)
 			setbit(ic->ic_modecaps, IEEE80211_MODE_11NA);
 		if (IEEE80211_IS_CHAN_HTG(c))
 			setbit(ic->ic_modecaps, IEEE80211_MODE_11NG);
+		if (IEEE80211_IS_CHAN_VHTA(c))
+			setbit(ic->ic_modecaps, IEEE80211_MODE_VHT_5GHZ);
+		if (IEEE80211_IS_CHAN_VHTG(c))
+			setbit(ic->ic_modecaps, IEEE80211_MODE_VHT_2GHZ);
 	}
 	/* initialize candidate channels to all available */
 	memcpy(ic->ic_chan_active, ic->ic_chan_avail,
@@ -207,6 +214,8 @@ ieee80211_chan_init(struct ieee80211com *ic)
 	DEFAULTRATES(IEEE80211_MODE_QUARTER,	 ieee80211_rateset_quarter);
 	DEFAULTRATES(IEEE80211_MODE_11NA,	 ieee80211_rateset_11a);
 	DEFAULTRATES(IEEE80211_MODE_11NG,	 ieee80211_rateset_11g);
+	DEFAULTRATES(IEEE80211_MODE_VHT_2GHZ,	 ieee80211_rateset_11g);
+	DEFAULTRATES(IEEE80211_MODE_VHT_5GHZ,	 ieee80211_rateset_11a);
 
 	/*
 	 * Setup required information to fill the mcsset field, if driver did
@@ -433,6 +442,22 @@ default_reset(struct ieee80211vap *vap, u_long cmd)
 }
 
 /*
+ * Default for updating the VAP default TX key index.
+ *
+ * Drivers that support TX offload as well as hardware encryption offload
+ * may need to be informed of key index changes separate from the key
+ * update.
+ */
+static void
+default_update_deftxkey(struct ieee80211vap *vap, ieee80211_keyix kid)
+{
+
+	/* XXX assert validity */
+	/* XXX assert we're in a key update block */
+	vap->iv_def_txkey = kid;
+}
+
+/*
  * Add underlying device errors to vap errors.
  */
 static uint64_t
@@ -561,6 +586,12 @@ ieee80211_vap_setup(struct ieee80211com *ic, struct ieee80211vap *vap,
 	 */
 	vap->iv_reset = default_reset;
 
+	/*
+	 * Install a default crypto key update method, the driver
+	 * can override this.
+	 */
+	vap->iv_update_deftxkey = default_update_deftxkey;
+
 	ieee80211_sysctl_vattach(vap);
 	ieee80211_crypto_vattach(vap);
 	ieee80211_node_vattach(vap);
@@ -630,6 +661,12 @@ ieee80211_vap_attach(struct ieee80211vap *vap, ifm_change_cb_t media_change,
 	ieee80211_syncflag_locked(ic, IEEE80211_F_BURST);
 	ieee80211_syncflag_ht_locked(ic, IEEE80211_FHT_HT);
 	ieee80211_syncflag_ht_locked(ic, IEEE80211_FHT_USEHT40);
+
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_VHT);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT40);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT80);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT80P80);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT160);
 	IEEE80211_UNLOCK(ic);
 
 	return 1;
@@ -677,6 +714,13 @@ ieee80211_vap_detach(struct ieee80211vap *vap)
 	ieee80211_syncflag_locked(ic, IEEE80211_F_BURST);
 	ieee80211_syncflag_ht_locked(ic, IEEE80211_FHT_HT);
 	ieee80211_syncflag_ht_locked(ic, IEEE80211_FHT_USEHT40);
+
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_VHT);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT40);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT80);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT80P80);
+	ieee80211_syncflag_vht_locked(ic, IEEE80211_FVHT_USEVHT160);
+
 	/* NB: this handles the bpfdetach done below */
 	ieee80211_syncflag_ext_locked(ic, IEEE80211_FEXT_BPF);
 	if (vap->iv_ifflags & IFF_PROMISC)
@@ -827,6 +871,46 @@ ieee80211_syncflag_ht(struct ieee80211vap *vap, int flag)
 	} else
 		vap->iv_flags_ht |= flag;
 	ieee80211_syncflag_ht_locked(ic, flag);
+	IEEE80211_UNLOCK(ic);
+}
+
+/*
+ * Synchronize flags_vht bit state in the com structure
+ * according to the state of all vap's.  This is used,
+ * for example, to handle state changes via ioctls.
+ */
+static void
+ieee80211_syncflag_vht_locked(struct ieee80211com *ic, int flag)
+{
+	struct ieee80211vap *vap;
+	int bit;
+
+	IEEE80211_LOCK_ASSERT(ic);
+
+	bit = 0;
+	TAILQ_FOREACH(vap, &ic->ic_vaps, iv_next)
+		if (vap->iv_flags_vht & flag) {
+			bit = 1;
+			break;
+		}
+	if (bit)
+		ic->ic_flags_vht |= flag;
+	else
+		ic->ic_flags_vht &= ~flag;
+}
+
+void
+ieee80211_syncflag_vht(struct ieee80211vap *vap, int flag)
+{
+	struct ieee80211com *ic = vap->iv_ic;
+
+	IEEE80211_LOCK(ic);
+	if (flag < 0) {
+		flag = -flag;
+		vap->iv_flags_vht &= ~flag;
+	} else
+		vap->iv_flags_vht |= flag;
+	ieee80211_syncflag_vht_locked(ic, flag);
 	IEEE80211_UNLOCK(ic);
 }
 
@@ -1170,6 +1254,53 @@ ieee80211_add_channel_ht40(struct ieee80211_channel chans[], int maxchans,
 }
 
 /*
+ * Fetch the center frequency for the primary channel.
+ */
+uint32_t
+ieee80211_get_channel_center_freq(const struct ieee80211_channel *c)
+{
+
+	return (c->ic_freq);
+}
+
+/*
+ * Fetch the center frequency for the primary BAND channel.
+ *
+ * For 5, 10, 20MHz channels it'll be the normally configured channel
+ * frequency.
+ *
+ * For 40MHz, 80MHz, 160Mhz channels it'll the the centre of the
+ * wide channel, not the centre of the primary channel (that's ic_freq).
+ *
+ * For 80+80MHz channels this will be the centre of the primary
+ * 80MHz channel; the secondary 80MHz channel will be center_freq2().
+ */
+
+uint32_t
+ieee80211_get_channel_center_freq1(const struct ieee80211_channel *c)
+{
+
+	if (IEEE80211_IS_CHAN_HT40U(c)) {
+		return (c->ic_freq + 10);
+	}
+	if (IEEE80211_IS_CHAN_HT40D(c)) {
+		return (c->ic_freq - 10);
+	}
+
+	return (c->ic_freq);
+}
+
+/*
+ * For now, no 80+80 support; this is zero.
+ */
+uint32_t
+ieee80211_get_channel_center_freq2(const struct ieee80211_channel *c)
+{
+
+	return (0);
+}
+
+/*
  * Adds channels into specified channel list (ieee[] array must be sorted).
  * Channels are already sorted.
  */
@@ -1369,6 +1500,8 @@ addmedia(struct ifmedia *media, int caps, int addsta, int mode, int mword)
 	    [IEEE80211_MODE_QUARTER]	= IFM_IEEE80211_11A,	/* XXX */
 	    [IEEE80211_MODE_11NA]	= IFM_IEEE80211_11NA,
 	    [IEEE80211_MODE_11NG]	= IFM_IEEE80211_11NG,
+	    [IEEE80211_MODE_VHT_2GHZ]	= IFM_IEEE80211_VHT2G,
+	    [IEEE80211_MODE_VHT_5GHZ]	= IFM_IEEE80211_VHT5G,
 	};
 	u_int mopt;
 
@@ -1481,6 +1614,19 @@ ieee80211_media_setup(struct ieee80211com *ic,
 		if (rate > maxrate)
 			maxrate = rate;
 	}
+
+	/*
+	 * Add VHT media.
+	 */
+	for (; mode <= IEEE80211_MODE_VHT_5GHZ; mode++) {
+		if (isclr(ic->ic_modecaps, mode))
+			continue;
+		addmedia(media, caps, addsta, mode, IFM_AUTO);
+		addmedia(media, caps, addsta, mode, IFM_IEEE80211_VHT);
+
+		/* XXX TODO: VHT maxrate */
+	}
+
 	return maxrate;
 }
 
@@ -1760,7 +1906,11 @@ enum ieee80211_phymode
 ieee80211_chan2mode(const struct ieee80211_channel *chan)
 {
 
-	if (IEEE80211_IS_CHAN_HTA(chan))
+	if (IEEE80211_IS_CHAN_VHT_2GHZ(chan))
+		return IEEE80211_MODE_VHT_2GHZ;
+	else if (IEEE80211_IS_CHAN_VHT_5GHZ(chan))
+		return IEEE80211_MODE_VHT_5GHZ;
+	else if (IEEE80211_IS_CHAN_HTA(chan))
 		return IEEE80211_MODE_11NA;
 	else if (IEEE80211_IS_CHAN_HTG(chan))
 		return IEEE80211_MODE_11NG;
@@ -1973,6 +2123,10 @@ ieee80211_rate2media(struct ieee80211com *ic, int rate, enum ieee80211_phymode m
 	case IEEE80211_MODE_11NG:
 	case IEEE80211_MODE_TURBO_G:
 		return findmedia(rates, nitems(rates), rate | IFM_IEEE80211_11G);
+	case IEEE80211_MODE_VHT_2GHZ:
+	case IEEE80211_MODE_VHT_5GHZ:
+		/* XXX TODO: need to figure out mapping for VHT rates */
+		return IFM_AUTO;
 	}
 	return IFM_AUTO;
 }
@@ -2006,6 +2160,7 @@ ieee80211_media2rate(int mword)
 		9,		/* IFM_IEEE80211_OFDM4 */
 		54,		/* IFM_IEEE80211_OFDM27 */
 		-1,		/* IFM_IEEE80211_MCS */
+		-1,		/* IFM_IEEE80211_VHT */
 	};
 	return IFM_SUBTYPE(mword) < nitems(ieeerates) ?
 		ieeerates[IFM_SUBTYPE(mword)] : 0;
@@ -2056,6 +2211,8 @@ ieee80211_channel_type_char(const struct ieee80211_channel *c)
 		return 'T';
 	if (IEEE80211_IS_CHAN_108G(c))
 		return 'G';
+	if (IEEE80211_IS_CHAN_VHT(c))
+		return 'v';
 	if (IEEE80211_IS_CHAN_HT(c))
 		return 'n';
 	if (IEEE80211_IS_CHAN_A(c))

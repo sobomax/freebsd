@@ -105,8 +105,7 @@ tmpfs_mem_avail(void)
 {
 	vm_ooffset_t avail;
 
-	avail = swap_pager_avail + vm_cnt.v_free_count + vm_cnt.v_cache_count -
-	    tmpfs_pages_reserved;
+	avail = swap_pager_avail + vm_cnt.v_free_count - tmpfs_pages_reserved;
 	if (__predict_false(avail < 0))
 		avail = 0;
 	return (avail);
@@ -1093,9 +1092,9 @@ tmpfs_dir_getdotdent(struct tmpfs_node *node, struct uio *uio)
 	else
 		error = uiomove(&dent, dent.d_reclen, uio);
 
-	node->tn_status |= TMPFS_NODE_ACCESSED;
+	tmpfs_set_status(node, TMPFS_NODE_ACCESSED);
 
-	return error;
+	return (error);
 }
 
 /*
@@ -1138,9 +1137,9 @@ tmpfs_dir_getdotdotdent(struct tmpfs_node *node, struct uio *uio)
 	else
 		error = uiomove(&dent, dent.d_reclen, uio);
 
-	node->tn_status |= TMPFS_NODE_ACCESSED;
+	tmpfs_set_status(node, TMPFS_NODE_ACCESSED);
 
-	return error;
+	return (error);
 }
 
 /*
@@ -1283,7 +1282,7 @@ tmpfs_dir_getdents(struct tmpfs_node *node, struct uio *uio, int maxcookies,
 	node->tn_dir.tn_readdir_lastn = off;
 	node->tn_dir.tn_readdir_lastp = de;
 
-	node->tn_status |= TMPFS_NODE_ACCESSED;
+	tmpfs_set_status(node, TMPFS_NODE_ACCESSED);
 	return error;
 }
 
@@ -1372,15 +1371,20 @@ retry:
 					VM_WAIT;
 					VM_OBJECT_WLOCK(uobj);
 					goto retry;
-				} else if (m->valid != VM_PAGE_BITS_ALL)
-					rv = vm_pager_get_pages(uobj, &m, 1,
-					    NULL, NULL);
-				else
-					/* A cached page was reactivated. */
-					rv = VM_PAGER_OK;
+				}
+				rv = vm_pager_get_pages(uobj, &m, 1, NULL,
+				    NULL);
 				vm_page_lock(m);
 				if (rv == VM_PAGER_OK) {
-					vm_page_deactivate(m);
+					/*
+					 * Since the page was not resident,
+					 * and therefore not recently
+					 * accessed, immediately enqueue it
+					 * for asynchronous laundering.  The
+					 * current operation is not regarded
+					 * as an access.
+					 */
+					vm_page_launder(m);
 					vm_page_unlock(m);
 					vm_page_xunbusy(m);
 				} else {
@@ -1458,7 +1462,7 @@ tmpfs_chflags(struct vnode *vp, u_long flags, struct ucred *cred,
 	int error;
 	struct tmpfs_node *node;
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chflags");
 
 	node = VP_TO_TMPFS_NODE(vp);
 
@@ -1498,9 +1502,9 @@ tmpfs_chflags(struct vnode *vp, u_long flags, struct ucred *cred,
 	node->tn_flags = flags;
 	node->tn_status |= TMPFS_NODE_CHANGED;
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chflags2");
 
-	return 0;
+	return (0);
 }
 
 /*
@@ -1514,7 +1518,7 @@ tmpfs_chmod(struct vnode *vp, mode_t mode, struct ucred *cred, struct thread *p)
 	int error;
 	struct tmpfs_node *node;
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chmod");
 
 	node = VP_TO_TMPFS_NODE(vp);
 
@@ -1554,9 +1558,9 @@ tmpfs_chmod(struct vnode *vp, mode_t mode, struct ucred *cred, struct thread *p)
 
 	node->tn_status |= TMPFS_NODE_CHANGED;
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chmod2");
 
-	return 0;
+	return (0);
 }
 
 /*
@@ -1575,7 +1579,7 @@ tmpfs_chown(struct vnode *vp, uid_t uid, gid_t gid, struct ucred *cred,
 	uid_t ouid;
 	gid_t ogid;
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chown");
 
 	node = VP_TO_TMPFS_NODE(vp);
 
@@ -1625,9 +1629,9 @@ tmpfs_chown(struct vnode *vp, uid_t uid, gid_t gid, struct ucred *cred,
 			node->tn_mode &= ~(S_ISUID | S_ISGID);
 	}
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chown2");
 
-	return 0;
+	return (0);
 }
 
 /*
@@ -1642,7 +1646,7 @@ tmpfs_chsize(struct vnode *vp, u_quad_t size, struct ucred *cred,
 	int error;
 	struct tmpfs_node *node;
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chsize");
 
 	node = VP_TO_TMPFS_NODE(vp);
 
@@ -1680,9 +1684,9 @@ tmpfs_chsize(struct vnode *vp, u_quad_t size, struct ucred *cred,
 	/* tmpfs_truncate will raise the NOTE_EXTEND and NOTE_ATTRIB kevents
 	 * for us, as will update tn_status; no need to do that here. */
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chsize2");
 
-	return error;
+	return (error);
 }
 
 /*
@@ -1697,7 +1701,7 @@ tmpfs_chtimes(struct vnode *vp, struct vattr *vap,
 	int error;
 	struct tmpfs_node *node;
 
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chtimes");
 
 	node = VP_TO_TMPFS_NODE(vp);
 
@@ -1726,9 +1730,20 @@ tmpfs_chtimes(struct vnode *vp, struct vattr *vap,
 
 	if (vap->va_birthtime.tv_sec != VNOVAL)
 		node->tn_birthtime = vap->va_birthtime;
-	MPASS(VOP_ISLOCKED(vp));
+	ASSERT_VOP_ELOCKED(vp, "chtimes2");
 
-	return 0;
+	return (0);
+}
+
+void
+tmpfs_set_status(struct tmpfs_node *node, int status)
+{
+
+	if ((node->tn_status & status) == status)
+		return;
+	TMPFS_NODE_LOCK(node);
+	node->tn_status |= status;
+	TMPFS_NODE_UNLOCK(node);
 }
 
 /* Sync timestamps */
@@ -1739,6 +1754,7 @@ tmpfs_itimes(struct vnode *vp, const struct timespec *acc,
 	struct tmpfs_node *node;
 	struct timespec now;
 
+	ASSERT_VOP_LOCKED(vp, "tmpfs_itimes");
 	node = VP_TO_TMPFS_NODE(vp);
 
 	if ((node->tn_status & (TMPFS_NODE_ACCESSED | TMPFS_NODE_MODIFIED |
@@ -1746,6 +1762,7 @@ tmpfs_itimes(struct vnode *vp, const struct timespec *acc,
 		return;
 
 	vfs_timestamp(&now);
+	TMPFS_NODE_LOCK(node);
 	if (node->tn_status & TMPFS_NODE_ACCESSED) {
 		if (acc == NULL)
 			 acc = &now;
@@ -1756,11 +1773,12 @@ tmpfs_itimes(struct vnode *vp, const struct timespec *acc,
 			mod = &now;
 		node->tn_mtime = *mod;
 	}
-	if (node->tn_status & TMPFS_NODE_CHANGED) {
+	if (node->tn_status & TMPFS_NODE_CHANGED)
 		node->tn_ctime = now;
-	}
-	node->tn_status &=
-	    ~(TMPFS_NODE_ACCESSED | TMPFS_NODE_MODIFIED | TMPFS_NODE_CHANGED);
+	node->tn_status &= ~(TMPFS_NODE_ACCESSED | TMPFS_NODE_MODIFIED |
+	    TMPFS_NODE_CHANGED);
+	TMPFS_NODE_UNLOCK(node);
+
 	/* XXX: FIX? The entropy here is desirable, but the harvesting may be expensive */
 	random_harvest_queue(node, sizeof(*node), 1, RANDOM_FS_ATIME);
 }
@@ -1794,14 +1812,13 @@ tmpfs_truncate(struct vnode *vp, off_t length)
 		return (EFBIG);
 
 	error = tmpfs_reg_resize(vp, length, FALSE);
-	if (error == 0) {
+	if (error == 0)
 		node->tn_status |= TMPFS_NODE_CHANGED | TMPFS_NODE_MODIFIED;
-	}
 
 out:
 	tmpfs_update(vp);
 
-	return error;
+	return (error);
 }
 
 static __inline int

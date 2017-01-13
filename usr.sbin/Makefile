@@ -62,6 +62,7 @@ SUBDIR=	adduser \
 	periodic \
 	powerd \
 	procctl \
+	prometheus_sysctl_exporter \
 	pstat \
 	pw \
 	pwd_mkdb \
@@ -88,6 +89,7 @@ SUBDIR=	adduser \
 	tcpdump \
 	traceroute \
 	trpt \
+	tzsetup \
 	uefisign \
 	ugidfw \
 	vigr \
@@ -121,7 +123,6 @@ SUBDIR.${MK_BOOTPARAMD}+=	bootparamd
 SUBDIR.${MK_BSDINSTALL}+=	bsdinstall
 SUBDIR.${MK_BSNMP}+=	bsnmpd
 SUBDIR.${MK_CTM}+=	ctm
-SUBDIR.${MK_DIALOG}+=	tzsetup
 SUBDIR.${MK_DIALOG}+=	bsdconfig
 SUBDIR.${MK_EFI}+=	efivar
 SUBDIR.${MK_FLOPPY}+=	fdcontrol

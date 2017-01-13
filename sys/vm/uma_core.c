@@ -845,8 +845,7 @@ static void
 keg_drain(uma_keg_t keg)
 {
 	struct slabhead freeslabs = { 0 };
-	uma_slab_t slab;
-	uma_slab_t n;
+	uma_slab_t slab, tmp;
 
 	/*
 	 * We don't want to take pages from statically allocated kegs at this
@@ -862,15 +861,10 @@ keg_drain(uma_keg_t keg)
 	if (keg->uk_free == 0)
 		goto finished;
 
-	slab = LIST_FIRST(&keg->uk_free_slab);
-	while (slab) {
-		n = LIST_NEXT(slab, us_link);
-
-		/* We have no where to free these to */
-		if (slab->us_flags & UMA_SLAB_BOOT) {
-			slab = n;
+	LIST_FOREACH_SAFE(slab, &keg->uk_free_slab, us_link, tmp) {
+		/* We have nowhere to free these to. */
+		if (slab->us_flags & UMA_SLAB_BOOT)
 			continue;
-		}
 
 		LIST_REMOVE(slab, us_link);
 		keg->uk_pages -= keg->uk_ppera;
@@ -880,8 +874,6 @@ keg_drain(uma_keg_t keg)
 			UMA_HASH_REMOVE(&keg->uk_hash, slab, slab->us_data);
 
 		SLIST_INSERT_HEAD(&freeslabs, slab, us_hlink);
-
-		slab = n;
 	}
 finished:
 	KEG_UNLOCK(keg);
@@ -1192,7 +1184,7 @@ page_free(void *mem, vm_size_t size, uint8_t flags)
 	else if (flags & UMA_SLAB_KERNEL)
 		vmem = kernel_arena;
 	else
-		panic("UMA: page_free used with invalid flags %d", flags);
+		panic("UMA: page_free used with invalid flags %x", flags);
 
 	kmem_free(vmem, (vm_offset_t)mem, size);
 }

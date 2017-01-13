@@ -1182,6 +1182,7 @@ sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
 	     (resid <= 0)) ?
 		PRUS_EOF :
 		/* If there is more to send set PRUS_MORETOCOME */
+		(flags & MSG_MORETOCOME) ||
 		(resid > 0 && space > 0) ? PRUS_MORETOCOME : 0,
 		top, addr, control, td);
 	if (dontroute) {
@@ -1368,6 +1369,7 @@ restart:
 			     (resid <= 0)) ?
 				PRUS_EOF :
 			/* If there is more to send set PRUS_MORETOCOME. */
+			    (flags & MSG_MORETOCOME) ||
 			    (resid > 0 && space > 0) ? PRUS_MORETOCOME : 0,
 			    top, addr, control, td);
 			if (dontroute) {
@@ -2455,12 +2457,8 @@ sooptcopyin(struct sockopt *sopt, void *buf, size_t len, size_t minlen)
 	 */
 	if ((valsize = sopt->sopt_valsize) < minlen)
 		return EINVAL;
-	if (valsize > len) {
-#if _BYTE_ORDER == _BIG_ENDIAN
-		sopt->sopt_val = (void *)((uintptr_t)sopt->sopt_val + (valsize - len));
-#endif
+	if (valsize > len)
 		sopt->sopt_valsize = valsize = len;
-	}
 
 	if (sopt->sopt_td != NULL)
 		return (copyin(sopt->sopt_val, buf, valsize));
