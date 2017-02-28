@@ -66,7 +66,7 @@ __FBSDID("$FreeBSD$");
 
 static PLAN *palloc(OPTION *);
 static long long find_parsenum(PLAN *, const char *, char *, char *);
-static long long find_parsetime(PLAN *, const char *, char *);
+static long long find_parsetime(PLAN *, const char *, char *, time_t);
 static char *nextarg(OPTION *, char ***);
 
 extern char **environ;
@@ -145,7 +145,7 @@ find_parsenum(PLAN *plan, const char *option, char *vp, char *endch)
  *	Parse a string of the form [+-]([0-9]+[smhdw]?)+ and return the value.
  */
 static long long
-find_parsetime(PLAN *plan, const char *option, char *vp)
+find_parsetime(PLAN *plan, const char *option, char *vp, time_t uval_default)
 {
 	long long secs, value;
 	char *str, *unit;	/* Pointer to character ending conversion. */
@@ -171,32 +171,35 @@ find_parsetime(PLAN *plan, const char *option, char *vp)
 		errx(1, "%s: %s: illegal time value", option, vp);
 		/* NOTREACHED */
 	}
-	if (*unit == '\0')
-		return value;
+	if (*unit == '\0') {
+		plan->uval = uval_default;
+		return (value * uval_default);
+	}
 
 	/* Units syntax. */
 	secs = 0;
 	for (;;) {
 		switch(*unit) {
 		case 's':	/* seconds */
-			secs += value;
+			plan->uval = 1;
 			break;
 		case 'm':	/* minutes */
-			secs += value * 60;
+			plan->uval = 60;
 			break;
 		case 'h':	/* hours */
-			secs += value * 3600;
+			plan->uval = 3600;
 			break;
 		case 'd':	/* days */
-			secs += value * 86400;
+			plan->uval = 86400;
 			break;
 		case 'w':	/* weeks */
-			secs += value * 604800;
+			plan->uval = 604800;
 			break;
 		default:
 			errx(1, "%s: %s: bad unit '%c'", option, vp, *unit);
 			/* NOTREACHED */
 		}
+		secs += value * plan->uval;
 		str = unit + 1;
 		if (*str == '\0')	/* EOS */
 			break;
@@ -253,18 +256,22 @@ nextarg(OPTION *option, char ***argvp)
 int
 f_Xmin(PLAN *plan, FTSENT *entry)
 {
+	time_t uval, cval;
+
+	uval = plan->uval;
+	cval = plan->t_data.tv_sec / uval;
 	if (plan->flags & F_TIME_C) {
 		COMPARE((now - entry->fts_statp->st_ctime +
-		    60 - 1) / 60, plan->t_data.tv_sec);
+		    uval - 1) / uval, cval);
 	} else if (plan->flags & F_TIME_A) {
 		COMPARE((now - entry->fts_statp->st_atime +
-		    60 - 1) / 60, plan->t_data.tv_sec);
+		    uval - 1) / uval, cval);
 	} else if (plan->flags & F_TIME_B) {
 		COMPARE((now - entry->fts_statp->st_birthtime +
-		    60 - 1) / 60, plan->t_data.tv_sec);
+		    uval - 1) / uval, cval);
 	} else {
 		COMPARE((now - entry->fts_statp->st_mtime +
-		    60 - 1) / 60, plan->t_data.tv_sec);
+		    uval - 1) / uval, cval);
 	}
 }
 
@@ -278,7 +285,7 @@ c_Xmin(OPTION *option, char ***argvp)
 	ftsoptions &= ~FTS_NOSTAT;
 
 	new = palloc(option);
-	new->t_data.tv_sec = find_parsenum(new, option->name, nmins, NULL);
+	new->t_data.tv_sec = find_parsetime(new, option->name, nmins, 60);
 	new->t_data.tv_nsec = 0;
 	TIME_CORRECT(new);
 	return new;
@@ -325,7 +332,7 @@ c_Xtime(OPTION *option, char ***argvp)
 	ftsoptions &= ~FTS_NOSTAT;
 
 	new = palloc(option);
-	new->t_data.tv_sec = find_parsetime(new, option->name, value);
+	new->t_data.tv_sec = find_parsetime(new, option->name, value, 1);
 	new->t_data.tv_nsec = 0;
 	if (!(new->flags & F_EXACTTIME))
 		TIME_CORRECT(new);

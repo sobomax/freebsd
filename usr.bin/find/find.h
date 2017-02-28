@@ -77,6 +77,7 @@ typedef struct _plandata {
 	struct _plandata *next;		/* next node */
 	exec_f	*execute;		/* node evaluation function */
 	int flags;			/* private flags */
+	time_t uval;
 	union {
 		gid_t _g_data;		/* gid */
 		ino_t _i_data;		/* inode */
