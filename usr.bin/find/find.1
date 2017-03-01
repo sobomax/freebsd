@@ -168,22 +168,13 @@ a preceding minus sign means
 and neither means
 .Dq exactly n .
 .Bl -tag -width indent
-.It Ic -Bmin Ar n Ns Op Cm smhdw
-If no units are specified, this primary evaluates to
-true if the difference between the time of a file's inode creation
+.It Ic -Bmin Ar n
+True if the difference between the time of a file's inode creation
 and the time
 .Nm
 was started, rounded up to the next full minute, is
 .Ar n
 minutes.
-.Pp
-If units are specified, this primary evaluates to
-true if the difference between the time of a file's inode creation
-and the time
-.Nm
-was started, rounded up to the next full unit, is
-.Ar n
-units.
 .It Ic -Bnewer Ar file
 Same as
 .Ic -newerBm .
@@ -212,9 +203,8 @@ files with extended ACLs.
 See
 .Xr acl 3
 for more information.
-.It Ic -amin Oo Cm - Ns | Ns Cm + Oc Ns Ar n Ns Op Cm smhdw
-If no units are specified, this primary evaluates to
-true if the difference between the file last access time and the time
+.It Ic -amin Oo Cm - Ns | Ns Cm + Oc Ns Ar n
+True if the difference between the file last access time and the time
 .Nm
 was started, rounded up to the next full minute, is
 more than
@@ -226,20 +216,6 @@ less than
 or exactly
 .Ar n
 minutes ago.
-.Pp
-If units are specified, this primary evaluates to
-true if the difference between the time of a file's last access
-and the time
-.Nm
-was started, rounded up to the next full unit, is more than
-.Ar n
-.Pq + Ns Ar n ,
-less than
-.Ar n
-.Pq - Ns Ar n ,
-or exactly
-.Ar n
-units.
 .It Ic -anewer Ar file
 Same as
 .Ic -neweram .
@@ -281,9 +257,8 @@ Units are probably only useful when used in conjunction with the
 or
 .Cm -
 modifier.
-.It Ic -cmin Oo Cm - Ns | Ns Cm + Oc Ns Ar n Ns Op Cm smhdw
-If no units are specified, this primary evaluates to
-true if the difference between the time of last change of file status
+.It Ic -cmin Oo Cm - Ns | Ns Cm + Oc Ns Ar n
+True if the difference between the time of last change of file status
 information and the time
 .Nm
 was started, rounded up to the next full minute, is
@@ -296,20 +271,6 @@ less than
 or exactly
 .Ar n
 minutes ago.
-.Pp
-If units are specified, this primary evaluates to
-true if the difference between the time of a file's last change
-of status information and the time
-.Nm
-was started, rounded up to the next full unit, is more than
-.Ar n
-.Pq + Ns Ar n ,
-less than
-.Ar n
-.Pq - Ns Ar n ,
-or exactly
-.Ar n
-units.
 .It Ic -cnewer Ar file
 Same as
 .Ic -newercm .
