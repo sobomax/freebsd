@@ -10,7 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -361,12 +361,12 @@ next(char **argv)
 
 		if (caph_limit_stream(fileno(stdin), CAPH_READ) < 0)
 			err(1, "unable to restrict %s",
-			    statok ? _argv[-1] : "stdin");
+			    statok ? *_argv : "stdin");
 
 		/*
 		 * We've opened our last input file; enter capsicum sandbox.
 		 */
-		if (*_argv == NULL) {
+		if (statok == 0 || *(_argv + 1) == NULL) {
 			if (cap_enter() < 0 && errno != ENOSYS)
 				err(1, "unable to enter capability mode");
 		}

@@ -13,7 +13,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -265,7 +265,7 @@ struct nfsreferral {
 	u_char		*nfr_srvlist;	/* List of servers */
 	int		nfr_srvcnt;	/* number of servers */
 	vnode_t		nfr_vp;	/* vnode for referral */
-	u_int32_t	nfr_dfileno;	/* assigned dir inode# */
+	uint64_t	nfr_dfileno;	/* assigned dir inode# */
 };
 
 /*

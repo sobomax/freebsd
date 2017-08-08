@@ -149,6 +149,7 @@ struct toepcb {
 	struct l2t_entry *l2te;	/* L2 table entry used by this connection */
 	struct clip_entry *ce;	/* CLIP table entry used by this tid */
 	int tid;		/* Connection identifier */
+	int tc_idx;		/* traffic class that this tid is bound to */
 
 	/* tx credit handling */
 	u_int tx_total;		/* total tx WR credits (in 16B units) */
@@ -321,17 +322,20 @@ uint64_t calc_opt0(struct socket *, struct vi_info *, struct l2t_entry *,
 uint64_t select_ntuple(struct vi_info *, struct l2t_entry *);
 void set_tcpddp_ulp_mode(struct toepcb *);
 int negative_advice(int);
-struct clip_entry *hold_lip(struct tom_data *, struct in6_addr *);
+struct clip_entry *hold_lip(struct tom_data *, struct in6_addr *,
+    struct clip_entry *);
 void release_lip(struct tom_data *, struct clip_entry *);
 
 /* t4_connect.c */
 void t4_init_connect_cpl_handlers(void);
+void t4_uninit_connect_cpl_handlers(void);
 int t4_connect(struct toedev *, struct socket *, struct rtentry *,
     struct sockaddr *);
 void act_open_failure_cleanup(struct adapter *, u_int, u_int);
 
 /* t4_listen.c */
 void t4_init_listen_cpl_handlers(void);
+void t4_uninit_listen_cpl_handlers(void);
 int t4_listen_start(struct toedev *, struct tcpcb *);
 int t4_listen_stop(struct toedev *, struct tcpcb *);
 void t4_syncache_added(struct toedev *, void *);

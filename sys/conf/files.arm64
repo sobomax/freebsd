@@ -37,6 +37,12 @@ arm/allwinner/clk/aw_pll.c	optional	aw_ccu fdt \
 	compile-with "${NORMAL_C} -I$S/gnu/dts/include"
 arm/allwinner/clk/aw_thsclk.c	optional	aw_ccu fdt
 arm/allwinner/clk/aw_usbclk.c	optional	aw_ccu fdt
+arm/allwinner/clkng/aw_ccung.c	optional	aw_ccu fdt
+arm/allwinner/clkng/aw_clk_nkmp.c	optional	aw_ccu fdt
+arm/allwinner/clkng/aw_clk_nm.c	optional	aw_ccu fdt
+arm/allwinner/clkng/aw_clk_prediv_mux.c	optional	aw_ccu fdt
+arm/allwinner/clkng/ccu_a64.c	optional	aw_ccu fdt
+
 arm/allwinner/if_awg.c		optional	awg fdt
 arm/annapurna/alpine/alpine_ccu.c		optional	al_ccu fdt
 arm/annapurna/alpine/alpine_nb_service.c	optional	al_nb_service fdt
@@ -88,7 +94,7 @@ arm64/arm64/disassem.c		optional	ddb
 arm64/arm64/dump_machdep.c	standard
 arm64/arm64/elf_machdep.c	standard
 arm64/arm64/exception.S		standard
-arm64/arm64/gicv3_its.c		optional	intrng
+arm64/arm64/gicv3_its.c		optional	intrng fdt
 arm64/arm64/gic_v3.c		standard
 arm64/arm64/gic_v3_fdt.c	optional	fdt
 arm64/arm64/identcpu.c		standard
@@ -142,11 +148,18 @@ armv8_crypto_wrap.o		optional	armv8crypto		\
 	compile-with	"${CC} -c ${CFLAGS:C/^-O2$/-O3/:N-nostdinc:N-mgeneral-regs-only} ${WERROR} ${NO_WCAST_QUAL} ${PROF} -march=armv8a+crypto ${.IMPSRC}" \
 	no-implicit-rule						\
 	clean		"armv8_crypto_wrap.o"
-crypto/blowfish/bf_enc.c	optional	crypto | ipsec
-crypto/des/des_enc.c		optional	crypto | ipsec | netsmb
+crypto/blowfish/bf_enc.c	optional	crypto | ipsec | ipsec_support
+crypto/des/des_enc.c		optional	crypto | ipsec | ipsec_support | netsmb
 dev/acpica/acpi_if.m		optional	acpi
 dev/ahci/ahci_generic.c		optional	ahci
+dev/axgbe/if_axgbe.c		optional	axgbe
+dev/axgbe/xgbe-desc.c		optional	axgbe
+dev/axgbe/xgbe-dev.c		optional	axgbe
+dev/axgbe/xgbe-drv.c		optional	axgbe
+dev/axgbe/xgbe-mdio.c		optional	axgbe
 dev/cpufreq/cpufreq_dt.c	optional	cpufreq fdt
+dev/iicbus/twsi/a10_twsi.c	optional	twsi fdt
+dev/iicbus/twsi/twsi.c		optional	twsi fdt
 dev/hwpmc/hwpmc_arm64.c		optional	hwpmc
 dev/hwpmc/hwpmc_arm64_md.c	optional	hwpmc
 dev/mbox/mbox_if.m		optional	soc_brcm_bcm2837
@@ -186,6 +199,7 @@ libkern/fls.c			standard
 libkern/flsl.c			standard
 libkern/flsll.c			standard
 libkern/memset.c		standard
+libkern/arm64/crc32c_armv8.S	standard
 cddl/contrib/opensolaris/common/atomic/aarch64/opensolaris_atomic.S	optional zfs | dtrace compile-with "${CDDL_C}"
 cddl/dev/dtrace/aarch64/dtrace_asm.S			optional dtrace compile-with "${DTRACE_S}"
 cddl/dev/dtrace/aarch64/dtrace_subr.c			optional dtrace compile-with "${DTRACE_C}"

@@ -106,15 +106,18 @@ efi_devpath_trim(EFI_DEVICE_PATH *devpath)
 	EFI_DEVICE_PATH *node, *copy;
 	size_t prefix, len;
 
-	node = efi_devpath_last_node(devpath);
+	if ((node = efi_devpath_last_node(devpath)) == NULL)
+		return (NULL);
 	prefix = (UINT8 *)node - (UINT8 *)devpath;
 	if (prefix == 0)
 		return (NULL);
 	len = prefix + DevicePathNodeLength(NextDevicePathNode(node));
 	copy = malloc(len);
-	memcpy(copy, devpath, prefix);
-	node = (EFI_DEVICE_PATH *)((UINT8 *)copy + prefix);
-	SetDevicePathEndNode(node);
+	if (copy != NULL) {
+		memcpy(copy, devpath, prefix);
+		node = (EFI_DEVICE_PATH *)((UINT8 *)copy + prefix);
+		SetDevicePathEndNode(node);
+	}
 	return (copy);
 }
 
@@ -134,4 +137,32 @@ efi_devpath_handle(EFI_DEVICE_PATH *devpath)
 	if (EFI_ERROR(status))
 		return (NULL);
 	return (h);
+}
+
+int
+efi_devpath_match(EFI_DEVICE_PATH *devpath1, EFI_DEVICE_PATH *devpath2)
+{
+	int len;
+
+	if (devpath1 == NULL || devpath2 == NULL)
+		return (0);
+
+	while (1) {
+		if (DevicePathType(devpath1) != DevicePathType(devpath2) ||
+		    DevicePathSubType(devpath1) != DevicePathSubType(devpath2))
+			return (0);
+
+		len = DevicePathNodeLength(devpath1);
+		if (len != DevicePathNodeLength(devpath2))
+			return (0);
+
+		if (memcmp(devpath1, devpath2, (size_t)len) != 0)
+			return (0);
+
+		if (IsDevicePathEnd(devpath1))
+			break;
+		devpath1 = NextDevicePathNode(devpath1);
+		devpath2 = NextDevicePathNode(devpath2);
+	}
+	return (1);
 }

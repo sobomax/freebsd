@@ -764,7 +764,7 @@ vpanic(const char *fmt, va_list ap)
 #ifdef SMP
 	printf("cpuid = %d\n", PCPU_GET(cpuid));
 #endif
-
+	printf("time = %jd\n", (intmax_t )time_second);
 #ifdef KDB
 	if (newpanic && trace_on_panic)
 		kdb_backtrace();
@@ -1229,6 +1229,7 @@ void
 mkdumpheader(struct kerneldumpheader *kdh, char *magic, uint32_t archver,
     uint64_t dumplen, uint32_t dumpkeysize, uint32_t blksz)
 {
+	size_t dstsize;
 
 	bzero(kdh, sizeof(*kdh));
 	strlcpy(kdh->magic, magic, sizeof(kdh->magic));
@@ -1240,7 +1241,9 @@ mkdumpheader(struct kerneldumpheader *kdh, char *magic, uint32_t archver,
 	kdh->dumpkeysize = htod32(dumpkeysize);
 	kdh->blocksize = htod32(blksz);
 	strlcpy(kdh->hostname, prison0.pr_hostname, sizeof(kdh->hostname));
-	strlcpy(kdh->versionstring, version, sizeof(kdh->versionstring));
+	dstsize = sizeof(kdh->versionstring);
+	if (strlcpy(kdh->versionstring, version, dstsize) >= dstsize)
+		kdh->versionstring[dstsize - 2] = '\n';
 	if (panicstr != NULL)
 		strlcpy(kdh->panicstring, panicstr, sizeof(kdh->panicstring));
 	kdh->parity = kerneldump_parity(kdh);

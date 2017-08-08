@@ -68,7 +68,7 @@
 	caddr_t	pc_cmap_addr2;						\
 	vm_offset_t pc_qmap_addr;	/* KVA for temporary mappings */\
 	uint32_t pc_smp_tlb_done;	/* TLB op acknowledgement */	\
-	char	__pad[189]
+	char	__pad[445]
 
 #ifdef _KERNEL
 
@@ -76,6 +76,7 @@
 
 extern struct pcpu *pcpup;
 
+#define	get_pcpu()		(pcpup)
 #define	PCPU_GET(member)	(pcpup->pc_ ## member)
 #define	PCPU_ADD(member, val)	(pcpup->pc_ ## member += (val))
 #define	PCPU_INC(member)	PCPU_ADD(member, 1)
@@ -195,6 +196,15 @@ extern struct pcpu *pcpup;
 		*__PCPU_PTR(name) = __val;				\
 	}								\
 } while (0)
+
+#define	get_pcpu() __extension__ ({					\
+	struct pcpu *__pc;						\
+									\
+	__asm __volatile("movl %%fs:%1,%0"				\
+	    : "=r" (__pc)						\
+	    : "m" (*(struct pcpu *)(__pcpu_offset(pc_prvspace))));	\
+	__pc;								\
+})
 
 #define	PCPU_GET(member)	__PCPU_GET(pc_ ## member)
 #define	PCPU_ADD(member, val)	__PCPU_ADD(pc_ ## member, val)

@@ -95,10 +95,9 @@ SYSCTL_INT(_kern_cam_ctl_iscsi, OID_AUTO, ping_timeout, CTLFLAG_RWTUN,
 static int login_timeout = 60;
 SYSCTL_INT(_kern_cam_ctl_iscsi, OID_AUTO, login_timeout, CTLFLAG_RWTUN,
     &login_timeout, 60, "Time to wait for ctld(8) to finish Login Phase, in seconds");
-static int maxcmdsn_delta = 256;
-SYSCTL_INT(_kern_cam_ctl_iscsi, OID_AUTO, maxcmdsn_delta, CTLFLAG_RWTUN,
-    &maxcmdsn_delta, 256, "Number of commands the initiator can send "
-    "without confirmation");
+static int maxtags = 256;
+SYSCTL_INT(_kern_cam_ctl_iscsi, OID_AUTO, maxtags, CTLFLAG_RWTUN,
+    &maxtags, 0, "Max number of requests queued by initiator");
 
 #define	CFISCSI_DEBUG(X, ...)						\
 	do {								\
@@ -144,7 +143,8 @@ SYSCTL_INT(_kern_cam_ctl_iscsi, OID_AUTO, maxcmdsn_delta, CTLFLAG_RWTUN,
 #define	PDU_TOTAL_TRANSFER_LEN(X)	(X)->ip_prv1
 #define	PDU_R2TSN(X)			(X)->ip_prv2
 
-int		cfiscsi_init(void);
+static int	cfiscsi_init(void);
+static int	cfiscsi_shutdown(void);
 static void	cfiscsi_online(void *arg);
 static void	cfiscsi_offline(void *arg);
 static int	cfiscsi_info(void *arg, struct sbuf *sb);
@@ -182,9 +182,10 @@ static struct ctl_frontend cfiscsi_frontend =
 	.name = "iscsi",
 	.init = cfiscsi_init,
 	.ioctl = cfiscsi_ioctl,
+	.shutdown = cfiscsi_shutdown,
 };
-CTL_FRONTEND_DECLARE(ctlcfiscsi, cfiscsi_frontend);
-MODULE_DEPEND(ctlcfiscsi, icl, 1, 1, 1);
+CTL_FRONTEND_DECLARE(cfiscsi, cfiscsi_frontend);
+MODULE_DEPEND(cfiscsi, icl, 1, 1, 1);
 
 static struct icl_pdu *
 cfiscsi_pdu_new_response(struct icl_pdu *request, int flags)
@@ -242,7 +243,7 @@ cfiscsi_pdu_update_cmdsn(const struct icl_pdu *request)
 		 * outside of this range.
 		 */
 		if (ISCSI_SNLT(cmdsn, cs->cs_cmdsn) ||
-		    ISCSI_SNGT(cmdsn, cs->cs_cmdsn + maxcmdsn_delta)) {
+		    ISCSI_SNGT(cmdsn, cs->cs_cmdsn - 1 + maxtags)) {
 			CFISCSI_SESSION_UNLOCK(cs);
 			CFISCSI_SESSION_WARN(cs, "received PDU with CmdSN %u, "
 			    "while expected %u", cmdsn, cs->cs_cmdsn);
@@ -320,11 +321,10 @@ cfiscsi_pdu_handle(struct icl_pdu *request)
 static void
 cfiscsi_receive_callback(struct icl_pdu *request)
 {
+#ifdef ICL_KERNEL_PROXY
 	struct cfiscsi_session *cs;
 
 	cs = PDU_SESSION(request);
-
-#ifdef ICL_KERNEL_PROXY
 	if (cs->cs_waiting_for_ctld || cs->cs_login_phase) {
 		if (cs->cs_login_pdu == NULL)
 			cs->cs_login_pdu = request;
@@ -397,7 +397,8 @@ cfiscsi_pdu_prepare(struct icl_pdu *response)
 	    (bhssr->bhssr_flags & BHSDI_FLAGS_S))
 		bhssr->bhssr_statsn = htonl(cs->cs_statsn);
 	bhssr->bhssr_expcmdsn = htonl(cs->cs_cmdsn);
-	bhssr->bhssr_maxcmdsn = htonl(cs->cs_cmdsn + maxcmdsn_delta);
+	bhssr->bhssr_maxcmdsn = htonl(cs->cs_cmdsn - 1 +
+	    imax(0, maxtags - cs->cs_outstanding_ctl_pdus));
 
 	if (advance_statsn)
 		cs->cs_statsn++;
@@ -1321,7 +1322,7 @@ cfiscsi_session_delete(struct cfiscsi_session *cs)
 	free(cs, M_CFISCSI);
 }
 
-int
+static int
 cfiscsi_init(void)
 {
 	struct cfiscsi_softc *softc;
@@ -1341,6 +1342,23 @@ cfiscsi_init(void)
 	    sizeof(struct cfiscsi_data_wait), NULL, NULL, NULL, NULL,
 	    UMA_ALIGN_PTR, 0);
 
+	return (0);
+}
+
+static int
+cfiscsi_shutdown(void)
+{
+	struct cfiscsi_softc *softc = &cfiscsi_softc;
+
+	if (!TAILQ_EMPTY(&softc->sessions) || !TAILQ_EMPTY(&softc->targets))
+		return (EBUSY);
+
+	uma_zdestroy(cfiscsi_data_wait_zone);
+#ifdef ICL_KERNEL_PROXY
+	cv_destroy(&softc->accept_cv);
+#endif
+	cv_destroy(&softc->sessions_cv);
+	mtx_destroy(&softc->lock);
 	return (0);
 }
 
@@ -1690,6 +1708,13 @@ cfiscsi_ioctl_list(struct ctl_iscsi *ci)
 	sbuf_finish(sb);
 
 	error = copyout(sbuf_data(sb), cilp->conn_xml, sbuf_len(sb) + 1);
+	if (error != 0) {
+		sbuf_delete(sb);
+		snprintf(ci->error_str, sizeof(ci->error_str),
+		    "copyout failed with error %d", error);
+		ci->status = CTL_ISCSI_ERROR;
+		return;
+	}
 	cilp->fill_len = sbuf_len(sb) + 1;
 	ci->status = CTL_ISCSI_OK;
 	sbuf_delete(sb);
@@ -2084,7 +2109,8 @@ cfiscsi_ioctl_port_create(struct ctl_req *req)
 	if (ct->ct_state == CFISCSI_TARGET_STATE_ACTIVE) {
 		req->status = CTL_LUN_ERROR;
 		snprintf(req->error_str, sizeof(req->error_str),
-		    "target \"%s\" already exists", target);
+		    "target \"%s\" for portal group tag %u already exists",
+		    target, tag);
 		cfiscsi_target_release(ct);
 		ctl_free_opts(&opts);
 		return;
@@ -2107,11 +2133,6 @@ cfiscsi_ioctl_port_create(struct ctl_req *req)
 	port->onoff_arg = ct;
 	port->fe_datamove = cfiscsi_datamove;
 	port->fe_done = cfiscsi_done;
-
-	/* XXX KDM what should we report here? */
-	/* XXX These should probably be fetched from CTL. */
-	port->max_targets = 1;
-	port->max_target_id = 15;
 	port->targ_port = -1;
 
 	port->options = opts;
@@ -2148,9 +2169,9 @@ cfiscsi_ioctl_port_create(struct ctl_req *req)
 	retval = ctl_port_register(port);
 	if (retval != 0) {
 		ctl_free_opts(&port->options);
-		cfiscsi_target_release(ct);
 		free(port->port_devid, M_CFISCSI);
 		free(port->target_devid, M_CFISCSI);
+		cfiscsi_target_release(ct);
 		req->status = CTL_LUN_ERROR;
 		snprintf(req->error_str, sizeof(req->error_str),
 		    "ctl_port_register() failed with error %d", retval);
@@ -2623,7 +2644,7 @@ cfiscsi_datamove_out(union ctl_io *io)
 	 * Complete write underflow.  Not a single byte to read.  Return.
 	 */
 	expected_len = ntohl(bhssc->bhssc_expected_data_transfer_length);
-	if (io->scsiio.kern_rel_offset > expected_len) {
+	if (io->scsiio.kern_rel_offset >= expected_len) {
 		io->scsiio.be_move_done(io);
 		return;
 	}

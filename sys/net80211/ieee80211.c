@@ -242,6 +242,8 @@ ieee80211_chan_init(struct ieee80211com *ic)
 	if (ic->ic_txstream == 0)
 		ic->ic_txstream = 2;
 
+	ieee80211_init_suphtrates(ic);
+
 	/*
 	 * Set auto mode to reset active channel state and any desired channel.
 	 */
@@ -725,6 +727,8 @@ ieee80211_vap_detach(struct ieee80211vap *vap)
 	 */
 	ieee80211_draintask(ic, &vap->iv_nstate_task);
 	ieee80211_draintask(ic, &vap->iv_swbmiss_task);
+	ieee80211_draintask(ic, &vap->iv_wme_task);
+	ieee80211_draintask(ic, &ic->ic_parent_task);
 
 	/* XXX band-aid until ifnet handles this for us */
 	taskqueue_drain(taskqueue_swi, &ifp->if_linktask);
@@ -1317,6 +1321,7 @@ getflags_5ghz(const uint8_t bands[], uint32_t flags[], int ht40, int vht80)
 	if (isset(bands, IEEE80211_MODE_VHT_5GHZ)) {
 		flags[nmodes++] = IEEE80211_CHAN_A | IEEE80211_CHAN_HT20 |
 		    IEEE80211_CHAN_VHT20;
+	}
 
 	/* 40MHz */
 	if (ht40) {
@@ -1340,7 +1345,6 @@ getflags_5ghz(const uint8_t bands[], uint32_t flags[], int ht40, int vht80)
 		    IEEE80211_CHAN_HT40U | IEEE80211_CHAN_VHT80;
 		flags[nmodes++] = IEEE80211_CHAN_A |
 		    IEEE80211_CHAN_HT40D | IEEE80211_CHAN_VHT80;
-		}
 	}
 
 	/* XXX VHT80+80 */
@@ -1903,6 +1907,14 @@ ieee80211_get_suprates(struct ieee80211com *ic, const struct ieee80211_channel *
 {
 	/* XXX does this work for 11ng basic rates? */
 	return &ic->ic_sup_rates[ieee80211_chan2mode(c)];
+}
+
+/* XXX inline or eliminate? */
+const struct ieee80211_htrateset *
+ieee80211_get_suphtrates(struct ieee80211com *ic,
+    const struct ieee80211_channel *c)
+{
+	return &ic->ic_sup_htrates;
 }
 
 void

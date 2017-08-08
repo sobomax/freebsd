@@ -75,6 +75,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/socket.h> /* sockaddrs */
 #include <sys/selinfo.h>
 #include <net/if.h>
+#include <net/if_types.h>
 #include <net/if_var.h>
 #include <machine/bus.h>        /* bus_dmamap_* in netmap_kern.h */
 
@@ -168,7 +169,8 @@ nm_os_get_mbuf(struct ifnet *ifp, int len)
 static void void_mbuf_dtor(struct mbuf *m, void *arg1, void *arg2) { }
 
 #define SET_MBUF_DESTRUCTOR(m, fn)	do {		\
-	(m)->m_ext.ext_free = fn ? (void *)fn : (void *)void_mbuf_dtor;	\
+	(m)->m_ext.ext_free = (fn != NULL) ?		\
+	    (void *)fn : (void *)void_mbuf_dtor;	\
 } while (0)
 
 static inline struct mbuf *
@@ -305,7 +307,7 @@ void generic_rate(int txp, int txs, int txi, int rxp, int rxs, int rxi)
 #endif /* !RATE */
 
 
-/* =============== GENERIC NETMAP ADAPTER SUPPORT ================= */
+/* ========== GENERIC (EMULATED) NETMAP ADAPTER SUPPORT ============= */
 
 /*
  * Wrapper used by the generic adapter layer to notify
@@ -335,7 +337,6 @@ generic_netmap_unregister(struct netmap_adapter *na)
 	int i, r;
 
 	if (na->active_fds == 0) {
-		D("Generic adapter %p goes off", na);
 		rtnl_lock();
 
 		na->na_flags &= ~NAF_NETMAP_ON;
@@ -351,14 +352,14 @@ generic_netmap_unregister(struct netmap_adapter *na)
 
 	for_each_rx_kring_h(r, kring, na) {
 		if (nm_kring_pending_off(kring)) {
-			D("RX ring %d of generic adapter %p goes off", r, na);
+			D("Emulated adapter: ring '%s' deactivated", kring->name);
 			kring->nr_mode = NKR_NETMAP_OFF;
 		}
 	}
 	for_each_tx_kring_h(r, kring, na) {
 		if (nm_kring_pending_off(kring)) {
 			kring->nr_mode = NKR_NETMAP_OFF;
-			D("TX ring %d of generic adapter %p goes off", r, na);
+			D("Emulated adapter: ring '%s' deactivated", kring->name);
 		}
 	}
 
@@ -388,7 +389,7 @@ generic_netmap_unregister(struct netmap_adapter *na)
 	}
 
 	if (na->active_fds == 0) {
-		free(gna->mit, M_DEVBUF);
+		nm_os_free(gna->mit);
 
 		for_each_rx_kring(r, kring, na) {
 			mbq_safe_fini(&kring->rx_queue);
@@ -405,7 +406,7 @@ generic_netmap_unregister(struct netmap_adapter *na)
 					m_freem(kring->tx_pool[i]);
 				}
 			}
-			free(kring->tx_pool, M_DEVBUF);
+			nm_os_free(kring->tx_pool);
 			kring->tx_pool = NULL;
 		}
 
@@ -415,6 +416,7 @@ generic_netmap_unregister(struct netmap_adapter *na)
 			del_timer(&rate_ctx.timer);
 		}
 #endif
+		D("Emulated adapter for %s deactivated", na->name);
 	}
 
 	return 0;
@@ -439,13 +441,12 @@ generic_netmap_register(struct netmap_adapter *na, int enable)
 	}
 
 	if (na->active_fds == 0) {
-		D("Generic adapter %p goes on", na);
+		D("Emulated adapter for %s activated", na->name);
 		/* Do all memory allocations when (na->active_fds == 0), to
 		 * simplify error management. */
 
 		/* Allocate memory for mitigation support on all the rx queues. */
-		gna->mit = malloc(na->num_rx_rings * sizeof(struct nm_generic_mit),
-				M_DEVBUF, M_NOWAIT | M_ZERO);
+		gna->mit = nm_os_malloc(na->num_rx_rings * sizeof(struct nm_generic_mit));
 		if (!gna->mit) {
 			D("mitigation allocation failed");
 			error = ENOMEM;
@@ -472,8 +473,7 @@ generic_netmap_register(struct netmap_adapter *na, int enable)
 		}
 		for_each_tx_kring(r, kring, na) {
 			kring->tx_pool =
-				malloc(na->num_tx_desc * sizeof(struct mbuf *),
-				       M_DEVBUF, M_NOWAIT | M_ZERO);
+				nm_os_malloc(na->num_tx_desc * sizeof(struct mbuf *));
 			if (!kring->tx_pool) {
 				D("tx_pool allocation failed");
 				error = ENOMEM;
@@ -486,14 +486,14 @@ generic_netmap_register(struct netmap_adapter *na, int enable)
 
 	for_each_rx_kring_h(r, kring, na) {
 		if (nm_kring_pending_on(kring)) {
-			D("RX ring %d of generic adapter %p goes on", r, na);
+			D("Emulated adapter: ring '%s' activated", kring->name);
 			kring->nr_mode = NKR_NETMAP_ON;
 		}
 
 	}
 	for_each_tx_kring_h(r, kring, na) {
 		if (nm_kring_pending_on(kring)) {
-			D("TX ring %d of generic adapter %p goes on", r, na);
+			D("Emulated adapter: ring '%s' activated", kring->name);
 			kring->nr_mode = NKR_NETMAP_ON;
 		}
 	}
@@ -554,13 +554,13 @@ free_tx_pools:
 		if (kring->tx_pool == NULL) {
 			continue;
 		}
-		free(kring->tx_pool, M_DEVBUF);
+		nm_os_free(kring->tx_pool);
 		kring->tx_pool = NULL;
 	}
 	for_each_rx_kring(r, kring, na) {
 		mbq_safe_fini(&kring->rx_queue);
 	}
-	free(gna->mit, M_DEVBUF);
+	nm_os_free(gna->mit);
 out:
 
 	return error;
@@ -1155,7 +1155,6 @@ generic_netmap_dtor(struct netmap_adapter *na)
 	struct netmap_adapter *prev_na = gna->prev;
 
 	if (prev_na != NULL) {
-		D("Released generic NA %p", gna);
 		netmap_adapter_put(prev_na);
 		if (nm_iszombie(na)) {
 		        /*
@@ -1164,6 +1163,7 @@ generic_netmap_dtor(struct netmap_adapter *na)
 		         */
 		        netmap_adapter_put(prev_na);
 		}
+		D("Native netmap adapter %p restored", prev_na);
 	}
 	NM_ATTACH_NA(ifp, prev_na);
 	/*
@@ -1171,7 +1171,13 @@ generic_netmap_dtor(struct netmap_adapter *na)
 	 * overrides WNA(ifp) if na->ifp is not NULL.
 	 */
 	na->ifp = NULL;
-	D("Restored native NA %p", prev_na);
+	D("Emulated netmap adapter for %s destroyed", na->name);
+}
+
+int
+na_is_generic(struct netmap_adapter *na)
+{
+	return na->nm_register == generic_netmap_register;
 }
 
 /*
@@ -1193,6 +1199,13 @@ generic_netmap_attach(struct ifnet *ifp)
 	int retval;
 	u_int num_tx_desc, num_rx_desc;
 
+#ifdef __FreeBSD__
+	if (ifp->if_type == IFT_LOOP) {
+		D("if_loop is not supported by %s", __func__);
+		return EINVAL;
+	}
+#endif
+
 	num_tx_desc = num_rx_desc = netmap_generic_ringsize; /* starting point */
 
 	nm_os_generic_find_num_desc(ifp, &num_tx_desc, &num_rx_desc); /* ignore errors */
@@ -1202,7 +1215,7 @@ generic_netmap_attach(struct ifnet *ifp)
 		return EINVAL;
 	}
 
-	gna = malloc(sizeof(*gna), M_DEVBUF, M_NOWAIT | M_ZERO);
+	gna = nm_os_malloc(sizeof(*gna));
 	if (gna == NULL) {
 		D("no memory on attach, give up");
 		return ENOMEM;
@@ -1231,7 +1244,7 @@ generic_netmap_attach(struct ifnet *ifp)
 
 	retval = netmap_attach_common(na);
 	if (retval) {
-		free(gna, M_DEVBUF);
+		nm_os_free(gna);
 		return retval;
 	}
 
@@ -1243,7 +1256,7 @@ generic_netmap_attach(struct ifnet *ifp)
 
 	nm_os_generic_set_features(gna);
 
-	D("Created generic NA %p (prev %p)", gna, gna->prev);
+	D("Emulated adapter for %s created (prev was %p)", na->name, gna->prev);
 
 	return retval;
 }

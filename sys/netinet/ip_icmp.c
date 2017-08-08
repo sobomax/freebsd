@@ -10,7 +10,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -185,10 +185,10 @@ kmod_icmpstat_inc(int statnum)
 void
 icmp_error(struct mbuf *n, int type, int code, uint32_t dest, int mtu)
 {
-	register struct ip *oip = mtod(n, struct ip *), *nip;
-	register unsigned oiphlen = oip->ip_hl << 2;
-	register struct icmp *icp;
-	register struct mbuf *m;
+	struct ip *oip = mtod(n, struct ip *), *nip;
+	unsigned oiphlen = oip->ip_hl << 2;
+	struct icmp *icp;
+	struct mbuf *m;
 	unsigned icmplen, icmpelen, nlen;
 
 	KASSERT((u_int)type <= ICMP_MAXTYPE, ("%s: illegal ICMP type", __func__));
@@ -380,10 +380,12 @@ icmp_input(struct mbuf **mp, int *offp, int proto)
 	 */
 #ifdef ICMPPRINTFS
 	if (icmpprintfs) {
-		char buf[4 * sizeof "123"];
-		strcpy(buf, inet_ntoa(ip->ip_src));
+		char srcbuf[INET_ADDRSTRLEN];
+		char dstbuf[INET_ADDRSTRLEN];
+
 		printf("icmp_input from %s to %s, len %d\n",
-		       buf, inet_ntoa(ip->ip_dst), icmplen);
+		    inet_ntoa_r(ip->ip_src, srcbuf),
+		    inet_ntoa_r(ip->ip_dst, dstbuf), icmplen);
 	}
 #endif
 	if (icmplen < ICMP_MINLEN) {
@@ -538,11 +540,10 @@ icmp_input(struct mbuf **mp, int *offp, int proto)
 			ICMPSTAT_INC(icps_bmcastecho);
 			break;
 		}
-		icp->icmp_type = ICMP_ECHOREPLY;
 		if (badport_bandlim(BANDLIM_ICMP_ECHO) < 0)
 			goto freeit;
-		else
-			goto reflect;
+		icp->icmp_type = ICMP_ECHOREPLY;
+		goto reflect;
 
 	case ICMP_TSTAMP:
 		if (V_icmptstamprepl == 0)
@@ -556,13 +557,12 @@ icmp_input(struct mbuf **mp, int *offp, int proto)
 			ICMPSTAT_INC(icps_badlen);
 			break;
 		}
+		if (badport_bandlim(BANDLIM_ICMP_TSTAMP) < 0)
+			goto freeit;
 		icp->icmp_type = ICMP_TSTAMPREPLY;
 		icp->icmp_rtime = iptime();
 		icp->icmp_ttime = icp->icmp_rtime;	/* bogus, do later! */
-		if (badport_bandlim(BANDLIM_ICMP_TSTAMP) < 0)
-			goto freeit;
-		else
-			goto reflect;
+		goto reflect;
 
 	case ICMP_MASKREQ:
 		if (V_icmpmaskrepl == 0)
@@ -649,11 +649,12 @@ reflect:
 		icmpdst.sin_addr = icp->icmp_gwaddr;
 #ifdef	ICMPPRINTFS
 		if (icmpprintfs) {
-			char buf[4 * sizeof "123"];
-			strcpy(buf, inet_ntoa(icp->icmp_ip.ip_dst));
+			char dstbuf[INET_ADDRSTRLEN];
+			char gwbuf[INET_ADDRSTRLEN];
 
 			printf("redirect dst %s to %s\n",
-			       buf, inet_ntoa(icp->icmp_gwaddr));
+			       inet_ntoa_r(icp->icmp_ip.ip_dst, dstbuf),
+			       inet_ntoa_r(icp->icmp_gwaddr, gwbuf));
 		}
 #endif
 		icmpsrc.sin_addr = icp->icmp_ip.ip_dst;
@@ -811,7 +812,7 @@ match:
 	ip->ip_ttl = V_ip_defttl;
 
 	if (optlen > 0) {
-		register u_char *cp;
+		u_char *cp;
 		int opt, cnt;
 		u_int len;
 
@@ -886,9 +887,9 @@ done:
 static void
 icmp_send(struct mbuf *m, struct mbuf *opts)
 {
-	register struct ip *ip = mtod(m, struct ip *);
-	register int hlen;
-	register struct icmp *icp;
+	struct ip *ip = mtod(m, struct ip *);
+	int hlen;
+	struct icmp *icp;
 
 	hlen = ip->ip_hl << 2;
 	m->m_data += hlen;
@@ -901,10 +902,12 @@ icmp_send(struct mbuf *m, struct mbuf *opts)
 	m->m_pkthdr.rcvif = (struct ifnet *)0;
 #ifdef ICMPPRINTFS
 	if (icmpprintfs) {
-		char buf[4 * sizeof "123"];
-		strcpy(buf, inet_ntoa(ip->ip_dst));
+		char dstbuf[INET_ADDRSTRLEN];
+		char srcbuf[INET_ADDRSTRLEN];
+
 		printf("icmp_send dst %s src %s\n",
-		       buf, inet_ntoa(ip->ip_src));
+		    inet_ntoa_r(ip->ip_dst, dstbuf),
+		    inet_ntoa_r(ip->ip_src, srcbuf));
 	}
 #endif
 	(void) ip_output(m, opts, NULL, 0, NULL, NULL);

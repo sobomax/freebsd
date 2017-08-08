@@ -13,7 +13,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
  */
 #include <fs/nfs/nfsport.h>
 #include <sys/sysctl.h>
+#include <rpc/rpc_com.h>
 #include <vm/vm.h>
 #include <vm/vm_object.h>
 #include <vm/vm_page.h>
@@ -348,7 +349,7 @@ nfsvno_pathconf(struct vnode *vp, int flag, register_t *retf,
 
 /* Fake nfsrv_atroot. Just return 0 */
 int
-nfsrv_atroot(struct vnode *vp, long *retp)
+nfsrv_atroot(struct vnode *vp, uint64_t *retp)
 {
 
 	return (0);
@@ -618,11 +619,30 @@ nfssvc_call(struct thread *p, struct nfssvc_args *uap, struct ucred *cred)
 		goto out;
 	} else if (uap->flag & NFSSVC_NFSUSERDPORT) {
 		u_short sockport;
+		struct sockaddr *sad;
+		struct sockaddr_un *sun;
 
-		error = copyin(uap->argp, (caddr_t)&sockport,
-		    sizeof (u_short));
-		if (!error)
-			error = nfsrv_nfsuserdport(sockport, p);
+		if ((uap->flag & NFSSVC_NEWSTRUCT) != 0) {
+			/* New nfsuserd using an AF_LOCAL socket. */
+			sun = malloc(sizeof(struct sockaddr_un), M_SONAME,
+			    M_WAITOK | M_ZERO);
+			error = copyinstr(uap->argp, sun->sun_path,
+			    sizeof(sun->sun_path), NULL);
+			if (error != 0) {
+				free(sun, M_SONAME);
+				return (error);
+			}
+		        sun->sun_family = AF_LOCAL;
+		        sun->sun_len = SUN_LEN(sun);
+			sockport = 0;
+			sad = (struct sockaddr *)sun;
+		} else {
+			error = copyin(uap->argp, (caddr_t)&sockport,
+			    sizeof (u_short));
+			sad = NULL;
+		}
+		if (error == 0)
+			error = nfsrv_nfsuserdport(sad, sockport, p);
 	} else if (uap->flag & NFSSVC_NFSUSERDDELPORT) {
 		nfsrv_nfsuserddelport();
 		error = 0;

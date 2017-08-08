@@ -13,7 +13,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -171,11 +171,11 @@ struct vm_object {
 #define	OBJ_FICTITIOUS	0x0001		/* (c) contains fictitious pages */
 #define	OBJ_UNMANAGED	0x0002		/* (c) contains unmanaged pages */
 #define	OBJ_POPULATE	0x0004		/* pager implements populate() */
-#define OBJ_DEAD	0x0008		/* dead objects (during rundown) */
+#define	OBJ_DEAD	0x0008		/* dead objects (during rundown) */
 #define	OBJ_NOSPLIT	0x0010		/* dont split this object */
 #define	OBJ_UMTXDEAD	0x0020		/* umtx pshared was terminated */
-#define OBJ_PIPWNT	0x0040		/* paging in progress wanted */
-#define OBJ_MIGHTBEDIRTY 0x0100		/* object might be dirty, only for vnode */
+#define	OBJ_PIPWNT	0x0040		/* paging in progress wanted */
+#define	OBJ_MIGHTBEDIRTY 0x0100		/* object might be dirty, only for vnode */
 #define	OBJ_TMPFS_NODE	0x0200		/* object belongs to tmpfs VREG node */
 #define	OBJ_TMPFS_DIRTY	0x0400		/* dirty tmpfs obj */
 #define	OBJ_COLORED	0x1000		/* pg_color is defined */
@@ -183,8 +183,23 @@ struct vm_object {
 #define	OBJ_DISCONNECTWNT 0x4000	/* disconnect from vnode wanted */
 #define	OBJ_TMPFS	0x8000		/* has tmpfs vnode allocated */
 
-#define IDX_TO_OFF(idx) (((vm_ooffset_t)(idx)) << PAGE_SHIFT)
-#define OFF_TO_IDX(off) ((vm_pindex_t)(((vm_ooffset_t)(off)) >> PAGE_SHIFT))
+/*
+ * Helpers to perform conversion between vm_object page indexes and offsets.
+ * IDX_TO_OFF() converts an index into an offset.
+ * OFF_TO_IDX() converts an offset into an index.  Since offsets are signed
+ *   by default, the sign propagation in OFF_TO_IDX(), when applied to
+ *   negative offsets, is intentional and returns a vm_object page index
+ *   that cannot be created by a userspace mapping.
+ * UOFF_TO_IDX() treats the offset as an unsigned value and converts it
+ *   into an index accordingly.  Use it only when the full range of offset
+ *   values are allowed.  Currently, this only applies to device mappings.
+ * OBJ_MAX_SIZE specifies the maximum page index corresponding to the
+ *   maximum unsigned offset.
+ */
+#define	IDX_TO_OFF(idx) (((vm_ooffset_t)(idx)) << PAGE_SHIFT)
+#define	OFF_TO_IDX(off) ((vm_pindex_t)(((vm_ooffset_t)(off)) >> PAGE_SHIFT))
+#define	UOFF_TO_IDX(off) (((vm_pindex_t)(off)) >> PAGE_SHIFT)
+#define	OBJ_MAX_SIZE	(UOFF_TO_IDX(UINT64_MAX) + 1)
 
 #ifdef	_KERNEL
 

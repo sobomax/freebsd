@@ -15,7 +15,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -80,7 +80,6 @@ struct mdproc {
 	/* empty */
 };
 
-#ifdef _KERNEL
 struct syscall_args {
 	u_int code;
 	struct sysent *callp;
@@ -88,7 +87,6 @@ struct syscall_args {
 	int narg;
 	struct trapframe *trapframe;
 };
-#endif
 
 #ifdef __mips_n64
 #define	KINFO_PROC_SIZE 1088

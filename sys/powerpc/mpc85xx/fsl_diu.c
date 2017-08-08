@@ -225,11 +225,9 @@ diu_set_pxclk(device_t dev, unsigned int freq)
 	unsigned long bus_freq;
 	uint32_t pxclk_set;
 	uint32_t clkdvd;
-	int res;
 
 	node = ofw_bus_get_node(device_get_parent(dev));
-	if ((res = OF_getencprop(node, "bus-frequency",
-	    (pcell_t *)&bus_freq, sizeof(bus_freq)) <= 0)) {
+	if ((bus_freq = mpc85xx_get_platform_clock()) <= 0) {
 		device_printf(dev, "Unable to get bus frequency\n");
 		return (ENXIO);
 	}
@@ -344,7 +342,7 @@ diu_init(struct diu_softc *sc)
 static int
 diu_attach(device_t dev)
 {
-	struct edid_info *edid;
+	struct edid_info edid;
 	struct diu_softc *sc;
 	const struct videomode *videomode;
 	void *edid_cells;
@@ -384,12 +382,12 @@ diu_attach(device_t dev)
 		}
 	}
 	if (edid_cells != NULL) {
-		if (edid_parse(edid_cells, edid) != 0) {
+		if (edid_parse(edid_cells, &edid) != 0) {
 			device_printf(dev, "Error parsing EDID\n");
 			OF_prop_free(edid_cells);
 			return (ENXIO);
 		}
-		videomode = edid->edid_preferred_mode;
+		videomode = edid.edid_preferred_mode;
 	} else {
 		/* Parse video-mode kenv variable. */
 		if ((err = sscanf(vm_name, "fslfb:%dx%d@%d", &w, &h, &r)) != 3) {

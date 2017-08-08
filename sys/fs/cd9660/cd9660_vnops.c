@@ -15,7 +15,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -792,20 +792,11 @@ cd9660_pathconf(ap)
 		else
 			*ap->a_retval = 37;
 		return (0);
-	case _PC_PATH_MAX:
-		*ap->a_retval = PATH_MAX;
-		return (0);
-	case _PC_PIPE_BUF:
-		*ap->a_retval = PIPE_BUF;
-		return (0);
-	case _PC_CHOWN_RESTRICTED:
-		*ap->a_retval = 1;
-		return (0);
 	case _PC_NO_TRUNC:
 		*ap->a_retval = 1;
 		return (0);
 	default:
-		return (EINVAL);
+		return (vop_stdpathconf(ap));
 	}
 	/* NOTREACHED */
 }

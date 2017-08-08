@@ -49,7 +49,6 @@ __FBSDID("$FreeBSD$");
 #include "opt_hwpmc_hooks.h"
 #include "opt_isa.h"
 #include "opt_kdb.h"
-#include "opt_npx.h"
 #include "opt_stack.h"
 #include "opt_trap.h"
 
@@ -193,7 +192,7 @@ trap(struct trapframe *frame)
 	static int lastalert = 0;
 #endif
 
-	PCPU_INC(cnt.v_trap);
+	VM_CNT_INC(v_trap);
 	type = frame->tf_trapno;
 
 #ifdef SMP
@@ -335,13 +334,9 @@ user_trctrap_out:
 			break;
 
 		case T_ARITHTRAP:	/* arithmetic trap */
-#ifdef DEV_NPX
 			ucode = npxtrap_x87();
 			if (ucode == -1)
 				goto userout;
-#else
-			ucode = 0;
-#endif
 			i = SIGFPE;
 			break;
 
@@ -475,13 +470,11 @@ user_trctrap_out:
 			break;
 
 		case T_DNA:
-#ifdef DEV_NPX
 			KASSERT(PCB_USER_FPU(td->td_pcb),
 			    ("kernel FPU ctx has leaked"));
 			/* transparent fault (due to context switch "late") */
 			if (npxdna())
 				goto userout;
-#endif
 			uprintf("pid %d killed due to lack of floating point\n",
 				p->p_pid);
 			i = SIGKILL;
@@ -494,13 +487,9 @@ user_trctrap_out:
 			break;
 
 		case T_XMMFLT:		/* SIMD floating-point exception */
-#if defined(DEV_NPX) && !defined(CPU_DISABLE_SSE) && defined(I686_CPU)
 			ucode = npxtrap_sse();
 			if (ucode == -1)
 				goto userout;
-#else
-			ucode = 0;
-#endif
 			i = SIGFPE;
 			break;
 #ifdef KDTRACE_HOOKS
@@ -524,12 +513,10 @@ user_trctrap_out:
 			goto out;
 
 		case T_DNA:
-#ifdef DEV_NPX
 			if (PCB_USER_FPU(td->td_pcb))
 				panic("Unregistered use of FPU in kernel");
 			if (npxdna())
 				goto out;
-#endif
 			break;
 
 		case T_ARITHTRAP:	/* arithmetic trap */
@@ -563,11 +550,7 @@ user_trctrap_out:
 					vm86_trap((struct vm86frame *)frame);
 				goto out;
 			}
-			if (type == T_STKFLT)
-				break;
-
 			/* FALL THROUGH */
-
 		case T_SEGNPFLT:	/* segment not present fault */
 			if (curpcb->pcb_flags & PCB_VM86CALL)
 				break;
@@ -608,6 +591,9 @@ user_trctrap_out:
 				frame->tf_eip = (int)doreti_iret_fault;
 				goto out;
 			}
+			if (type == T_STKFLT)
+				break;
+
 			if (frame->tf_eip == (int)doreti_popl_ds) {
 				frame->tf_eip = (int)doreti_popl_ds_fault;
 				goto out;
@@ -1025,16 +1011,18 @@ dblfault_handler()
 }
 
 int
-cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
+cpu_fetch_syscall_args(struct thread *td)
 {
 	struct proc *p;
 	struct trapframe *frame;
+	struct syscall_args *sa;
 	caddr_t params;
 	long tmp;
 	int error;
 
 	p = td->td_proc;
 	frame = td->td_frame;
+	sa = &td->td_sa;
 
 	params = (caddr_t)frame->tf_esp + sizeof(int);
 	sa->code = frame->tf_eax;
@@ -1095,7 +1083,6 @@ void
 syscall(struct trapframe *frame)
 {
 	struct thread *td;
-	struct syscall_args sa;
 	register_t orig_tf_eflags;
 	int error;
 	ksiginfo_t ksi;
@@ -1112,7 +1099,7 @@ syscall(struct trapframe *frame)
 	td = curthread;
 	td->td_frame = frame;
 
-	error = syscallenter(td, &sa);
+	error = syscallenter(td);
 
 	/*
 	 * Traced syscall.
@@ -1128,10 +1115,10 @@ syscall(struct trapframe *frame)
 
 	KASSERT(PCB_USER_FPU(td->td_pcb),
 	    ("System call %s returning with kernel FPU ctx leaked",
-	     syscallname(td->td_proc, sa.code)));
+	     syscallname(td->td_proc, td->td_sa.code)));
 	KASSERT(td->td_pcb->pcb_save == get_pcb_user_save_td(td),
 	    ("System call %s returning with mangled pcb_save",
-	     syscallname(td->td_proc, sa.code)));
+	     syscallname(td->td_proc, td->td_sa.code)));
 
-	syscallret(td, error, &sa);
+	syscallret(td, error);
 }

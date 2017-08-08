@@ -89,14 +89,16 @@ call_trapsignal(struct thread *td, int sig, int code, void *addr)
 }
 
 int
-cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
+cpu_fetch_syscall_args(struct thread *td)
 {
 	struct proc *p;
 	register_t *ap;
+	struct syscall_args *sa;
 	int nap;
 
-	nap = 8;
+	nap = NARGREG;
 	p = td->td_proc;
+	sa = &td->td_sa;
 	ap = &td->td_frame->tf_a[0];
 
 	sa->code = td->td_frame->tf_t[0];
@@ -116,7 +118,7 @@ cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
 	sa->narg = sa->callp->sy_narg;
 	memcpy(sa->args, ap, nap * sizeof(register_t));
 	if (sa->narg > nap)
-		panic("TODO: Could we have more then 8 args?");
+		panic("TODO: Could we have more then %d args?", NARGREG);
 
 	td->td_retval[0] = 0;
 	td->td_retval[1] = 0;
@@ -151,15 +153,14 @@ dump_regs(struct trapframe *frame)
 static void
 svc_handler(struct trapframe *frame)
 {
-	struct syscall_args sa;
 	struct thread *td;
 	int error;
 
 	td = curthread;
 	td->td_frame = frame;
 
-	error = syscallenter(td, &sa);
-	syscallret(td, error, &sa);
+	error = syscallenter(td);
+	syscallret(td, error);
 }
 
 static void

@@ -13,7 +13,7 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 4. Neither the name of the University nor the names of its contributors
+ * 3. Neither the name of the University nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
  *
@@ -204,7 +204,7 @@ vm_object_zinit(void *mem, int size, int flags)
 	/* These are true for any object that has been freed */
 	object->type = OBJT_DEAD;
 	object->ref_count = 0;
-	object->rtree.rt_root = 0;
+	vm_radix_init(&object->rtree);
 	object->paging_in_progress = 0;
 	object->resident_page_count = 0;
 	object->shadow_count = 0;
@@ -273,16 +273,16 @@ vm_object_init(void)
 	mtx_init(&vm_object_list_mtx, "vm object_list", NULL, MTX_DEF);
 	
 	rw_init(&kernel_object->lock, "kernel vm object");
-	_vm_object_allocate(OBJT_PHYS, OFF_TO_IDX(VM_MAX_KERNEL_ADDRESS - VM_MIN_KERNEL_ADDRESS),
-	    kernel_object);
+	_vm_object_allocate(OBJT_PHYS, atop(VM_MAX_KERNEL_ADDRESS -
+	    VM_MIN_KERNEL_ADDRESS), kernel_object);
 #if VM_NRESERVLEVEL > 0
 	kernel_object->flags |= OBJ_COLORED;
 	kernel_object->pg_color = (u_short)atop(VM_MIN_KERNEL_ADDRESS);
 #endif
 
 	rw_init(&kmem_object->lock, "kmem vm object");
-	_vm_object_allocate(OBJT_PHYS, OFF_TO_IDX(VM_MAX_KERNEL_ADDRESS - VM_MIN_KERNEL_ADDRESS),
-	    kmem_object);
+	_vm_object_allocate(OBJT_PHYS, atop(VM_MAX_KERNEL_ADDRESS -
+	    VM_MIN_KERNEL_ADDRESS), kmem_object);
 #if VM_NRESERVLEVEL > 0
 	kmem_object->flags |= OBJ_COLORED;
 	kmem_object->pg_color = (u_short)atop(VM_MIN_KERNEL_ADDRESS);
@@ -301,7 +301,7 @@ vm_object_init(void)
 #endif
 	    vm_object_zinit, NULL, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
 
-	vm_radix_init();
+	vm_radix_zinit();
 }
 
 void
@@ -765,7 +765,7 @@ vm_object_terminate(vm_object_t object)
 		p->object = NULL;
 		if (p->wire_count == 0) {
 			vm_page_free(p);
-			PCPU_INC(cnt.v_pfree);
+			VM_CNT_INC(v_pfree);
 		}
 		vm_page_unlock(p);
 	}
@@ -1028,7 +1028,7 @@ vm_object_sync(vm_object_t object, vm_ooffset_t offset, vm_size_t size,
 		(void) vn_start_write(vp, &mp, V_WAIT);
 		vn_lock(vp, LK_EXCLUSIVE | LK_RETRY);
 		if (syncio && !invalidate && offset == 0 &&
-		    OFF_TO_IDX(size) == object->size) {
+		    atop(size) == object->size) {
 			/*
 			 * If syncing the whole mapping of the file,
 			 * it is faster to schedule all the writes in
@@ -1075,6 +1075,33 @@ vm_object_sync(vm_object_t object, vm_ooffset_t offset, vm_size_t size,
 }
 
 /*
+ * Determine whether the given advice can be applied to the object.  Advice is
+ * not applied to unmanaged pages since they never belong to page queues, and
+ * since MADV_FREE is destructive, it can apply only to anonymous pages that
+ * have been mapped at most once.
+ */
+static bool
+vm_object_advice_applies(vm_object_t object, int advice)
+{
+
+	if ((object->flags & OBJ_UNMANAGED) != 0)
+		return (false);
+	if (advice != MADV_FREE)
+		return (true);
+	return ((object->type == OBJT_DEFAULT || object->type == OBJT_SWAP) &&
+	    (object->flags & OBJ_ONEMAPPING) != 0);
+}
+
+static void
+vm_object_madvise_freespace(vm_object_t object, int advice, vm_pindex_t pindex,
+    vm_size_t size)
+{
+
+	if (advice == MADV_FREE && object->type == OBJT_SWAP)
+		swap_pager_freespace(object, pindex, size);
+}
+
+/*
  *	vm_object_madvise:
  *
  *	Implements the madvise function at the object/page level.
@@ -1101,100 +1128,102 @@ vm_object_madvise(vm_object_t object, vm_pindex_t pindex, vm_pindex_t end,
 {
 	vm_pindex_t tpindex;
 	vm_object_t backing_object, tobject;
-	vm_page_t m;
+	vm_page_t m, tm;
 
 	if (object == NULL)
 		return;
 
-	VM_OBJECT_WLOCK(object);
-	for (m = NULL; pindex < end; pindex++) {
 relookup:
+	VM_OBJECT_WLOCK(object);
+	if (!vm_object_advice_applies(object, advice)) {
+		VM_OBJECT_WUNLOCK(object);
+		return;
+	}
+	for (m = vm_page_find_least(object, pindex); pindex < end; pindex++) {
 		tobject = object;
-		tpindex = pindex;
-shadowlookup:
-		/*
-		 * MADV_FREE only operates on OBJT_DEFAULT or OBJT_SWAP pages
-		 * and those pages must be OBJ_ONEMAPPING.
-		 */
-		if (advice == MADV_FREE) {
-			if ((tobject->type != OBJT_DEFAULT &&
-			     tobject->type != OBJT_SWAP) ||
-			    (tobject->flags & OBJ_ONEMAPPING) == 0) {
-				goto unlock_tobject;
-			}
-		} else if ((tobject->flags & OBJ_UNMANAGED) != 0)
-			goto unlock_tobject;
 
 		/*
-		 * In the common case where the object has no backing object, we
-		 * can avoid performing lookups at each pindex.  In either case,
-		 * when applying MADV_FREE we take care to release any swap
-		 * space used to store non-resident pages.
+		 * If the next page isn't resident in the top-level object, we
+		 * need to search the shadow chain.  When applying MADV_FREE, we
+		 * take care to release any swap space used to store
+		 * non-resident pages.
 		 */
-		if (object->backing_object == NULL) {
-			m = (m != NULL) ? TAILQ_NEXT(m, listq) :
-			    vm_page_find_least(object, pindex);
-			tpindex = (m != NULL && m->pindex < end) ?
-			    m->pindex : end;
-			if (advice == MADV_FREE && object->type == OBJT_SWAP &&
-			    tpindex > pindex)
-				swap_pager_freespace(object, pindex,
-				    tpindex - pindex);
-			if ((pindex = tpindex) == end)
-				break;
-		} else if ((m = vm_page_lookup(tobject, tpindex)) == NULL) {
-			if (advice == MADV_FREE && tobject->type == OBJT_SWAP)
-				swap_pager_freespace(tobject, tpindex, 1);
+		if (m == NULL || pindex < m->pindex) {
 			/*
-			 * Prepare to search the next object in the chain.
+			 * Optimize a common case: if the top-level object has
+			 * no backing object, we can skip over the non-resident
+			 * range in constant time.
 			 */
-			backing_object = tobject->backing_object;
-			if (backing_object == NULL)
-				goto unlock_tobject;
-			VM_OBJECT_WLOCK(backing_object);
-			tpindex += OFF_TO_IDX(tobject->backing_object_offset);
-			if (tobject != object)
-				VM_OBJECT_WUNLOCK(tobject);
-			tobject = backing_object;
-			goto shadowlookup;
+			if (object->backing_object == NULL) {
+				tpindex = (m != NULL && m->pindex < end) ?
+				    m->pindex : end;
+				vm_object_madvise_freespace(object, advice,
+				    pindex, tpindex - pindex);
+				if ((pindex = tpindex) == end)
+					break;
+				goto next_page;
+			}
+
+			tpindex = pindex;
+			do {
+				vm_object_madvise_freespace(tobject, advice,
+				    tpindex, 1);
+				/*
+				 * Prepare to search the next object in the
+				 * chain.
+				 */
+				backing_object = tobject->backing_object;
+				if (backing_object == NULL)
+					goto next_pindex;
+				VM_OBJECT_WLOCK(backing_object);
+				tpindex +=
+				    OFF_TO_IDX(tobject->backing_object_offset);
+				if (tobject != object)
+					VM_OBJECT_WUNLOCK(tobject);
+				tobject = backing_object;
+				if (!vm_object_advice_applies(tobject, advice))
+					goto next_pindex;
+			} while ((tm = vm_page_lookup(tobject, tpindex)) ==
+			    NULL);
+		} else {
+next_page:
+			tm = m;
+			m = TAILQ_NEXT(m, listq);
 		}
 
 		/*
 		 * If the page is not in a normal state, skip it.
 		 */
-		if (m->valid != VM_PAGE_BITS_ALL)
-			goto unlock_tobject;
-		vm_page_lock(m);
-		if (m->hold_count != 0 || m->wire_count != 0) {
-			vm_page_unlock(m);
-			goto unlock_tobject;
+		if (tm->valid != VM_PAGE_BITS_ALL)
+			goto next_pindex;
+		vm_page_lock(tm);
+		if (tm->hold_count != 0 || tm->wire_count != 0) {
+			vm_page_unlock(tm);
+			goto next_pindex;
 		}
-		KASSERT((m->flags & PG_FICTITIOUS) == 0,
-		    ("vm_object_madvise: page %p is fictitious", m));
-		KASSERT((m->oflags & VPO_UNMANAGED) == 0,
-		    ("vm_object_madvise: page %p is not managed", m));
-		if (vm_page_busied(m)) {
+		KASSERT((tm->flags & PG_FICTITIOUS) == 0,
+		    ("vm_object_madvise: page %p is fictitious", tm));
+		KASSERT((tm->oflags & VPO_UNMANAGED) == 0,
+		    ("vm_object_madvise: page %p is not managed", tm));
+		if (vm_page_busied(tm)) {
+			if (object != tobject)
+				VM_OBJECT_WUNLOCK(tobject);
+			VM_OBJECT_WUNLOCK(object);
 			if (advice == MADV_WILLNEED) {
 				/*
 				 * Reference the page before unlocking and
 				 * sleeping so that the page daemon is less
-				 * likely to reclaim it. 
+				 * likely to reclaim it.
 				 */
-				vm_page_aflag_set(m, PGA_REFERENCED);
+				vm_page_aflag_set(tm, PGA_REFERENCED);
 			}
-			if (object != tobject)
-				VM_OBJECT_WUNLOCK(object);
-			VM_OBJECT_WUNLOCK(tobject);
-			vm_page_busy_sleep(m, "madvpo", false);
-			m = NULL;
-			VM_OBJECT_WLOCK(object);
+			vm_page_busy_sleep(tm, "madvpo", false);
   			goto relookup;
 		}
-		vm_page_advise(m, advice);
-		vm_page_unlock(m);
-		if (advice == MADV_FREE && tobject->type == OBJT_SWAP)
-			swap_pager_freespace(tobject, tpindex, 1);
-unlock_tobject:
+		vm_page_advise(tm, advice);
+		vm_page_unlock(tm);
+		vm_object_madvise_freespace(tobject, advice, tm->pindex, 1);
+next_pindex:
 		if (tobject != object)
 			VM_OBJECT_WUNLOCK(tobject);
 	}
@@ -1949,7 +1978,7 @@ vm_object_page_noreuse(vm_object_t object, vm_pindex_t start, vm_pindex_t end)
 	struct mtx *mtx, *new_mtx;
 	vm_page_t p, next;
 
-	VM_OBJECT_ASSERT_WLOCKED(object);
+	VM_OBJECT_ASSERT_LOCKED(object);
 	KASSERT((object->flags & (OBJ_FICTITIOUS | OBJ_UNMANAGED)) == 0,
 	    ("vm_object_page_noreuse: illegal object %p", object));
 	if (object->resident_page_count == 0)
@@ -2246,7 +2275,7 @@ vm_object_vnode(vm_object_t object)
 static int
 sysctl_vm_object_list(SYSCTL_HANDLER_ARGS)
 {
-	struct kinfo_vmobject kvo;
+	struct kinfo_vmobject *kvo;
 	char *fullpath, *freepath;
 	struct vnode *vp;
 	struct vattr va;
@@ -2271,6 +2300,7 @@ sysctl_vm_object_list(SYSCTL_HANDLER_ARGS)
 		    count * 11 / 10));
 	}
 
+	kvo = malloc(sizeof(*kvo), M_TEMP, M_WAITOK);
 	error = 0;
 
 	/*
@@ -2288,13 +2318,13 @@ sysctl_vm_object_list(SYSCTL_HANDLER_ARGS)
 			continue;
 		}
 		mtx_unlock(&vm_object_list_mtx);
-		kvo.kvo_size = ptoa(obj->size);
-		kvo.kvo_resident = obj->resident_page_count;
-		kvo.kvo_ref_count = obj->ref_count;
-		kvo.kvo_shadow_count = obj->shadow_count;
-		kvo.kvo_memattr = obj->memattr;
-		kvo.kvo_active = 0;
-		kvo.kvo_inactive = 0;
+		kvo->kvo_size = ptoa(obj->size);
+		kvo->kvo_resident = obj->resident_page_count;
+		kvo->kvo_ref_count = obj->ref_count;
+		kvo->kvo_shadow_count = obj->shadow_count;
+		kvo->kvo_memattr = obj->memattr;
+		kvo->kvo_active = 0;
+		kvo->kvo_inactive = 0;
 		TAILQ_FOREACH(m, &obj->memq, listq) {
 			/*
 			 * A page may belong to the object but be
@@ -2306,45 +2336,46 @@ sysctl_vm_object_list(SYSCTL_HANDLER_ARGS)
 			 * approximation of the system anyway.
 			 */
 			if (vm_page_active(m))
-				kvo.kvo_active++;
+				kvo->kvo_active++;
 			else if (vm_page_inactive(m))
-				kvo.kvo_inactive++;
+				kvo->kvo_inactive++;
 		}
 
-		kvo.kvo_vn_fileid = 0;
-		kvo.kvo_vn_fsid = 0;
+		kvo->kvo_vn_fileid = 0;
+		kvo->kvo_vn_fsid = 0;
+		kvo->kvo_vn_fsid_freebsd11 = 0;
 		freepath = NULL;
 		fullpath = "";
 		vp = NULL;
 		switch (obj->type) {
 		case OBJT_DEFAULT:
-			kvo.kvo_type = KVME_TYPE_DEFAULT;
+			kvo->kvo_type = KVME_TYPE_DEFAULT;
 			break;
 		case OBJT_VNODE:
-			kvo.kvo_type = KVME_TYPE_VNODE;
+			kvo->kvo_type = KVME_TYPE_VNODE;
 			vp = obj->handle;
 			vref(vp);
 			break;
 		case OBJT_SWAP:
-			kvo.kvo_type = KVME_TYPE_SWAP;
+			kvo->kvo_type = KVME_TYPE_SWAP;
 			break;
 		case OBJT_DEVICE:
-			kvo.kvo_type = KVME_TYPE_DEVICE;
+			kvo->kvo_type = KVME_TYPE_DEVICE;
 			break;
 		case OBJT_PHYS:
-			kvo.kvo_type = KVME_TYPE_PHYS;
+			kvo->kvo_type = KVME_TYPE_PHYS;
 			break;
 		case OBJT_DEAD:
-			kvo.kvo_type = KVME_TYPE_DEAD;
+			kvo->kvo_type = KVME_TYPE_DEAD;
 			break;
 		case OBJT_SG:
-			kvo.kvo_type = KVME_TYPE_SG;
+			kvo->kvo_type = KVME_TYPE_SG;
 			break;
 		case OBJT_MGTDEVICE:
-			kvo.kvo_type = KVME_TYPE_MGTDEVICE;
+			kvo->kvo_type = KVME_TYPE_MGTDEVICE;
 			break;
 		default:
-			kvo.kvo_type = KVME_TYPE_UNKNOWN;
+			kvo->kvo_type = KVME_TYPE_UNKNOWN;
 			break;
 		}
 		VM_OBJECT_RUNLOCK(obj);
@@ -2352,27 +2383,30 @@ sysctl_vm_object_list(SYSCTL_HANDLER_ARGS)
 			vn_fullpath(curthread, vp, &fullpath, &freepath);
 			vn_lock(vp, LK_SHARED | LK_RETRY);
 			if (VOP_GETATTR(vp, &va, curthread->td_ucred) == 0) {
-				kvo.kvo_vn_fileid = va.va_fileid;
-				kvo.kvo_vn_fsid = va.va_fsid;
+				kvo->kvo_vn_fileid = va.va_fileid;
+				kvo->kvo_vn_fsid = va.va_fsid;
+				kvo->kvo_vn_fsid_freebsd11 = va.va_fsid;
+								/* truncate */
 			}
 			vput(vp);
 		}
 
-		strlcpy(kvo.kvo_path, fullpath, sizeof(kvo.kvo_path));
+		strlcpy(kvo->kvo_path, fullpath, sizeof(kvo->kvo_path));
 		if (freepath != NULL)
 			free(freepath, M_TEMP);
 
 		/* Pack record size down */
-		kvo.kvo_structsize = offsetof(struct kinfo_vmobject, kvo_path) +
-		    strlen(kvo.kvo_path) + 1;
-		kvo.kvo_structsize = roundup(kvo.kvo_structsize,
+		kvo->kvo_structsize = offsetof(struct kinfo_vmobject, kvo_path)
+		    + strlen(kvo->kvo_path) + 1;
+		kvo->kvo_structsize = roundup(kvo->kvo_structsize,
 		    sizeof(uint64_t));
-		error = SYSCTL_OUT(req, &kvo, kvo.kvo_structsize);
+		error = SYSCTL_OUT(req, kvo, kvo->kvo_structsize);
 		mtx_lock(&vm_object_list_mtx);
 		if (error)
 			break;
 	}
 	mtx_unlock(&vm_object_list_mtx);
+	free(kvo, M_TEMP);
 	return (error);
 }
 SYSCTL_PROC(_vm, OID_AUTO, objects, CTLTYPE_STRUCT | CTLFLAG_RW | CTLFLAG_SKIP |

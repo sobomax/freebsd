@@ -100,9 +100,6 @@ cloudabi_sys_fd_create1(struct thread *td,
     struct cloudabi_sys_fd_create1_args *uap)
 {
 	struct filecaps fcaps = {};
-	struct socket_args socket_args = {
-		.domain = AF_UNIX,
-	};
 
 	switch (uap->type) {
 	case CLOUDABI_FILETYPE_POLL:
@@ -113,14 +110,9 @@ cloudabi_sys_fd_create1(struct thread *td,
 		    CAP_MMAP_RWX);
 		return (kern_shm_open(td, SHM_ANON, O_RDWR, 0, &fcaps));
 	case CLOUDABI_FILETYPE_SOCKET_DGRAM:
-		socket_args.type = SOCK_DGRAM;
-		return (sys_socket(td, &socket_args));
-	case CLOUDABI_FILETYPE_SOCKET_SEQPACKET:
-		socket_args.type = SOCK_SEQPACKET;
-		return (sys_socket(td, &socket_args));
+		return (kern_socket(td, AF_UNIX, SOCK_DGRAM, 0));
 	case CLOUDABI_FILETYPE_SOCKET_STREAM:
-		socket_args.type = SOCK_STREAM;
-		return (sys_socket(td, &socket_args));
+		return (kern_socket(td, AF_UNIX, SOCK_STREAM, 0));
 	default:
 		return (EINVAL);
 	}
@@ -150,9 +142,6 @@ cloudabi_sys_fd_create2(struct thread *td,
 		break;
 	case CLOUDABI_FILETYPE_SOCKET_DGRAM:
 		error = kern_socketpair(td, AF_UNIX, SOCK_DGRAM, 0, fds);
-		break;
-	case CLOUDABI_FILETYPE_SOCKET_SEQPACKET:
-		error = kern_socketpair(td, AF_UNIX, SOCK_SEQPACKET, 0, fds);
 		break;
 	case CLOUDABI_FILETYPE_SOCKET_STREAM:
 		error = kern_socketpair(td, AF_UNIX, SOCK_STREAM, 0, fds);
@@ -209,26 +198,23 @@ cloudabi_sys_fd_replace(struct thread *td,
 int
 cloudabi_sys_fd_seek(struct thread *td, struct cloudabi_sys_fd_seek_args *uap)
 {
-	struct lseek_args lseek_args = {
-		.fd	= uap->fd,
-		.offset	= uap->offset
-	};
+	int whence;
 
 	switch (uap->whence) {
 	case CLOUDABI_WHENCE_CUR:
-		lseek_args.whence = SEEK_CUR;
+		whence = SEEK_CUR;
 		break;
 	case CLOUDABI_WHENCE_END:
-		lseek_args.whence = SEEK_END;
+		whence = SEEK_END;
 		break;
 	case CLOUDABI_WHENCE_SET:
-		lseek_args.whence = SEEK_SET;
+		whence = SEEK_SET;
 		break;
 	default:
 		return (EINVAL);
 	}
 
-	return (sys_lseek(td, &lseek_args));
+	return (kern_lseek(td, uap->fd, uap->offset, whence));
 }
 
 /* Converts a file descriptor to a CloudABI file descriptor type. */
@@ -254,8 +240,6 @@ cloudabi_convert_filetype(const struct file *fp)
 		switch (so->so_type) {
 		case SOCK_DGRAM:
 			return (CLOUDABI_FILETYPE_SOCKET_DGRAM);
-		case SOCK_SEQPACKET:
-			return (CLOUDABI_FILETYPE_SOCKET_SEQPACKET);
 		case SOCK_STREAM:
 			return (CLOUDABI_FILETYPE_SOCKET_STREAM);
 		default:
@@ -409,7 +393,6 @@ cloudabi_remove_conflicting_rights(cloudabi_filetype_t filetype,
 		*inheriting = 0;
 		break;
 	case CLOUDABI_FILETYPE_SOCKET_DGRAM:
-	case CLOUDABI_FILETYPE_SOCKET_SEQPACKET:
 	case CLOUDABI_FILETYPE_SOCKET_STREAM:
 		*base &= CLOUDABI_RIGHT_FD_READ |
 		    CLOUDABI_RIGHT_FD_STAT_PUT_FLAGS |

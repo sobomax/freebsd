@@ -80,6 +80,9 @@ __FBSDID("$FreeBSD$");
 #define	FAULTBUF_CR	22
 #define	FAULTBUF_R14	3
 
+#define	MOREARGS(sp)	((caddr_t)((uintptr_t)(sp) + \
+    sizeof(struct callframe) - 3*sizeof(register_t))) /* more args go here */
+
 static void	trap_fatal(struct trapframe *frame);
 static void	printtrap(u_int vector, struct trapframe *frame, int isfatal,
 		    int user);
@@ -92,6 +95,10 @@ static void	syscall(struct trapframe *frame);
        void	handle_kernel_slb_spill(int, register_t, register_t);
 static int	handle_user_slb_spill(pmap_t pm, vm_offset_t addr);
 extern int	n_slbs;
+#endif
+
+#ifdef KDB
+int db_trap_glue(struct trapframe *);		/* Called from trap_subr.S */
 #endif
 
 struct powerpc_exception {
@@ -164,7 +171,7 @@ trap(struct trapframe *frame)
 	u_int		ucode;
 	ksiginfo_t	ksi;
 
-	PCPU_INC(cnt.v_trap);
+	VM_CNT_INC(v_trap);
 
 	td = curthread;
 	p = td->td_proc;
@@ -335,9 +342,13 @@ trap(struct trapframe *frame)
 		KASSERT(cold || td->td_ucred != NULL,
 		    ("kernel trap doesn't have ucred"));
 		switch (type) {
-#ifdef KDTRACE_HOOKS
 		case EXC_PGM:
+#ifdef KDTRACE_HOOKS
+#ifdef AIM
 			if (frame->srr1 & EXC_PGM_TRAP) {
+#else
+			if (frame->cpu.booke.esr & ESR_PTR) {
+#endif
 				if (*(uint32_t *)frame->srr0 == EXC_DTRACE) {
 					if (dtrace_invop_jump_addr != NULL) {
 						dtrace_invop_jump_addr(frame);
@@ -345,8 +356,12 @@ trap(struct trapframe *frame)
 					}
 				}
 			}
-			break;
 #endif
+#ifdef KDB
+			if (db_trap_glue(frame))
+				return;
+#endif
+			break;
 #if defined(__powerpc64__) && defined(AIM)
 		case EXC_DSE:
 			if ((frame->dar & SEGMENT_MASK) == USER_ADDR) {
@@ -481,16 +496,18 @@ handle_onfault(struct trapframe *frame)
 }
 
 int
-cpu_fetch_syscall_args(struct thread *td, struct syscall_args *sa)
+cpu_fetch_syscall_args(struct thread *td)
 {
 	struct proc *p;
 	struct trapframe *frame;
+	struct syscall_args *sa;
 	caddr_t	params;
 	size_t argsz;
 	int error, n, i;
 
 	p = td->td_proc;
 	frame = td->td_frame;
+	sa = &td->td_sa;
 
 	sa->code = frame->fixreg[0];
 	params = (caddr_t)(frame->fixreg + FIRSTARG);
@@ -572,7 +589,6 @@ void
 syscall(struct trapframe *frame)
 {
 	struct thread *td;
-	struct syscall_args sa;
 	int error;
 
 	td = curthread;
@@ -587,8 +603,8 @@ syscall(struct trapframe *frame)
             "r"(td->td_pcb->pcb_cpu.aim.usr_vsid), "r"(USER_SLB_SLBE));
 #endif
 
-	error = syscallenter(td, &sa);
-	syscallret(td, error, &sa);
+	error = syscallenter(td);
+	syscallret(td, error);
 }
 
 #if defined(__powerpc64__) && defined(AIM)
@@ -830,11 +846,10 @@ fix_unaligned(struct thread *td, struct trapframe *frame)
 }
 
 #ifdef KDB
-int db_trap_glue(struct trapframe *);		/* Called from trap_subr.S */
-
 int
 db_trap_glue(struct trapframe *frame)
 {
+
 	if (!(frame->srr1 & PSL_PR)
 	    && (frame->exc == EXC_TRC || frame->exc == EXC_RUNMODETRC
 #ifdef AIM
@@ -842,6 +857,7 @@ db_trap_glue(struct trapframe *frame)
 		    && (frame->srr1 & EXC_PGM_TRAP))
 #else
 		|| (frame->exc == EXC_DEBUG)
+		|| (frame->cpu.booke.esr & ESR_PTR)
 #endif
 		|| frame->exc == EXC_BPT
 		|| frame->exc == EXC_DSI)) {
@@ -853,7 +869,8 @@ db_trap_glue(struct trapframe *frame)
 #ifdef AIM
 		if (type == EXC_PGM && (frame->srr1 & EXC_PGM_TRAP)) {
 #else
-		if (frame->cpu.booke.esr & ESR_PTR) {
+		if (type == EXC_DEBUG ||
+		    (frame->cpu.booke.esr & ESR_PTR)) {
 #endif
 			type = T_BREAKPOINT;
 		}
