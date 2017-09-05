@@ -458,8 +458,8 @@ static void createImportLibrary(bool AsLib) {
   std::vector<COFFShortExport> Exports;
   for (Export &E1 : Config->Exports) {
     COFFShortExport E2;
-    // Use SymbolName, which will have any stdcall or fastcall qualifiers.
-    E2.Name = E1.SymbolName;
+    E2.Name = E1.Name;
+    E2.SymbolName = E1.SymbolName;
     E2.ExtName = E1.ExtName;
     E2.Ordinal = E1.Ordinal;
     E2.Noname = E1.Noname;
@@ -470,7 +470,7 @@ static void createImportLibrary(bool AsLib) {
   }
 
   writeImportLibrary(getImportName(AsLib), getImplibPath(), Exports,
-                     Config->Machine);
+                     Config->Machine, false);
 }
 
 static void parseModuleDefs(StringRef Path) {
@@ -899,17 +899,24 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   for (auto *Arg : Args.filtered(OPT_section))
     parseSection(Arg->getValue());
 
-  // Handle /manifest
-  if (auto *Arg = Args.getLastArg(OPT_manifest_colon))
-    parseManifest(Arg->getValue());
+  // Handle /manifestdependency. This enables /manifest unless /manifest:no is
+  // also passed.
+  if (auto *Arg = Args.getLastArg(OPT_manifestdependency)) {
+    Config->ManifestDependency = Arg->getValue();
+    Config->Manifest = Configuration::SideBySide;
+  }
+
+  // Handle /manifest and /manifest:
+  if (auto *Arg = Args.getLastArg(OPT_manifest, OPT_manifest_colon)) {
+    if (Arg->getOption().getID() == OPT_manifest)
+      Config->Manifest = Configuration::SideBySide;
+    else
+      parseManifest(Arg->getValue());
+  }
 
   // Handle /manifestuac
   if (auto *Arg = Args.getLastArg(OPT_manifestuac))
     parseManifestUAC(Arg->getValue());
-
-  // Handle /manifestdependency
-  if (auto *Arg = Args.getLastArg(OPT_manifestdependency))
-    Config->ManifestDependency = Arg->getValue();
 
   // Handle /manifestfile
   if (auto *Arg = Args.getLastArg(OPT_manifestfile))
@@ -918,6 +925,11 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   // Handle /manifestinput
   for (auto *Arg : Args.filtered(OPT_manifestinput))
     Config->ManifestInput.push_back(Arg->getValue());
+
+  if (!Config->ManifestInput.empty() &&
+      Config->Manifest != Configuration::Embed) {
+    fatal("/MANIFESTINPUT: requires /MANIFEST:EMBED");
+  }
 
   // Handle miscellaneous boolean flags.
   if (Args.hasArg(OPT_allowisolation_no))
