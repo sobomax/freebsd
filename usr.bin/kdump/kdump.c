@@ -105,6 +105,7 @@ void ktrcaprights(cap_rights_t *);
 void ktritimerval(struct itimerval *it);
 void ktrsockaddr(struct sockaddr *);
 void ktrstat(struct stat *);
+void ktrtimespec(struct timespec *);
 void ktrstruct(char *, size_t);
 void ktrcapfail(struct ktr_cap_fail *);
 void ktrfault(struct ktr_fault *);
@@ -1955,6 +1956,13 @@ ktrstat(struct stat *statp)
 }
 
 void
+ktrtimespec(struct timespec *tsp)
+{
+
+	printf("{ tv_sec=%ld, tv_nsec=%ld }\n", (long)tsp->tv_sec, tsp->tv_nsec);
+}
+
+void
 ktrstruct(char *buf, size_t buflen)
 {
 	char *name, *data;
@@ -1964,6 +1972,7 @@ ktrstruct(char *buf, size_t buflen)
 	struct itimerval it;
 	struct stat sb;
 	struct sockaddr_storage ss;
+	struct timespec ts;
 
 	for (name = buf, namelen = 0;
 	     namelen < buflen && name[namelen] != '\0';
@@ -2003,6 +2012,11 @@ ktrstruct(char *buf, size_t buflen)
 		if (datalen != ss.ss_len)
 			goto invalid;
 		ktrsockaddr((struct sockaddr *)&ss);
+	} else if (strcmp(name, "timespec") == 0) {
+		if (datalen != sizeof(struct timespec))
+			goto invalid;
+		memcpy(&ts, data, datalen);
+		ktrtimespec(&ts);
 	} else {
 		printf("unknown structure\n");
 	}

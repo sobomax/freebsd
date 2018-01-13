@@ -235,8 +235,14 @@ sys_clock_gettime(struct thread *td, struct clock_gettime_args *uap)
 	int error;
 
 	error = kern_clock_gettime(td, uap->clock_id, &ats);
-	if (error == 0)
+
+	if (error == 0) {
 		error = copyout(&ats, uap->tp, sizeof(ats));
+#ifdef KTRACE
+		if (KTRPOINT(td, KTR_STRUCT))
+			ktrtimespec(&ats);
+#endif
+	}
 
 	return (error);
 }

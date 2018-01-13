@@ -276,6 +276,8 @@ void	ktrcapfail(enum ktr_cap_fail_type, const cap_rights_t *,
 	ktrstruct("sockaddr", (s), ((struct sockaddr *)(s))->sa_len)
 #define ktrstat(s) \
 	ktrstruct("stat", (s), sizeof(struct stat))
+#define ktrtimespec(s)\
+	ktrstruct("timespec", (s), sizeof(struct timespec))
 extern u_int ktr_geniosize;
 #else
 
