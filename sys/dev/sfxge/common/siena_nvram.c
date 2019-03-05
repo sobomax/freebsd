@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2009-2016 Solarflare Communications Inc.
  * All rights reserved.
  *
@@ -436,12 +438,11 @@ siena_nvram_get_subtype(
 	__out			uint32_t *subtypep)
 {
 	efx_mcdi_req_t req;
-	uint8_t payload[MAX(MC_CMD_GET_BOARD_CFG_IN_LEN,
-			    MC_CMD_GET_BOARD_CFG_OUT_LENMAX)];
+	EFX_MCDI_DECLARE_BUF(payload, MC_CMD_GET_BOARD_CFG_IN_LEN,
+		MC_CMD_GET_BOARD_CFG_OUT_LENMAX);
 	efx_word_t *fw_list;
 	efx_rc_t rc;
 
-	(void) memset(payload, 0, sizeof (payload));
 	req.emr_cmd = MC_CMD_GET_BOARD_CFG;
 	req.emr_in_buf = payload;
 	req.emr_in_length = MC_CMD_GET_BOARD_CFG_IN_LEN;
@@ -525,7 +526,7 @@ siena_nvram_partn_get_version(
 			: MC_CMD_NVRAM_TYPE_DYNAMIC_CFG_PORT1;
 		/*
 		 * Ingore missing partitions on port 2, assuming they're due
-		 * to to running on a single port part.
+		 * to running on a single port part.
 		 */
 		if ((1 << dcfg_partn) &  ~enp->en_u.siena.enu_partn_mask) {
 			if (entry->port == 2)

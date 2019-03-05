@@ -387,7 +387,7 @@ archive_read_disk_vtable(void)
 }
 
 const char *
-archive_read_disk_gname(struct archive *_a, int64_t gid)
+archive_read_disk_gname(struct archive *_a, la_int64_t gid)
 {
 	struct archive_read_disk *a = (struct archive_read_disk *)_a;
 	if (ARCHIVE_OK != __archive_check_magic(_a, ARCHIVE_READ_DISK_MAGIC,
@@ -399,7 +399,7 @@ archive_read_disk_gname(struct archive *_a, int64_t gid)
 }
 
 const char *
-archive_read_disk_uname(struct archive *_a, int64_t uid)
+archive_read_disk_uname(struct archive *_a, la_int64_t uid)
 {
 	struct archive_read_disk *a = (struct archive_read_disk *)_a;
 	if (ARCHIVE_OK != __archive_check_magic(_a, ARCHIVE_READ_DISK_MAGIC,
@@ -413,7 +413,7 @@ archive_read_disk_uname(struct archive *_a, int64_t uid)
 int
 archive_read_disk_set_gname_lookup(struct archive *_a,
     void *private_data,
-    const char * (*lookup_gname)(void *private, int64_t gid),
+    const char * (*lookup_gname)(void *private, la_int64_t gid),
     void (*cleanup_gname)(void *private))
 {
 	struct archive_read_disk *a = (struct archive_read_disk *)_a;
@@ -432,7 +432,7 @@ archive_read_disk_set_gname_lookup(struct archive *_a,
 int
 archive_read_disk_set_uname_lookup(struct archive *_a,
     void *private_data,
-    const char * (*lookup_uname)(void *private, int64_t uid),
+    const char * (*lookup_uname)(void *private, la_int64_t uid),
     void (*cleanup_uname)(void *private))
 {
 	struct archive_read_disk *a = (struct archive_read_disk *)_a;
@@ -856,7 +856,12 @@ next_entry(struct archive_read_disk *a, struct tree *t,
 	const struct stat *st; /* info to use for this entry */
 	const struct stat *lst;/* lstat() information */
 	const char *name;
-	int descend, r;
+	int delayed, delayed_errno, descend, r;
+	struct archive_string delayed_str;
+
+	delayed = ARCHIVE_OK;
+	delayed_errno = 0;
+	archive_string_init(&delayed_str);
 
 	st = NULL;
 	lst = NULL;
@@ -885,11 +890,23 @@ next_entry(struct archive_read_disk *a, struct tree *t,
 		case TREE_REGULAR:
 			lst = tree_current_lstat(t);
 			if (lst == NULL) {
+			    if (errno == ENOENT && t->depth > 0) {
+				delayed = ARCHIVE_WARN;
+				delayed_errno = errno;
+				if (delayed_str.length == 0) {
+					archive_string_sprintf(&delayed_str,
+					    "%s", tree_current_path(t));
+				} else {
+					archive_string_sprintf(&delayed_str,
+					    " %s", tree_current_path(t));
+				}
+			    } else {
 				archive_set_error(&a->archive, errno,
 				    "%s: Cannot stat",
 				    tree_current_path(t));
 				tree_enter_initial_dir(t);
 				return (ARCHIVE_FAILED);
+			    }
 			}
 			break;
 		}	
@@ -1082,6 +1099,18 @@ next_entry(struct archive_read_disk *a, struct tree *t,
 	archive_entry_copy_sourcepath(entry, tree_current_access_path(t));
 	r = archive_read_disk_entry_from_file(&(a->archive), entry,
 		t->entry_fd, st);
+
+	if (r == ARCHIVE_OK) {
+		r = delayed;
+		if (r != ARCHIVE_OK) {
+			archive_string_sprintf(&delayed_str, ": %s",
+			    "File removed before we read it");
+			archive_set_error(&(a->archive), delayed_errno,
+			    "%s", delayed_str.s);
+		}
+	}
+	if (!archive_string_empty(&delayed_str))
+		archive_string_free(&delayed_str);
 
 	return (r);
 }

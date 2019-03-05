@@ -6,6 +6,7 @@
 PACKAGE=rescue
 MAN=
 MK_SSP=	no
+NO_SHARED=	yes
 
 PROG=	rescue
 BINDIR?=/rescue
@@ -67,10 +68,6 @@ CRUNCH_ALIAS_rm= unlink
 CRUNCH_ALIAS_ed= red
 CRUNCH_ALIAS_pkill= pgrep
 
-.if ${MK_RCMDS} != "no"
-CRUNCH_PROGS_bin+= rcp
-.endif
-
 .if ${MK_TCSH} != "no"
 CRUNCH_PROGS_bin+= csh
 CRUNCH_ALIAS_csh= -csh tcsh -tcsh
@@ -89,7 +86,7 @@ CRUNCH_SUPPRESS_LINK_-tcsh= 1
 # headers in addition to the standard 'paths.h' header.
 #
 CRUNCH_SRCDIRS+= sbin
-CRUNCH_PROGS_sbin= badsect					\
+CRUNCH_PROGS_sbin= 						\
 	camcontrol clri devfs dmesg dump			\
 	dumpfs dumpon fsck fsck_ffs fsck_msdosfs fsdb		\
 	fsirand gbde geom ifconfig init 			\
@@ -112,6 +109,7 @@ CRUNCH_PROGS_sbin+= rtsol
 
 .if ${MK_IPFILTER} != "no"
 CRUNCH_PROGS_sbin+= ipf
+CRUNCH_LIBS_ipf+=	${LIBIPF}
 .endif
 
 .if ${MK_ROUTED} != "no"
@@ -119,6 +117,7 @@ CRUNCH_PROGS_sbin+= routed rtquery
 .endif
 
 .if ${MK_ZFS} != "no"
+CRUNCH_PROGS_sbin+= bectl
 CRUNCH_PROGS_sbin+= zfs
 CRUNCH_PROGS_sbin+= zpool
 CRUNCH_PROGS_usr.sbin+= zdb
@@ -130,6 +129,7 @@ CRUNCH_PROGS_usr.sbin+= zdb
 CRUNCH_LIBS+= -l80211 -lalias -lcam -lncursesw -ldevstat -lipsec -llzma
 .if ${MK_ZFS} != "no"
 CRUNCH_LIBS+= -lavl -lzpool -lzfs_core -lzfs -lnvpair -lpthread -luutil -lumem
+CRUNCH_LIBS+= -lbe
 .else
 # liblzma needs pthread
 CRUNCH_LIBS+= -lpthread
@@ -196,7 +196,7 @@ CRUNCH_ALIAS_xz= unxz lzma unlzma xzcat lzcat
 
 CRUNCH_PROGS_usr.bin+= zstd
 CRUNCH_ALIAS_zstd= unzstd zstdcat zstdmt
-CRUNCH_LIBS+=	-lprivatezstd
+CRUNCH_LIBS+=	${LDADD_zstd}
 
 CRUNCH_PROGS_usr.bin+= tar
 CRUNCH_LIBS+= -larchive

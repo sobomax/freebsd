@@ -33,6 +33,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/proc.h>
 #include <sys/sched.h>
 
+#include <linux/compiler.h>
 #include <linux/interrupt.h>
 #include <linux/compat.h>
 
@@ -40,15 +41,16 @@ __FBSDID("$FreeBSD$");
 #define	TASKLET_ST_BUSY 1
 #define	TASKLET_ST_EXEC 2
 #define	TASKLET_ST_LOOP 3
+#define	TASKLET_ST_PAUSED 4
 
 #define	TASKLET_ST_CMPSET(ts, old, new)	\
 	atomic_cmpset_ptr((volatile uintptr_t *)&(ts)->entry.tqe_prev, old, new)
 
 #define	TASKLET_ST_SET(ts, new)	\
-	atomic_store_rel_ptr((volatile uintptr_t *)&(ts)->entry.tqe_prev, new)
+	WRITE_ONCE(*(volatile uintptr_t *)&(ts)->entry.tqe_prev, new)
 
 #define	TASKLET_ST_GET(ts) \
-	atomic_load_acq_ptr((volatile uintptr_t *)&(ts)->entry.tqe_prev)
+	READ_ONCE(*(volatile uintptr_t *)&(ts)->entry.tqe_prev)
 
 struct tasklet_worker {
 	struct mtx mtx;
@@ -59,7 +61,7 @@ struct tasklet_worker {
 #define	TASKLET_WORKER_LOCK(tw) mtx_lock(&(tw)->mtx)
 #define	TASKLET_WORKER_UNLOCK(tw) mtx_unlock(&(tw)->mtx)
 
-static DPCPU_DEFINE(struct tasklet_worker, tasklet_worker);
+DPCPU_DEFINE_STATIC(struct tasklet_worker, tasklet_worker);
 
 static void
 tasklet_handler(void *arg)
@@ -194,4 +196,22 @@ tasklet_kill(struct tasklet_struct *ts)
 	/* wait until tasklet is no longer busy */
 	while (TASKLET_ST_GET(ts) != TASKLET_ST_IDLE)
 		pause("W", 1);
+}
+
+void
+tasklet_enable(struct tasklet_struct *ts)
+{
+	(void) TASKLET_ST_CMPSET(ts, TASKLET_ST_PAUSED, TASKLET_ST_IDLE);
+}
+
+void
+tasklet_disable(struct tasklet_struct *ts)
+{
+	while (1) {
+		if (TASKLET_ST_GET(ts) == TASKLET_ST_PAUSED) 
+			break;
+		if (TASKLET_ST_CMPSET(ts, TASKLET_ST_IDLE, TASKLET_ST_PAUSED))
+			break;
+		pause("W", 1);
+	}
 }

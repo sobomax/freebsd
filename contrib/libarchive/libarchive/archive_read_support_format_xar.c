@@ -167,6 +167,9 @@ struct xar_file {
 #define HAS_FFLAGS		0x01000
 #define HAS_XATTR		0x02000
 #define HAS_ACL			0x04000
+#define HAS_CTIME		0x08000
+#define HAS_MTIME		0x10000
+#define HAS_ATIME		0x20000
 
 	uint64_t		 id;
 	uint64_t		 length;
@@ -695,9 +698,15 @@ xar_read_header(struct archive_read *a, struct archive_entry *entry)
 		 */
 		file_free(file);
 	}
-	archive_entry_set_atime(entry, file->atime, 0);
-	archive_entry_set_ctime(entry, file->ctime, 0);
-	archive_entry_set_mtime(entry, file->mtime, 0);
+        if (file->has & HAS_ATIME) {
+          archive_entry_set_atime(entry, file->atime, 0);
+        }
+        if (file->has & HAS_CTIME) {
+          archive_entry_set_ctime(entry, file->ctime, 0);
+        }
+        if (file->has & HAS_MTIME) {
+          archive_entry_set_mtime(entry, file->mtime, 0);
+        }
 	archive_entry_set_gid(entry, file->gid);
 	if (file->gname.length > 0 &&
 	    archive_entry_copy_gname_l(entry, file->gname.s,
@@ -967,7 +976,7 @@ move_reading_point(struct archive_read *a, uint64_t offset)
 				return ((int)step);
 			xar->offset += step;
 		} else {
-			int64_t pos = __archive_read_seek(a, offset, SEEK_SET);
+			int64_t pos = __archive_read_seek(a, xar->h_base + offset, SEEK_SET);
 			if (pos == ARCHIVE_FAILED) {
 				archive_set_error(&(a->archive),
 				    ARCHIVE_ERRNO_MISC,
@@ -1040,6 +1049,9 @@ atol10(const char *p, size_t char_cnt)
 	uint64_t l;
 	int digit;
 
+	if (char_cnt == 0)
+		return (0);
+
 	l = 0;
 	digit = *p - '0';
 	while (digit >= 0 && digit < 10  && char_cnt-- > 0) {
@@ -1054,7 +1066,10 @@ atol8(const char *p, size_t char_cnt)
 {
 	int64_t l;
 	int digit;
-        
+
+	if (char_cnt == 0)
+		return (0);
+
 	l = 0;
 	while (char_cnt-- > 0) {
 		if (*p >= '0' && *p <= '7')
@@ -1214,8 +1229,7 @@ heap_add_entry(struct archive_read *a,
 		}
 		memcpy(new_pending_files, heap->files,
 		    heap->allocated * sizeof(new_pending_files[0]));
-		if (heap->files != NULL)
-			free(heap->files);
+		free(heap->files);
 		heap->files = new_pending_files;
 		heap->allocated = new_size;
 	}
@@ -1761,8 +1775,8 @@ file_new(struct archive_read *a, struct xar *xar, struct xmlattr_list *list)
 	}
 	file->parent = xar->file;
 	file->mode = 0777 | AE_IFREG;
-	file->atime = time(NULL);
-	file->mtime = time(NULL);
+	file->atime =  0;
+	file->mtime = 0;
 	xar->file = file;
 	xar->xattr = NULL;
 	for (attr = list->first; attr != NULL; attr = attr->next) {
@@ -2623,6 +2637,14 @@ strappend_base64(struct xar *xar,
 		archive_strncat(as, (const char *)buff, len);
 }
 
+static int
+is_string(const char *known, const char *data, size_t len)
+{
+	if (strlen(known) != len)
+		return -1;
+	return memcmp(data, known, len);
+}
+
 static void
 xml_data(void *userData, const char *s, int len)
 {
@@ -2674,26 +2696,26 @@ xml_data(void *userData, const char *s, int len)
 		archive_strncpy(&(xar->file->symlink), s, len);
 		break;
 	case FILE_TYPE:
-		if (strncmp("file", s, len) == 0 ||
-		    strncmp("hardlink", s, len) == 0)
+		if (is_string("file", s, len) == 0 ||
+		    is_string("hardlink", s, len) == 0)
 			xar->file->mode =
 			    (xar->file->mode & ~AE_IFMT) | AE_IFREG;
-		if (strncmp("directory", s, len) == 0)
+		if (is_string("directory", s, len) == 0)
 			xar->file->mode =
 			    (xar->file->mode & ~AE_IFMT) | AE_IFDIR;
-		if (strncmp("symlink", s, len) == 0)
+		if (is_string("symlink", s, len) == 0)
 			xar->file->mode =
 			    (xar->file->mode & ~AE_IFMT) | AE_IFLNK;
-		if (strncmp("character special", s, len) == 0)
+		if (is_string("character special", s, len) == 0)
 			xar->file->mode =
 			    (xar->file->mode & ~AE_IFMT) | AE_IFCHR;
-		if (strncmp("block special", s, len) == 0)
+		if (is_string("block special", s, len) == 0)
 			xar->file->mode =
 			    (xar->file->mode & ~AE_IFMT) | AE_IFBLK;
-		if (strncmp("socket", s, len) == 0)
+		if (is_string("socket", s, len) == 0)
 			xar->file->mode =
 			    (xar->file->mode & ~AE_IFMT) | AE_IFSOCK;
-		if (strncmp("fifo", s, len) == 0)
+		if (is_string("fifo", s, len) == 0)
 			xar->file->mode =
 			    (xar->file->mode & ~AE_IFMT) | AE_IFIFO;
 		xar->file->has |= HAS_TYPE;
@@ -2737,15 +2759,15 @@ xml_data(void *userData, const char *s, int len)
 		xar->file->uid = atol10(s, len);
 		break;
 	case FILE_CTIME:
-		xar->file->has |= HAS_TIME;
+		xar->file->has |= HAS_TIME | HAS_CTIME;
 		xar->file->ctime = parse_time(s, len);
 		break;
 	case FILE_MTIME:
-		xar->file->has |= HAS_TIME;
+		xar->file->has |= HAS_TIME | HAS_MTIME;
 		xar->file->mtime = parse_time(s, len);
 		break;
 	case FILE_ATIME:
-		xar->file->has |= HAS_TIME;
+		xar->file->has |= HAS_TIME | HAS_ATIME;
 		xar->file->atime = parse_time(s, len);
 		break;
 	case FILE_DATA_LENGTH:

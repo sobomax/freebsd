@@ -1,6 +1,8 @@
 #!/bin/sh
 
 #-
+# SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+#
 # Copyright 2004-2007 Colin Percival
 # All rights reserved
 #
@@ -418,6 +420,9 @@ init_params () {
 
 	# Run without a TTY
 	NOTTYOK=0
+
+	# Fetched first in a chain of commands
+	ISFETCHED=0
 }
 
 # Parse the command line
@@ -783,8 +788,10 @@ install_check_params () {
 	# Check that we have updates ready to install
 	if ! [ -L ${BDHASH}-install ]; then
 		echo "No updates are available to install."
-		echo "Run '$0 fetch' first."
-		exit 1
+		if [ $ISFETCHED -eq 0 ]; then
+			echo "Run '$0 fetch' first."
+		fi
+		exit 0
 	fi
 	if ! [ -f ${BDHASH}-install/INDEX-OLD ] ||
 	    ! [ -f ${BDHASH}-install/INDEX-NEW ]; then
@@ -1047,7 +1054,7 @@ fetch_make_patchlist () {
 				continue
 			fi
 			echo "${X}|${Y}"
-		done | uniq
+		done | sort -u
 }
 
 # Print user-friendly progress statistics
@@ -1881,7 +1888,7 @@ fetch_files () {
 		echo ${NDEBUG} "files... "
 		lam -s "${FETCHDIR}/f/" - -s ".gz" < filelist |
 		    xargs ${XARGST} ${PHTTPGET} ${SERVERNAME}	\
-		    2>${QUIETREDIR}
+			2>${STATSREDIR} | fetch_progress
 
 		while read Y; do
 			if ! [ -f ${Y}.gz ]; then
@@ -3241,6 +3248,7 @@ cmd_fetch () {
 	fi
 	fetch_check_params
 	fetch_run || exit 1
+	ISFETCHED=1
 }
 
 # Cron command.  Make sure the parameters are sensible; wait
@@ -3292,7 +3300,7 @@ export PATH=/sbin:/bin:/usr/sbin:/usr/bin:${PATH}
 
 # Set a pager if the user doesn't
 if [ -z "$PAGER" ]; then
-	PAGER=/usr/bin/more
+	PAGER=/usr/bin/less
 fi
 
 # Set LC_ALL in order to avoid problems with character ranges like [A-Z].

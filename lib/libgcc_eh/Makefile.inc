@@ -20,7 +20,10 @@ SRCS_EXC+=	libunwind.cpp
 
 SRCS+=		${SRCS_EXC}
 .for file in ${SRCS_EXC:M*.c}
-CFLAGS.${file}+=	-fexceptions
+CFLAGS.${file}+=	-fno-exceptions -funwind-tables
+.endfor
+.for file in ${SRCS_EXC:M*.cpp}
+CXXFLAGS.${file}+=	-fno-exceptions -funwind-tables
 .endfor
 
 CFLAGS+=	-I${UNWINDINCDIR} -I${.CURDIR} -D_LIBUNWIND_IS_NATIVE_ONLY
@@ -29,7 +32,8 @@ CXXFLAGS+=	-std=c++11
 .endif
 CXXFLAGS+=	-fno-rtti
 STATIC_CXXFLAGS+= -fvisibility=hidden -fPIC
+# Probably need to just move this earlier or use CXXFLAGS
 .if ${MK_DIRDEPS_BUILD} == "yes"
 # Avoid dependency on lib/libc++
-CFLAGS+=	-I${SRCTOP}/contrib/libc++/include
+CFLAGS+=	-isystem ${SRCTOP}/contrib/libc++/include -nostdinc++
 .endif

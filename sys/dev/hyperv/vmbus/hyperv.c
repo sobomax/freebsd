@@ -27,7 +27,7 @@
  */
 
 /**
- * Implements low-level interactions with Hypver-V/Azure
+ * Implements low-level interactions with Hyper-V/Azure
  */
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
@@ -76,6 +76,8 @@ struct hypercall_ctx {
 static u_int			hyperv_get_timecount(struct timecounter *);
 static bool			hyperv_identify(void);
 static void			hypercall_memfree(void);
+
+u_int				hyperv_ver_major;
 
 u_int				hyperv_features;
 u_int				hyperv_recommends;
@@ -169,8 +171,9 @@ hyperv_identify(void)
 	hyperv_features3 = regs[3];
 
 	do_cpuid(CPUID_LEAF_HV_IDENTITY, regs);
+	hyperv_ver_major = regs[1] >> 16;
 	printf("Hyper-V Version: %d.%d.%d [SP%d]\n",
-	    regs[1] >> 16, regs[1] & 0xffff, regs[0], regs[2]);
+	    hyperv_ver_major, regs[1] & 0xffff, regs[0], regs[2]);
 
 	printf("  Features=0x%b\n", hyperv_features,
 	    "\020"
@@ -261,8 +264,7 @@ SYSINIT(hyperv_initialize, SI_SUB_HYPERVISOR, SI_ORDER_FIRST, hyperv_init,
 static void
 hypercall_memfree(void)
 {
-	kmem_free(kernel_arena, (vm_offset_t)hypercall_context.hc_addr,
-	    PAGE_SIZE);
+	kmem_free((vm_offset_t)hypercall_context.hc_addr, PAGE_SIZE);
 	hypercall_context.hc_addr = NULL;
 }
 
@@ -280,7 +282,7 @@ hypercall_create(void *arg __unused)
 	 *   the NX bit.
 	 * - Assume kmem_malloc() returns properly aligned memory.
 	 */
-	hypercall_context.hc_addr = (void *)kmem_malloc(kernel_arena, PAGE_SIZE,
+	hypercall_context.hc_addr = (void *)kmem_malloc(PAGE_SIZE, M_EXEC |
 	    M_WAITOK);
 	hypercall_context.hc_paddr = vtophys(hypercall_context.hc_addr);
 

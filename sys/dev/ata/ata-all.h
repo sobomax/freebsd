@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1998 - 2008 Søren Schmidt <sos@FreeBSD.org>
  * All rights reserved.
  *
@@ -200,10 +202,6 @@
 #define ATA_OP_CONTINUES                0
 #define ATA_OP_FINISHED                 1
 #define ATA_MAX_28BIT_LBA               268435455UL
-
-#ifndef	ATA_REQUEST_TIMEOUT
-#define	ATA_REQUEST_TIMEOUT		10
-#endif
 
 /* structure used for composite atomic operations */
 #define MAX_COMPOSITES          32              /* u_int32_t bits */

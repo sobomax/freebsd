@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1980, 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -66,9 +68,8 @@ void getsysctl(const char *name, void *ptr, size_t len)
 		    strerror(errno));
 	}
 	if (nlen != len) {
-		error("sysctl(%s...) expected %lu, got %lu", name,
-		    (unsigned long)len, (unsigned long)nlen);
-    }
+		error("sysctl(%s...) expected %zu, got %zu", name, len, nlen);
+	}
 }
 
 /*

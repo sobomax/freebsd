@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2002-2004 M. Warner Losh.
  * Copyright (c) 2000-2001 Jonathan Chen.
  * All rights reserved.
@@ -981,4 +983,6 @@ static driver_t cbb_driver = {
 };
 
 DRIVER_MODULE(cbb, pci, cbb_driver, cbb_devclass, 0, 0);
+MODULE_PNP_INFO("W32:vendor/device;D:#", pci, cbb, yc_chipsets,
+    nitems(yc_chipsets) - 1);
 MODULE_DEPEND(cbb, exca, 1, 1, 1);

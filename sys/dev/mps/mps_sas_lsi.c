@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2011-2015 LSI Corp.
  * Copyright (c) 2013-2015 Avago Technologies
  * All rights reserved.
@@ -46,10 +48,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/uio.h>
 #include <sys/sysctl.h>
 #include <sys/endian.h>
+#include <sys/proc.h>
 #include <sys/queue.h>
 #include <sys/kthread.h>
 #include <sys/taskqueue.h>
 #include <sys/sbuf.h>
+#include <sys/reboot.h>
 
 #include <machine/bus.h>
 #include <machine/resource.h>
@@ -124,7 +128,7 @@ int mpssas_get_sas_address_for_sata_disk(struct mps_softc *sc,
     u64 *sas_address, u16 handle, u32 device_info, u8 *is_SATA_SSD);
 static int mpssas_volume_add(struct mps_softc *sc,
     u16 handle);
-static void mpssas_SSU_to_SATA_devices(struct mps_softc *sc);
+static void mpssas_SSU_to_SATA_devices(struct mps_softc *sc, int howto);
 static void mpssas_stop_unit_done(struct cam_periph *periph,
     union ccb *done_ccb);
 
@@ -628,9 +632,11 @@ mpssas_add_device(struct mps_softc *sc, u16 handle, u8 linkrate){
 
 	sassc = sc->sassc;
 	mpssas_startup_increment(sassc);
-	if ((mps_config_get_sas_device_pg0(sc, &mpi_reply, &config_page,
-	     MPI2_SAS_DEVICE_PGAD_FORM_HANDLE, handle))) {
-		printf("%s: error reading SAS device page0\n", __func__);
+	if (mps_config_get_sas_device_pg0(sc, &mpi_reply, &config_page,
+	    MPI2_SAS_DEVICE_PGAD_FORM_HANDLE, handle) != 0) {
+		mps_dprint(sc, MPS_INFO|MPS_MAPPING|MPS_FAULT,
+		    "Error reading SAS device %#x page0, iocstatus= 0x%x\n",
+		    handle, mpi_reply.IOCStatus);
 		error = ENXIO;
 		goto out;
 	}
@@ -642,12 +648,14 @@ mpssas_add_device(struct mps_softc *sc, u16 handle, u8 linkrate){
 		Mpi2ConfigReply_t tmp_mpi_reply;
 		Mpi2SasDevicePage0_t parent_config_page;
 
-		if ((mps_config_get_sas_device_pg0(sc, &tmp_mpi_reply,
-		     &parent_config_page, MPI2_SAS_DEVICE_PGAD_FORM_HANDLE,
-		     le16toh(config_page.ParentDevHandle)))) {
+		if (mps_config_get_sas_device_pg0(sc, &tmp_mpi_reply,
+		    &parent_config_page, MPI2_SAS_DEVICE_PGAD_FORM_HANDLE,
+		    le16toh(config_page.ParentDevHandle)) != 0) {
 			mps_dprint(sc, MPS_MAPPING|MPS_FAULT,
-			    "%s: error reading SAS device %#x page0\n",
-			    __func__, le16toh(config_page.ParentDevHandle));
+			    "Error reading parent SAS device %#x page0, "
+			    "iocstatus= 0x%x\n",
+			    le16toh(config_page.ParentDevHandle),
+			    tmp_mpi_reply.IOCStatus);
 		} else {
 			parent_sas_address = parent_config_page.SASAddress.High;
 			parent_sas_address = (parent_sas_address << 32) |
@@ -973,8 +981,9 @@ mpssas_get_sata_identify(struct mps_softc *sc, u16 handle,
  		 * If the request returns an error then we need to do a diag
  		 * reset
  		 */ 
- 		printf("%s: request for page completed with error %d",
-		    __func__, error);
+ 		mps_dprint(sc, MPS_INFO|MPS_FAULT|MPS_MAPPING,
+		    "Request for SATA PASSTHROUGH page completed with error %d",
+		    error);
 		error = ENXIO;
 		goto out;
 	}
@@ -982,8 +991,9 @@ mpssas_get_sata_identify(struct mps_softc *sc, u16 handle,
 	bcopy(reply, mpi_reply, sizeof(Mpi2SataPassthroughReply_t));
 	if ((le16toh(reply->IOCStatus) & MPI2_IOCSTATUS_MASK) !=
 	    MPI2_IOCSTATUS_SUCCESS) {
-		printf("%s: error reading SATA PASSTHRU; iocstatus = 0x%x\n",
-		    __func__, reply->IOCStatus);
+		mps_dprint(sc, MPS_INFO|MPS_MAPPING|MPS_FAULT,
+		    "Error reading device %#x SATA PASSTHRU; iocstatus= 0x%x\n",
+		    handle, reply->IOCStatus);
 		error = ENXIO;
 		goto out;
 	}
@@ -1105,6 +1115,7 @@ out:
 /**
  * mpssas_SSU_to_SATA_devices 
  * @sc: per adapter object
+ * @howto: mast of RB_* bits for how we're rebooting
  *
  * Looks through the target list and issues a StartStopUnit SCSI command to each
  * SATA direct-access device.  This helps to ensure that data corruption is
@@ -1114,7 +1125,7 @@ out:
  * Return nothing.
  */
 static void
-mpssas_SSU_to_SATA_devices(struct mps_softc *sc)
+mpssas_SSU_to_SATA_devices(struct mps_softc *sc, int howto)
 {
 	struct mpssas_softc *sassc = sc->sassc;
 	union ccb *ccb;
@@ -1122,7 +1133,7 @@ mpssas_SSU_to_SATA_devices(struct mps_softc *sc)
 	target_id_t targetid;
 	struct mpssas_target *target;
 	char path_str[64];
-	struct timeval cur_time, start_time;
+	int timeout;
 
 	/*
 	 * For each target, issue a StartStopUnit command to stop the device.
@@ -1185,17 +1196,25 @@ mpssas_SSU_to_SATA_devices(struct mps_softc *sc)
 	}
 
 	/*
-	 * Wait until all of the SSU commands have completed or time has
-	 * expired (60 seconds).  Pause for 100ms each time through.  If any
-	 * command times out, the target will be reset in the SCSI command
-	 * timeout routine.
+	 * Timeout after 60 seconds by default or 10 seconds if howto has
+	 * RB_NOSYNC set which indicates we're likely handling a panic.
 	 */
-	getmicrotime(&start_time);
-	while (sc->SSU_refcount) {
+	timeout = 600;
+	if (howto & RB_NOSYNC)
+		timeout = 100;
+
+	/*
+	 * Wait until all of the SSU commands have completed or timeout has
+	 * expired.  Pause for 100ms each time through.  If any command
+	 * times out, the target will be reset in the SCSI command timeout
+	 * routine.
+	 */
+	while (sc->SSU_refcount > 0) {
 		pause("mpswait", hz/10);
-		
-		getmicrotime(&cur_time);
-		if ((cur_time.tv_sec - start_time.tv_sec) > 60) {
+		if (SCHEDULER_STOPPED())
+			xpt_sim_poll(sassc->sim);
+
+		if (--timeout == 0) {
 			mps_dprint(sc, MPS_FAULT, "Time has expired waiting "
 			    "for SSU commands to complete.\n");
 			break;
@@ -1230,6 +1249,7 @@ mpssas_stop_unit_done(struct cam_periph *periph, union ccb *done_ccb)
 /**
  * mpssas_ir_shutdown - IR shutdown notification
  * @sc: per adapter object
+ * @howto: mast of RB_* bits for how we're rebooting
  *
  * Sending RAID Action to alert the Integrated RAID subsystem of the IOC that
  * the host system is shutting down.
@@ -1237,7 +1257,7 @@ mpssas_stop_unit_done(struct cam_periph *periph, union ccb *done_ccb)
  * Return nothing.
  */
 void
-mpssas_ir_shutdown(struct mps_softc *sc)
+mpssas_ir_shutdown(struct mps_softc *sc, int howto)
 {
 	u16 volume_mapping_flags;
 	u16 ioc_pg8_flags = le16toh(sc->ioc_pg8.Flags);
@@ -1342,5 +1362,5 @@ out:
 			}
 		}
 	}
-	mpssas_SSU_to_SATA_devices(sc);
+	mpssas_SSU_to_SATA_devices(sc, howto);
 }

@@ -21,7 +21,6 @@ SUBDIR=	adduser \
 	dconschat \
 	devctl \
 	devinfo \
-	digictl \
 	diskinfo \
 	dumpcis \
 	etcupdate \
@@ -60,8 +59,10 @@ SUBDIR=	adduser \
 	nologin \
 	pciconf \
 	periodic \
+	pnfsdscopymr \
+	pnfsdsfile \
+	pnfsdskill \
 	powerd \
-	procctl \
 	prometheus_sysctl_exporter \
 	pstat \
 	pw \
@@ -83,15 +84,16 @@ SUBDIR=	adduser \
 	setpmac \
 	smbmsg \
 	snapinfo \
+	spi \
 	spray \
 	syslogd \
 	sysrc \
 	tcpdrop \
 	tcpdump \
 	traceroute \
+	trim \
 	trpt \
 	tzsetup \
-	uefisign \
 	ugidfw \
 	vigr \
 	vipw \
@@ -115,10 +117,8 @@ SUBDIR.${MK_AUDIT}+=	auditreduce
 SUBDIR.${MK_AUDIT}+=	praudit
 SUBDIR.${MK_AUTHPF}+=	authpf
 SUBDIR.${MK_AUTOFS}+=	autofs
-.if ${MK_BLACKLIST} != "no"
 SUBDIR.${MK_BLACKLIST}+=	blacklistctl
 SUBDIR.${MK_BLACKLIST}+=	blacklistd
-.endif
 SUBDIR.${MK_BLUETOOTH}+=	bluetooth
 SUBDIR.${MK_BOOTPARAMD}+=	bootparamd
 SUBDIR.${MK_BSDINSTALL}+=	bsdinstall
@@ -126,7 +126,10 @@ SUBDIR.${MK_BSNMP}+=	bsnmpd
 SUBDIR.${MK_CTM}+=	ctm
 SUBDIR.${MK_CXGBETOOL}+=	cxgbetool
 SUBDIR.${MK_DIALOG}+=	bsdconfig
-SUBDIR.${MK_EFI}+=	efivar efidp
+SUBDIR.${MK_EFI}+=	efivar efidp efibootmgr
+.if ${MK_OPENSSL} != "no"
+SUBDIR.${MK_EFI}+=	uefisign
+.endif
 SUBDIR.${MK_FLOPPY}+=	fdcontrol
 SUBDIR.${MK_FLOPPY}+=	fdformat
 SUBDIR.${MK_FLOPPY}+=	fdread
@@ -162,10 +165,10 @@ SUBDIR.${MK_NS_CACHING}+=	nscd
 .endif
 SUBDIR.${MK_LPR}+=	lpr
 SUBDIR.${MK_MAN_UTILS}+=	manctl
+SUBDIR.${MK_MLX5TOOL}+=	mlx5tool
 SUBDIR.${MK_NAND}+=	nandsim
 SUBDIR.${MK_NAND}+=	nandtool
 SUBDIR.${MK_NETGRAPH}+=	flowctl
-SUBDIR.${MK_NETGRAPH}+=	lmcconfig
 SUBDIR.${MK_NETGRAPH}+=	ngctl
 SUBDIR.${MK_NETGRAPH}+=	nghook
 SUBDIR.${MK_NIS}+=	rpc.yppasswdd
@@ -183,10 +186,10 @@ SUBDIR.${MK_OPENSSL}+=	keyserv
 SUBDIR.${MK_PC_SYSINSTALL}+=	pc-sysinstall
 SUBDIR.${MK_PF}+=	ftp-proxy
 SUBDIR.${MK_PKGBOOTSTRAP}+=	pkg
-SUBDIR.${MK_PMC}+=	pmcannotate
-SUBDIR.${MK_PMC}+=	pmccontrol
-SUBDIR.${MK_PMC}+=	pmcstat
-SUBDIR.${MK_PMC}+=	pmcstudy
+.if ${COMPILER_FEATURES:Mc++11}
+SUBDIR.${MK_PMC}+=	pmc
+.endif
+SUBDIR.${MK_PMC}+=	pmcannotate pmccontrol pmcstat pmcstudy
 SUBDIR.${MK_PORTSNAP}+=	portsnap
 SUBDIR.${MK_PPP}+=	ppp
 SUBDIR.${MK_QUOTAS}+=	edquota

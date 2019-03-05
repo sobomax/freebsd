@@ -4,6 +4,7 @@
 .PATH: ${SRCTOP}/sys/cddl/contrib/opensolaris/common/zfs
 .PATH: ${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common/fs/zfs
 .PATH: ${SRCTOP}/cddl/contrib/opensolaris/lib/libzfs/common
+.PATH: ${SRCTOP}/cddl/contrib/opensolaris/lib/libcmdutils/common
 
 LIB=	zfs
 LIBADD=	md pthread umem util uutil m avl bsdxml geom nvpair z zfs_core
@@ -14,6 +15,8 @@ SRCS=	deviceid.c \
 	thread_pool.c \
 	zmount.c \
 	zone.c
+
+SRCS+=	nicenum.c
 
 SRCS+=	libzfs_changelist.c \
 	libzfs_compat.c \
@@ -47,12 +50,12 @@ CFLAGS+= -I${SRCTOP}/cddl/compat/opensolaris/lib/libumem
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libzpool/common
 CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/common/zfs
 CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common/fs/zfs
-CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common/sys
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/head
 CFLAGS+= -I${SRCTOP}/sys/cddl/contrib/opensolaris/uts/common
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libnvpair
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libuutil/common
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libzfs/common
 CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libzfs_core/common
+CFLAGS+= -I${SRCTOP}/cddl/contrib/opensolaris/lib/libcmdutils
 
 .include <bsd.lib.mk>

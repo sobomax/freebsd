@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2009 Stanislav Sedov <stas@FreeBSD.org>
  * Copyright (c) 1988, 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -298,6 +300,8 @@ print_file_info(struct procstat *procstat, struct filestat *fst,
 		break;
 	case PS_FST_TYPE_SEM:
 		print_sem_info(procstat, fst);
+		break;
+	case PS_FST_TYPE_DEV:
 		break;
 	default:	
 		if (vflg)

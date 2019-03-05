@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2008-2012 Semihalf.
  * All rights reserved.
  *
@@ -66,6 +68,7 @@ extern void *ap_pcpu;
 extern vm_paddr_t kernload;		/* Kernel physical load address */
 extern uint8_t __boot_page[];		/* Boot page body */
 extern uint32_t bp_kernload;
+extern vm_offset_t __startkernel;
 
 struct cpu_release {
 	uint32_t entry_h;
@@ -92,8 +95,7 @@ static int mpc85xx_smp_first_cpu(platform_t, struct cpuref *cpuref);
 static int mpc85xx_smp_next_cpu(platform_t, struct cpuref *cpuref);
 static int mpc85xx_smp_get_bsp(platform_t, struct cpuref *cpuref);
 static int mpc85xx_smp_start_cpu(platform_t, struct pcpu *cpu);
-static void mpc85xx_idle(platform_t, int cpu);
-static int mpc85xx_idle_wakeup(platform_t plat, int cpu);
+static void mpc85xx_smp_timebase_sync(platform_t, u_long tb, int ap);
 
 static void mpc85xx_reset(platform_t);
 
@@ -107,10 +109,9 @@ static platform_method_t mpc85xx_methods[] = {
 	PLATFORMMETHOD(platform_smp_next_cpu,	mpc85xx_smp_next_cpu),
 	PLATFORMMETHOD(platform_smp_get_bsp,	mpc85xx_smp_get_bsp),
 	PLATFORMMETHOD(platform_smp_start_cpu,	mpc85xx_smp_start_cpu),
+	PLATFORMMETHOD(platform_smp_timebase_sync, mpc85xx_smp_timebase_sync),
 
 	PLATFORMMETHOD(platform_reset,		mpc85xx_reset),
-	PLATFORMMETHOD(platform_idle,		mpc85xx_idle),
-	PLATFORMMETHOD(platform_idle_wakeup,	mpc85xx_idle_wakeup),
 
 	PLATFORMMETHOD_END
 };
@@ -199,9 +200,6 @@ mpc85xx_attach(platform_t plat)
 	ccsrbar_pa = ccsrbar;
 	ccsrbar_size = ccsrsize;
 
-#if 0
-	mpc85xx_fix_errata(ccsrbar_va);
-#endif
 	mpc85xx_enable_l3_cache();
 
 	return (0);
@@ -349,7 +347,7 @@ mpc85xx_smp_start_cpu_epapr(platform_t plat, struct pcpu *pc)
 	rel_va = rel_page + (rel_pa & PAGE_MASK);
 	pmap_kenter(rel_page, rel_pa & ~PAGE_MASK);
 	rel = (struct cpu_release *)rel_va;
-	bptr = ((vm_paddr_t)(uintptr_t)__boot_page - KERNBASE) + kernload;
+	bptr = pmap_kextract((uintptr_t)__boot_page);
 	cpu_flush_dcache(__DEVOLATILE(struct cpu_release *,rel), sizeof(*rel));
 	rel->pir = pc->pc_cpuid; __asm __volatile("sync");
 	rel->entry_h = (bptr >> 32);
@@ -418,7 +416,7 @@ mpc85xx_smp_start_cpu(platform_t plat, struct pcpu *pc)
 	/* Flush caches to have our changes hit DRAM. */
 	cpu_flush_dcache(__boot_page, 4096);
 
-	bptr = ((vm_paddr_t)(uintptr_t)__boot_page - KERNBASE) + kernload;
+	bptr = pmap_kextract((uintptr_t)__boot_page);
 	KASSERT((bptr & 0xfff) == 0,
 	    ("%s: boot page is not aligned (%#jx)", __func__, (uintmax_t)bptr));
 	if (mpc85xx_is_qoriq()) {
@@ -529,27 +527,9 @@ mpc85xx_reset(platform_t plat)
 }
 
 static void
-mpc85xx_idle(platform_t plat, int cpu)
-{
-	uint32_t reg;
-
-	if (mpc85xx_is_qoriq()) {
-		/*
-		 * Base binutils doesn't know what the 'wait' instruction is, so
-		 * use the opcode encoding here.
-		 */
-		__asm __volatile("wrteei 1; .long 0x7c00007c");
-	} else {
-		reg = mfmsr();
-		/* Freescale E500 core RM section 6.4.1. */
-		__asm __volatile("msync; mtmsr %0; isync" ::
-		    "r" (reg | PSL_WE));
-	}
-}
-
-static int
-mpc85xx_idle_wakeup(platform_t plat, int cpu)
+mpc85xx_smp_timebase_sync(platform_t plat, u_long tb, int ap)
 {
 
-	return (0);
+	mttb(tb);
 }
+

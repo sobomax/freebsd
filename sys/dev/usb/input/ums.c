@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
@@ -296,7 +298,7 @@ ums_intr_callback(struct usb_xfer *xfer, usb_error_t error)
 
 		if ((info->sc_flags & UMS_FLAG_T_AXIS) &&
 		    (id == info->sc_iid_t)) {
-			dt -= hid_get_data(buf, len, &info->sc_loc_t);
+			dt += hid_get_data(buf, len, &info->sc_loc_t);
 			/* T-axis is translated into button presses */
 			buttons_found |= (1UL << 5) | (1UL << 6);
 		}
@@ -332,10 +334,10 @@ ums_intr_callback(struct usb_xfer *xfer, usb_error_t error)
 			/* translate T-axis into button presses until further */
 			if (dt > 0) {
 				ums_put_queue(sc, 0, 0, 0, 0, buttons);
-				buttons |= 1UL << 5;
+				buttons |= 1UL << 6;
 			} else if (dt < 0) {
 				ums_put_queue(sc, 0, 0, 0, 0, buttons);
-				buttons |= 1UL << 6;
+				buttons |= 1UL << 5;
 			}
 
 			sc->sc_status.button = buttons;
@@ -948,9 +950,9 @@ ums_reset_buf(struct ums_softc *sc)
 
 #ifdef EVDEV_SUPPORT
 static int
-ums_ev_open(struct evdev_dev *evdev, void *ev_softc)
+ums_ev_open(struct evdev_dev *evdev)
 {
-	struct ums_softc *sc = (struct ums_softc *)ev_softc;
+	struct ums_softc *sc = evdev_get_softc(evdev);
 
 	mtx_assert(&sc->sc_mtx, MA_OWNED);
 
@@ -964,10 +966,10 @@ ums_ev_open(struct evdev_dev *evdev, void *ev_softc)
 	return (0);
 }
 
-static void
-ums_ev_close(struct evdev_dev *evdev, void *ev_softc)
+static int
+ums_ev_close(struct evdev_dev *evdev)
 {
-	struct ums_softc *sc = (struct ums_softc *)ev_softc;
+	struct ums_softc *sc = evdev_get_softc(evdev);
 
 	mtx_assert(&sc->sc_mtx, MA_OWNED);
 
@@ -975,6 +977,8 @@ ums_ev_close(struct evdev_dev *evdev, void *ev_softc)
 
 	if (sc->sc_fflags == 0)
 		ums_stop_rx(sc);
+
+	return (0);
 }
 #endif
 

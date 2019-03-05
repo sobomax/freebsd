@@ -1,6 +1,8 @@
 /*	$NetBSD: fpu_sqrt.c,v 1.4 2005/12/11 12:18:42 christos Exp $ */
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -224,12 +226,12 @@ fpu_sqrt(struct fpemu *fe)
 		return (x);
 	}
 	if (x->fp_sign) {
+		fe->fe_cx |= FPSCR_VXSQRT;
 		return (fpu_newnan(fe));
 	}
 	if (ISINF(x)) {
-		fe->fe_cx |= FPSCR_VXSQRT;
-		DUMPFPN(FPE_REG, 0);
-		return (0);
+		DUMPFPN(FPE_REG, x);
+		return (x);
 	}
 
 	/*

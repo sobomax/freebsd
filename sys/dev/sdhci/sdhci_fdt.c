@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2012 Thomas Skibo
  * Copyright (c) 2008 Alexander Motin <mav@FreeBSD.org>
  * All rights reserved.
@@ -57,14 +59,18 @@ __FBSDID("$FreeBSD$");
 #include "mmcbr_if.h"
 #include "sdhci_if.h"
 
+#include "opt_mmccam.h"
+
 #define	MAX_SLOTS		6
 #define	SDHCI_FDT_ARMADA38X	1
 #define	SDHCI_FDT_GENERIC	2
 #define	SDHCI_FDT_XLNX_ZY7	3
+#define	SDHCI_FDT_QUALCOMM	4
 
 static struct ofw_compat_data compat_data[] = {
 	{ "marvell,armada-380-sdhci",	SDHCI_FDT_ARMADA38X },
 	{ "sdhci_generic",		SDHCI_FDT_GENERIC },
+	{ "qcom,sdhci-msm-v4",		SDHCI_FDT_QUALCOMM },
 	{ "xlnx,zy7_sdhci",		SDHCI_FDT_XLNX_ZY7 },
 	{ NULL, 0 }
 };
@@ -74,6 +80,7 @@ struct sdhci_fdt_softc {
 	u_int		quirks;		/* Chip specific quirks */
 	u_int		caps;		/* If we override SDHCI_CAPABILITIES */
 	uint32_t	max_clk;	/* Max possible freq */
+	uint8_t		sdma_boundary;	/* If we override the SDMA boundary */
 	struct resource *irq_res;	/* IRQ resource */
 	void		*intrhand;	/* Interrupt handle */
 
@@ -199,6 +206,12 @@ sdhci_fdt_probe(device_t dev)
 	case SDHCI_FDT_GENERIC:
 		device_set_desc(dev, "generic fdt SDHCI controller");
 		break;
+	case SDHCI_FDT_QUALCOMM:
+		sc->quirks = SDHCI_QUIRK_ALL_SLOTS_NON_REMOVABLE |
+		    SDHCI_QUIRK_BROKEN_SDMA_BOUNDARY;
+		sc->sdma_boundary = SDHCI_BLKSZ_SDMA_BNDRY_4K;
+		device_set_desc(dev, "Qualcomm FDT SDHCI controller");
+		break;
 	case SDHCI_FDT_XLNX_ZY7:
 		sc->quirks = SDHCI_QUIRK_DATA_TIMEOUT_USES_SDCLK;
 		device_set_desc(dev, "Zynq-7000 generic fdt SDHCI controller");
@@ -261,6 +274,7 @@ sdhci_fdt_attach(device_t dev)
 		slot->quirks = sc->quirks;
 		slot->caps = sc->caps;
 		slot->max_clk = sc->max_clk;
+		slot->sdma_boundary = sc->sdma_boundary;
 
 		if (sdhci_init_slot(dev, slot, i) != 0)
 			continue;
@@ -343,5 +357,7 @@ static devclass_t sdhci_fdt_devclass;
 
 DRIVER_MODULE(sdhci_fdt, simplebus, sdhci_fdt_driver, sdhci_fdt_devclass,
     NULL, NULL);
-MODULE_DEPEND(sdhci_fdt, sdhci, 1, 1, 1);
+SDHCI_DEPEND(sdhci_fdt);
+#ifndef MMCCAM
 MMC_DECLARE_BRIDGE(sdhci_fdt);
+#endif

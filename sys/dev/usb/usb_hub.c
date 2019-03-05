@@ -1,5 +1,7 @@
 /* $FreeBSD$ */
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-NetBSD
+ *
  * Copyright (c) 1998 The NetBSD Foundation, Inc. All rights reserved.
  * Copyright (c) 1998 Lennart Augustsson. All rights reserved.
  * Copyright (c) 2008-2010 Hans Petter Selasky. All rights reserved.
@@ -100,7 +102,9 @@ SYSCTL_INT(_hw_usb, OID_AUTO, power_timeout, CTLFLAG_RWTUN,
 #if USB_HAVE_DISABLE_ENUM
 static int usb_disable_enumeration = 0;
 SYSCTL_INT(_hw_usb, OID_AUTO, disable_enumeration, CTLFLAG_RWTUN,
-    &usb_disable_enumeration, 0, "Set to disable all USB device enumeration.");
+    &usb_disable_enumeration, 0, "Set to disable all USB device enumeration. "
+	"This can secure against USB devices turning evil, "
+	"for example a USB memory stick becoming a USB keyboard.");
 
 static int usb_disable_port_power = 0;
 SYSCTL_INT(_hw_usb, OID_AUTO, disable_port_power, CTLFLAG_RWTUN,
@@ -125,6 +129,8 @@ struct uhub_softc {
 	int sc_disable_enumeration;
 	int sc_disable_port_power;
 #endif
+	uint8_t sc_usb_port_errors;	/* error counter */
+#define	UHUB_USB_PORT_ERRORS_MAX 4
 	uint8_t	sc_flags;
 #define	UHUB_FLAG_DID_EXPLORE 0x01
 };
@@ -583,13 +589,25 @@ uhub_read_port_status(struct uhub_softc *sc, uint8_t portno)
 	struct usb_port_status ps;
 	usb_error_t err;
 
+	if (sc->sc_usb_port_errors >= UHUB_USB_PORT_ERRORS_MAX) {
+		DPRINTFN(4, "port %d, HUB looks dead, too many errors\n", portno);
+		sc->sc_st.port_status = 0;
+		sc->sc_st.port_change = 0;
+		return (USB_ERR_TIMEOUT);
+	}
+
 	err = usbd_req_get_port_status(
 	    sc->sc_udev, NULL, &ps, portno);
 
-	/* update status regardless of error */
-
-	sc->sc_st.port_status = UGETW(ps.wPortStatus);
-	sc->sc_st.port_change = UGETW(ps.wPortChange);
+	if (err == 0) {
+		sc->sc_st.port_status = UGETW(ps.wPortStatus);
+		sc->sc_st.port_change = UGETW(ps.wPortChange);
+		sc->sc_usb_port_errors = 0;
+	} else {
+		sc->sc_st.port_status = 0;
+		sc->sc_st.port_change = 0;
+		sc->sc_usb_port_errors++;
+	}
 
 	/* debugging print */
 

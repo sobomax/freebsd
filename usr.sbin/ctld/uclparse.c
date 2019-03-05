@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2015 iXsystems Inc.
  * All rights reserved.
  *
@@ -619,6 +621,8 @@ uclparse_target(const char *name, const ucl_object_t *top)
 	const char *key;
 
 	target = target_new(conf, name);
+	if (target == NULL)
+		return (1);
 
 	while ((obj = ucl_iterate_object(top, &it, true))) {
 		key = ucl_object_key(obj);
@@ -754,6 +758,19 @@ uclparse_target(const char *name, const ucl_object_t *top)
 			struct pport *pp;
 			struct port *tp;
 			const char *value = ucl_object_tostring(obj);
+			int ret, i_pp, i_vp = 0;
+
+			ret = sscanf(value, "ioctl/%d/%d", &i_pp, &i_vp);
+			if (ret > 0) {
+				tp = port_new_ioctl(conf, target, i_pp, i_vp);
+				if (tp == NULL) {
+					log_warnx("can't create new ioctl port "
+					    "for target \"%s\"", target->t_name);
+					return (1);
+				}
+
+				return (0);
+			}
 
 			pp = pport_find(conf, value);
 			if (pp == NULL) {
@@ -807,6 +824,8 @@ uclparse_lun(const char *name, const ucl_object_t *top)
 	const char *key;
 
 	lun = lun_new(conf, name);
+	if (lun == NULL)
+		return (1);
 
 	while ((obj = ucl_iterate_object(top, &it, true))) {
 		key = ucl_object_key(obj);

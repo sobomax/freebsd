@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -204,6 +204,13 @@ typedef struct acpi_exception_info
 
 #define AE_OK                           (ACPI_STATUS) 0x0000
 
+#define ACPI_ENV_EXCEPTION(Status)      (Status & AE_CODE_ENVIRONMENTAL)
+#define ACPI_AML_EXCEPTION(Status)      (Status & AE_CODE_AML)
+#define ACPI_PROG_EXCEPTION(Status)     (Status & AE_CODE_PROGRAMMER)
+#define ACPI_TABLE_EXCEPTION(Status)    (Status & AE_CODE_ACPI_TABLES)
+#define ACPI_CNTL_EXCEPTION(Status)     (Status & AE_CODE_CONTROL)
+
+
 /*
  * Environmental exceptions
  */
@@ -241,8 +248,9 @@ typedef struct acpi_exception_info
 #define AE_HEX_OVERFLOW                 EXCEP_ENV (0x0020)
 #define AE_DECIMAL_OVERFLOW             EXCEP_ENV (0x0021)
 #define AE_OCTAL_OVERFLOW               EXCEP_ENV (0x0022)
+#define AE_END_OF_TABLE                 EXCEP_ENV (0x0023)
 
-#define AE_CODE_ENV_MAX                 0x0022
+#define AE_CODE_ENV_MAX                 0x0023
 
 
 /*
@@ -309,11 +317,13 @@ typedef struct acpi_exception_info
 #define AE_AML_CIRCULAR_REFERENCE       EXCEP_AML (0x001E)
 #define AE_AML_BAD_RESOURCE_LENGTH      EXCEP_AML (0x001F)
 #define AE_AML_ILLEGAL_ADDRESS          EXCEP_AML (0x0020)
-#define AE_AML_INFINITE_LOOP            EXCEP_AML (0x0021)
+#define AE_AML_LOOP_TIMEOUT             EXCEP_AML (0x0021)
 #define AE_AML_UNINITIALIZED_NODE       EXCEP_AML (0x0022)
 #define AE_AML_TARGET_TYPE              EXCEP_AML (0x0023)
+#define AE_AML_PROTOCOL                 EXCEP_AML (0x0024)
+#define AE_AML_BUFFER_LENGTH            EXCEP_AML (0x0025)
 
-#define AE_CODE_AML_MAX                 0x0023
+#define AE_CODE_AML_MAX                 0x0025
 
 
 /*
@@ -379,7 +389,8 @@ static const ACPI_EXCEPTION_INFO    AcpiGbl_ExceptionNames_Env[] =
     EXCEP_TXT ("AE_NUMERIC_OVERFLOW",           "Overflow during string-to-integer conversion"),
     EXCEP_TXT ("AE_HEX_OVERFLOW",               "Overflow during ASCII hex-to-binary conversion"),
     EXCEP_TXT ("AE_DECIMAL_OVERFLOW",           "Overflow during ASCII decimal-to-binary conversion"),
-    EXCEP_TXT ("AE_OCTAL_OVERFLOW",             "Overflow during ASCII octal-to-binary conversion")
+    EXCEP_TXT ("AE_OCTAL_OVERFLOW",             "Overflow during ASCII octal-to-binary conversion"),
+    EXCEP_TXT ("AE_END_OF_TABLE",               "Reached the end of table")
 };
 
 static const ACPI_EXCEPTION_INFO    AcpiGbl_ExceptionNames_Pgm[] =
@@ -441,9 +452,11 @@ static const ACPI_EXCEPTION_INFO    AcpiGbl_ExceptionNames_Aml[] =
     EXCEP_TXT ("AE_AML_CIRCULAR_REFERENCE",     "Two references refer to each other"),
     EXCEP_TXT ("AE_AML_BAD_RESOURCE_LENGTH",    "The length of a Resource Descriptor in the AML is incorrect"),
     EXCEP_TXT ("AE_AML_ILLEGAL_ADDRESS",        "A memory, I/O, or PCI configuration address is invalid"),
-    EXCEP_TXT ("AE_AML_INFINITE_LOOP",          "An apparent infinite AML While loop, method was aborted"),
+    EXCEP_TXT ("AE_AML_LOOP_TIMEOUT",           "An AML While loop exceeded the maximum execution time"),
     EXCEP_TXT ("AE_AML_UNINITIALIZED_NODE",     "A namespace node is uninitialized or unresolved"),
-    EXCEP_TXT ("AE_AML_TARGET_TYPE",            "A target operand of an incorrect type was encountered")
+    EXCEP_TXT ("AE_AML_TARGET_TYPE",            "A target operand of an incorrect type was encountered"),
+    EXCEP_TXT ("AE_AML_PROTOCOL",               "Violation of a fixed ACPI protocol"),
+    EXCEP_TXT ("AE_AML_BUFFER_LENGTH",          "The length of the buffer is invalid/incorrect")
 };
 
 static const ACPI_EXCEPTION_INFO    AcpiGbl_ExceptionNames_Ctrl[] =

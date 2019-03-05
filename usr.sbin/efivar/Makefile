@@ -3,9 +3,11 @@
 PROG=	efivar
 MAN=	efivar.8
 
-LIBADD= efivar
+LIBADD= efivar geom
 
-EFIBOOT=${SRCTOP}/sys/boot/efi
+SRCS=	efivar.c efiutil.c
+
+EFIBOOT=${SRCTOP}/stand/efi
 CFLAGS+=	-I${EFIBOOT}/include
 
 .include <bsd.prog.mk>

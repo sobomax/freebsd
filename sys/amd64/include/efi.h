@@ -46,21 +46,32 @@
 #endif
 
 #ifdef _KERNEL
-struct uuid;
-struct efi_tm;
+#include <isa/rtc.h>
 
-int efi_rt_ok(void);
-int efi_get_table(struct uuid *uuid, void **ptr);
-int efi_get_time(struct efi_tm *tm);
-int efi_get_time_locked(struct efi_tm *tm);
-int efi_reset_system(void);
-int efi_set_time(struct efi_tm *tm);
-int efi_set_time_locked(struct efi_tm *tm);
-int efi_var_get(uint16_t *name, struct uuid *vendor, uint32_t *attrib,
-    size_t *datasize, void *data);
-int efi_var_nextname(size_t *namesize, uint16_t *name, struct uuid *vendor);
-int efi_var_set(uint16_t *name, struct uuid *vendor, uint32_t attrib,
-    size_t datasize, void *data);
+#define	EFI_TIME_LOCK()		mtx_lock(&atrtc_time_lock)
+#define	EFI_TIME_UNLOCK()	mtx_unlock(&atrtc_time_lock)
+#define	EFI_TIME_OWNED()	mtx_assert(&atrtc_time_lock, MA_OWNED)
+
+#define	EFI_RT_HANDLE_FAULTS_DEFAULT	1
 #endif
+
+struct efirt_callinfo {
+	const char	*ec_name;
+	register_t	ec_efi_status;
+	register_t	ec_fptr;
+	register_t	ec_argcnt;
+	register_t	ec_arg1;
+	register_t	ec_arg2;
+	register_t	ec_arg3;
+	register_t	ec_arg4;
+	register_t	ec_arg5;
+	register_t	ec_rbx;
+	register_t	ec_rsp;
+	register_t	ec_rbp;
+	register_t	ec_r12;
+	register_t	ec_r13;
+	register_t	ec_r14;
+	register_t	ec_r15;
+};
 
 #endif /* __AMD64_INCLUDE_EFI_H_ */

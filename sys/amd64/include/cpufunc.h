@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2003 Peter Wemm.
  * Copyright (c) 1993 The Regents of the University of California.
  * All rights reserved.
@@ -111,6 +113,13 @@ clflushopt(u_long addr)
 {
 
 	__asm __volatile(".byte 0x66;clflush %0" : : "m" (*(char *)addr));
+}
+
+static __inline void
+clwb(u_long addr)
+{
+
+	__asm __volatile("clwb %0" : : "m" (*(char *)addr));
 }
 
 static __inline void
@@ -384,6 +393,15 @@ rdtsc(void)
 	return (low | ((uint64_t)high << 32));
 }
 
+static __inline uint64_t
+rdtscp(void)
+{
+	uint32_t low, high;
+
+	__asm __volatile("rdtscp" : "=a" (low), "=d" (high) : : "ecx");
+	return (low | ((uint64_t)high << 32));
+}
+
 static __inline uint32_t
 rdtsc32(void)
 {
@@ -609,6 +627,22 @@ cpu_mwait(u_long extensions, u_int hints)
 	__asm __volatile("mwait" : : "a" (hints), "c" (extensions));
 }
 
+static __inline uint32_t
+rdpkru(void)
+{
+	uint32_t res;
+
+	__asm __volatile("rdpkru" :  "=a" (res) : "c" (0) : "edx");
+	return (res);
+}
+
+static __inline void
+wrpkru(uint32_t mask)
+{
+
+	__asm __volatile("wrpkru" :  : "a" (mask),  "c" (0), "d" (0));
+}
+
 #ifdef _KERNEL
 /* This is defined in <machine/specialreg.h> but is too painful to get to */
 #ifndef	MSR_FSBASE
@@ -717,6 +751,15 @@ static __inline void
 lldt(u_short sel)
 {
 	__asm __volatile("lldt %0" : : "r" (sel));
+}
+
+static __inline u_short
+sldt(void)
+{
+	u_short sel;
+
+	__asm __volatile("sldt %0" : "=r" (sel));
+	return (sel);
 }
 
 static __inline void
@@ -832,6 +875,20 @@ static __inline void
 intr_restore(register_t rflags)
 {
 	write_rflags(rflags);
+}
+
+static __inline void
+stac(void)
+{
+
+	__asm __volatile("stac" : : : "cc");
+}
+
+static __inline void
+clac(void)
+{
+
+	__asm __volatile("clac" : : : "cc");
 }
 
 enum {

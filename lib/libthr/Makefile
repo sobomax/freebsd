@@ -3,10 +3,7 @@
 # All library objects contain FreeBSD revision strings by default; they may be
 # excluded as a space-saving measure.  To produce a library that does
 # not contain these strings, add -DSTRIP_FBSDID (see <sys/cdefs.h>) to CFLAGS
-# below.  Note, there are no IDs for syscall stubs whose sources are generated.
-# To included legacy CSRG sccsid strings, add -DLIBC_SCCS and -DSYSLIBC_SCCS
-# (for system call stubs) to CFLAGS below.  -DSYSLIBC_SCCS affects just the
-# system call stubs.
+# below.
 
 PACKAGE=	clibs
 SHLIBDIR?= /lib
@@ -29,6 +26,7 @@ CFLAGS+=-I${SRCTOP}/lib/libthread_db
 CFLAGS+=-Winline
 
 CFLAGS.thr_stack.c+=	-Wno-cast-align
+CFLAGS.rtld_malloc.c+=	-Wno-cast-align
 .include <bsd.compiler.mk>
 .if !(${COMPILER_TYPE} == "gcc" && ${COMPILER_VERSION} < 40300)
 CFLAGS.thr_symbols.c+=	-Wno-missing-variable-declarations
@@ -52,12 +50,14 @@ CFLAGS+=-D_PTHREADS_INVARIANTS
 PRECIOUSLIB=
 
 .PATH: ${.CURDIR}/arch/${MACHINE_CPUARCH}/${MACHINE_CPUARCH}
+.PATH: ${SRCTOP}/libexec/rtld-elf
 
 .if exists(${.CURDIR}/arch/${MACHINE_CPUARCH}/Makefile.inc)
 .include "${.CURDIR}/arch/${MACHINE_CPUARCH}/Makefile.inc"
 .endif
 .include "${.CURDIR}/sys/Makefile.inc"
 .include "${.CURDIR}/thread/Makefile.inc"
+SRCS+= rtld_malloc.c
 
 .if ${MK_INSTALLLIB} != "no"
 SYMLINKS+=lib${LIB}.a ${LIBDIR}/libpthread.a

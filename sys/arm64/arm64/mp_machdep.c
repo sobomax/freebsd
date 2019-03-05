@@ -221,7 +221,7 @@ arm64_cpu_attach(device_t dev)
 static void
 release_aps(void *dummy __unused)
 {
-	int i;
+	int i, started;
 
 	/* Only release CPUs if they exist */
 	if (mp_ncpus == 1)
@@ -236,13 +236,27 @@ release_aps(void *dummy __unused)
 
 	atomic_store_rel_int(&aps_ready, 1);
 	/* Wake up the other CPUs */
-	__asm __volatile("sev");
+	__asm __volatile(
+	    "dsb ishst	\n"
+	    "sev	\n"
+	    ::: "memory");
 
-	printf("Release APs\n");
+	printf("Release APs...");
 
+	started = 0;
 	for (i = 0; i < 2000; i++) {
-		if (smp_started)
+		if (smp_started) {
+			printf("done\n");
 			return;
+		}
+		/*
+		 * Don't time out while we are making progress. Some large
+		 * systems can take a while to start all CPUs.
+		 */
+		if (smp_cpus > started) {
+			i = 0;
+			started = smp_cpus;
+		}
 		DELAY(1000);
 	}
 
@@ -279,6 +293,7 @@ init_secondary(uint64_t cpu)
 	 * runtime chip identification.
 	 */
 	identify_cpu();
+	install_cpu_errata();
 
 	intr_pic_init_secondary();
 
@@ -469,8 +484,7 @@ start_cpu(u_int id, uint64_t target_cpu)
 	pcpup = &__pcpu[cpuid];
 	pcpu_init(pcpup, cpuid, sizeof(struct pcpu));
 
-	dpcpu[cpuid - 1] = (void *)kmem_malloc(kernel_arena, DPCPU_SIZE,
-	    M_WAITOK | M_ZERO);
+	dpcpu[cpuid - 1] = (void *)kmem_malloc(DPCPU_SIZE, M_WAITOK | M_ZERO);
 	dpcpu_init(dpcpu[cpuid - 1], cpuid);
 
 	printf("Starting CPU %u (%lx)\n", cpuid, target_cpu);
@@ -488,8 +502,7 @@ start_cpu(u_int id, uint64_t target_cpu)
 		    ("Failed to start CPU %u (%lx)\n", id, target_cpu));
 
 		pcpu_destroy(pcpup);
-		kmem_free(kernel_arena, (vm_offset_t)dpcpu[cpuid - 1],
-		    DPCPU_SIZE);
+		kmem_free((vm_offset_t)dpcpu[cpuid - 1], DPCPU_SIZE);
 		dpcpu[cpuid - 1] = NULL;
 		mp_ncpus--;
 
@@ -563,11 +576,12 @@ cpu_init_fdt(u_int id, phandle_t node, u_int addr_size, pcell_t *reg)
 		return (FALSE);
 
 	/* Try to read the numa node of this cpu */
-	if (OF_getencprop(node, "numa-node-id", &domain, sizeof(domain)) > 0) {
-		__pcpu[id].pc_domain = domain;
-		if (domain < MAXMEMDOM)
-			CPU_SET(id, &cpuset_domain[domain]);
-	}
+	if (vm_ndomains == 1 ||
+	    OF_getencprop(node, "numa-node-id", &domain, sizeof(domain)) <= 0)
+		domain = 0;
+	__pcpu[id].pc_domain = domain;
+	if (domain < MAXMEMDOM)
+		CPU_SET(id, &cpuset_domain[domain]);
 
 	return (TRUE);
 }

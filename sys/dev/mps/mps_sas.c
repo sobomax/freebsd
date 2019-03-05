@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2009 Yahoo! Inc.
  * Copyright (c) 2011-2015 LSI Corp.
  * Copyright (c) 2013-2015 Avago Technologies
@@ -716,7 +718,7 @@ mps_attach_sas(struct mps_softc *sc)
 {
 	struct mpssas_softc *sassc;
 	cam_status status;
-	int unit, error = 0;
+	int unit, error = 0, reqs;
 
 	MPS_FUNCTRACE(sc);
 	mps_dprint(sc, MPS_INIT, "%s entered\n", __func__);
@@ -746,7 +748,8 @@ mps_attach_sas(struct mps_softc *sc)
 	sc->sassc = sassc;
 	sassc->sc = sc;
 
-	if ((sassc->devq = cam_simq_alloc(sc->num_reqs)) == NULL) {
+	reqs = sc->num_reqs - sc->num_prireqs - 1;
+	if ((sassc->devq = cam_simq_alloc(reqs)) == NULL) {
 		mps_dprint(sc, MPS_ERROR, "Cannot allocate SIMQ\n");
 		error = ENOMEM;
 		goto out;
@@ -754,7 +757,7 @@ mps_attach_sas(struct mps_softc *sc)
 
 	unit = device_get_unit(sc->mps_dev);
 	sassc->sim = cam_sim_alloc(mpssas_action, mpssas_poll, "mps", sassc,
-	    unit, &sc->mps_mtx, sc->num_reqs, sc->num_reqs, sassc->devq);
+	    unit, &sc->mps_mtx, reqs, reqs, sassc->devq);
 	if (sassc->sim == NULL) {
 		mps_dprint(sc, MPS_INIT|MPS_ERROR, "Cannot allocate SIM\n");
 		error = EINVAL;
@@ -871,6 +874,9 @@ mps_detach_sas(struct mps_softc *sc)
 	/* Make sure CAM doesn't wedge if we had to bail out early. */
 	mps_lock(sc);
 
+	while (sassc->startup_refcount != 0)
+		mpssas_startup_decrement(sassc);
+
 	/* Deregister our async handler */
 	if (sassc->path != NULL) {
 		xpt_register_async(0, mpssas_async, sc, sassc->path);
@@ -952,7 +958,6 @@ mpssas_action(struct cam_sim *sim, union ccb *ccb)
 	{
 		struct ccb_pathinq *cpi = &ccb->cpi;
 		struct mps_softc *sc = sassc->sc;
-		uint8_t sges_per_frame;
 
 		cpi->version_num = 1;
 		cpi->hba_inquiry = PI_SDTR_ABLE|PI_TAG_ABLE|PI_WIDE_16;
@@ -981,23 +986,7 @@ mpssas_action(struct cam_sim *sim, union ccb *ccb)
 		cpi->transport_version = 0;
 		cpi->protocol = PROTO_SCSI;
 		cpi->protocol_version = SCSI_REV_SPC;
-
-		/*
-		 * Max IO Size is Page Size * the following:
-		 * ((SGEs per frame - 1 for chain element) *
-		 * Max Chain Depth) + 1 for no chain needed in last frame
-		 *
-		 * If user suggests a Max IO size to use, use the smaller of the
-		 * user's value and the calculated value as long as the user's
-		 * value is larger than 0. The user's value is in pages.
-		 */
-		sges_per_frame = ((sc->facts->IOCRequestFrameSize * 4) /
-		    sizeof(MPI2_SGE_SIMPLE64)) - 1;
-		cpi->maxio = (sges_per_frame * sc->facts->MaxChainDepth) + 1;
-		cpi->maxio *= PAGE_SIZE;
-		if ((sc->max_io_pages > 0) && (sc->max_io_pages * PAGE_SIZE <
-		    cpi->maxio))
-			cpi->maxio = sc->max_io_pages * PAGE_SIZE;
+		cpi->maxio = sc->maxio;
 		mpssas_set_ccbstatus(ccb, CAM_REQ_CMP);
 		break;
 	}
@@ -1112,6 +1101,10 @@ mpssas_complete_all_commands(struct mps_softc *sc)
 	/* complete all commands with a NULL reply */
 	for (i = 1; i < sc->num_reqs; i++) {
 		cm = &sc->commands[i];
+		if (cm->cm_state == MPS_CM_STATE_FREE)
+			continue;
+
+		cm->cm_state = MPS_CM_STATE_BUSY;
 		cm->cm_reply = NULL;
 		completed = 0;
 
@@ -1120,14 +1113,12 @@ mpssas_complete_all_commands(struct mps_softc *sc)
 
 		if (cm->cm_complete != NULL) {
 			mpssas_log_command(cm, MPS_RECOVERY,
-			    "completing cm %p state %x ccb %p for diag reset\n", 
+			    "completing cm %p state %x ccb %p for diag reset\n",
 			    cm, cm->cm_state, cm->cm_ccb);
 
 			cm->cm_complete(sc, cm);
 			completed = 1;
-		}
-
-		if (cm->cm_flags & MPS_CM_FLAGS_WAKEUP) {
+		} else if (cm->cm_flags & MPS_CM_FLAGS_WAKEUP) {
 			mpssas_log_command(cm, MPS_RECOVERY,
 			    "waking up cm %p state %x ccb %p for diag reset\n", 
 			    cm, cm->cm_state, cm->cm_ccb);
@@ -1135,9 +1126,6 @@ mpssas_complete_all_commands(struct mps_softc *sc)
 			completed = 1;
 		}
 
-		if (cm->cm_sc->io_cmds_active != 0)
-			cm->cm_sc->io_cmds_active--;
-		
 		if ((completed == 0) && (cm->cm_state != MPS_CM_STATE_FREE)) {
 			/* this should never happen, but if it does, log */
 			mpssas_log_command(cm, MPS_RECOVERY,
@@ -1146,6 +1134,8 @@ mpssas_complete_all_commands(struct mps_softc *sc)
 			    cm->cm_ccb);
 		}
 	}
+
+	sc->io_cmds_active = 0;
 }
 
 void
@@ -1202,6 +1192,11 @@ mpssas_tm_timeout(void *data)
 
 	mpssas_log_command(tm, MPS_INFO|MPS_RECOVERY,
 	    "task mgmt %p timed out\n", tm);
+
+	KASSERT(tm->cm_state == MPS_CM_STATE_INQUEUE,
+	    ("command not inqueue\n"));
+
+	tm->cm_state = MPS_CM_STATE_BUSY;
 	mps_reinit(sc);
 }
 
@@ -1602,7 +1597,7 @@ mpssas_scsiio_timeout(void *data)
 	 * and been re-used, though this is unlikely.
 	 */
 	mps_intr_locked(sc);
-	if (cm->cm_state == MPS_CM_STATE_FREE) {
+	if (cm->cm_state != MPS_CM_STATE_INQUEUE) {
 		mpssas_log_command(cm, MPS_XINFO,
 		    "SCSI command %p almost timed out\n", cm);
 		return;
@@ -1935,43 +1930,6 @@ mpssas_action_scsiio(struct mpssas_softc *sassc, union ccb *ccb)
 	return;
 }
 
-static void
-mps_response_code(struct mps_softc *sc, u8 response_code)
-{
-        char *desc;
- 
-        switch (response_code) {
-        case MPI2_SCSITASKMGMT_RSP_TM_COMPLETE:
-                desc = "task management request completed";
-                break;
-        case MPI2_SCSITASKMGMT_RSP_INVALID_FRAME:
-                desc = "invalid frame";
-                break;
-        case MPI2_SCSITASKMGMT_RSP_TM_NOT_SUPPORTED:
-                desc = "task management request not supported";
-                break;
-        case MPI2_SCSITASKMGMT_RSP_TM_FAILED:
-                desc = "task management request failed";
-                break;
-        case MPI2_SCSITASKMGMT_RSP_TM_SUCCEEDED:
-                desc = "task management request succeeded";
-                break;
-        case MPI2_SCSITASKMGMT_RSP_TM_INVALID_LUN:
-                desc = "invalid lun";
-                break;
-        case 0xA:
-                desc = "overlapped tag attempted";
-                break;
-        case MPI2_SCSITASKMGMT_RSP_IO_QUEUED_ON_IOC:
-                desc = "task queued, however not sent to target";
-                break;
-        default:
-                desc = "unknown";
-                break;
-        }
-		mps_dprint(sc, MPS_XINFO, "response_code(0x%01x): %s\n",
-                response_code, desc);
-}
 /**
  * mps_sc_failed_io_info - translated non-succesfull SCSI_IO request
  */
@@ -1985,132 +1943,28 @@ mps_sc_failed_io_info(struct mps_softc *sc, struct ccb_scsiio *csio,
 	    MPI2_IOCSTATUS_MASK;
 	u8 scsi_state = mpi_reply->SCSIState;
 	u8 scsi_status = mpi_reply->SCSIStatus;
-	char *desc_ioc_state = NULL;
-	char *desc_scsi_status = NULL;
-	char *desc_scsi_state = sc->tmp_string;
 	u32 log_info = le32toh(mpi_reply->IOCLogInfo);
+	const char *desc_ioc_state, *desc_scsi_status;
 	
 	if (log_info == 0x31170000)
 		return;
 
-	switch (ioc_status) {
-	case MPI2_IOCSTATUS_SUCCESS:
-		desc_ioc_state = "success";
-		break;
-	case MPI2_IOCSTATUS_INVALID_FUNCTION:
-		desc_ioc_state = "invalid function";
-		break;
-	case MPI2_IOCSTATUS_SCSI_RECOVERED_ERROR:
-		desc_ioc_state = "scsi recovered error";
-		break;
-	case MPI2_IOCSTATUS_SCSI_INVALID_DEVHANDLE:
-		desc_ioc_state = "scsi invalid dev handle";
-		break;
-	case MPI2_IOCSTATUS_SCSI_DEVICE_NOT_THERE:
-		desc_ioc_state = "scsi device not there";
-		break;
-	case MPI2_IOCSTATUS_SCSI_DATA_OVERRUN:
-		desc_ioc_state = "scsi data overrun";
-		break;
-	case MPI2_IOCSTATUS_SCSI_DATA_UNDERRUN:
-		desc_ioc_state = "scsi data underrun";
-		break;
-	case MPI2_IOCSTATUS_SCSI_IO_DATA_ERROR:
-		desc_ioc_state = "scsi io data error";
-		break;
-	case MPI2_IOCSTATUS_SCSI_PROTOCOL_ERROR:
-		desc_ioc_state = "scsi protocol error";
-		break;
-	case MPI2_IOCSTATUS_SCSI_TASK_TERMINATED:
-		desc_ioc_state = "scsi task terminated";
-		break;
-	case MPI2_IOCSTATUS_SCSI_RESIDUAL_MISMATCH:
-		desc_ioc_state = "scsi residual mismatch";
-		break;
-	case MPI2_IOCSTATUS_SCSI_TASK_MGMT_FAILED:
-		desc_ioc_state = "scsi task mgmt failed";
-		break;
-	case MPI2_IOCSTATUS_SCSI_IOC_TERMINATED:
-		desc_ioc_state = "scsi ioc terminated";
-		break;
-	case MPI2_IOCSTATUS_SCSI_EXT_TERMINATED:
-		desc_ioc_state = "scsi ext terminated";
-		break;
-	case MPI2_IOCSTATUS_EEDP_GUARD_ERROR:
-		desc_ioc_state = "eedp guard error";
-		break;
-	case MPI2_IOCSTATUS_EEDP_REF_TAG_ERROR:
-		desc_ioc_state = "eedp ref tag error";
-		break;
-	case MPI2_IOCSTATUS_EEDP_APP_TAG_ERROR:
-		desc_ioc_state = "eedp app tag error";
-		break;
-	default:
-		desc_ioc_state = "unknown";
-		break;
-	}
-
-	switch (scsi_status) {
-	case MPI2_SCSI_STATUS_GOOD:
-		desc_scsi_status = "good";
-		break;
-	case MPI2_SCSI_STATUS_CHECK_CONDITION:
-		desc_scsi_status = "check condition";
-		break;
-	case MPI2_SCSI_STATUS_CONDITION_MET:
-		desc_scsi_status = "condition met";
-		break;
-	case MPI2_SCSI_STATUS_BUSY:
-		desc_scsi_status = "busy";
-		break;
-	case MPI2_SCSI_STATUS_INTERMEDIATE:
-		desc_scsi_status = "intermediate";
-		break;
-	case MPI2_SCSI_STATUS_INTERMEDIATE_CONDMET:
-		desc_scsi_status = "intermediate condmet";
-		break;
-	case MPI2_SCSI_STATUS_RESERVATION_CONFLICT:
-		desc_scsi_status = "reservation conflict";
-		break;
-	case MPI2_SCSI_STATUS_COMMAND_TERMINATED:
-		desc_scsi_status = "command terminated";
-		break;
-	case MPI2_SCSI_STATUS_TASK_SET_FULL:
-		desc_scsi_status = "task set full";
-		break;
-	case MPI2_SCSI_STATUS_ACA_ACTIVE:
-		desc_scsi_status = "aca active";
-		break;
-	case MPI2_SCSI_STATUS_TASK_ABORTED:
-		desc_scsi_status = "task aborted";
-		break;
-	default:
-		desc_scsi_status = "unknown";
-		break;
-	}
-
-	desc_scsi_state[0] = '\0';
-	if (!scsi_state)
-		desc_scsi_state = " ";
-	if (scsi_state & MPI2_SCSI_STATE_RESPONSE_INFO_VALID)
-		strcat(desc_scsi_state, "response info ");
-	if (scsi_state & MPI2_SCSI_STATE_TERMINATED)
-		strcat(desc_scsi_state, "state terminated ");
-	if (scsi_state & MPI2_SCSI_STATE_NO_SCSI_STATUS)
-		strcat(desc_scsi_state, "no status ");
-	if (scsi_state & MPI2_SCSI_STATE_AUTOSENSE_FAILED)
-		strcat(desc_scsi_state, "autosense failed ");
-	if (scsi_state & MPI2_SCSI_STATE_AUTOSENSE_VALID)
-		strcat(desc_scsi_state, "autosense valid ");
+	desc_ioc_state = mps_describe_table(mps_iocstatus_string,
+	    ioc_status);
+	desc_scsi_status = mps_describe_table(mps_scsi_status_string,
+	    scsi_status);
 
 	mps_dprint(sc, MPS_XINFO, "\thandle(0x%04x), ioc_status(%s)(0x%04x)\n",
 	    le16toh(mpi_reply->DevHandle), desc_ioc_state, ioc_status);
-	/* We can add more detail about underflow data here
+
+	/*
+	 *We can add more detail about underflow data here
 	 * TO-DO
-	 * */
+	 */
 	mps_dprint(sc, MPS_XINFO, "\tscsi_status(%s)(0x%02x), "
-	    "scsi_state(%s)(0x%02x)\n", desc_scsi_status, scsi_status,
-	    desc_scsi_state, scsi_state);
+	    "scsi_state %b\n", desc_scsi_status, scsi_status,
+	    scsi_state, "\20" "\1AutosenseValid" "\2AutosenseFailed"
+	    "\3NoScsiStatus" "\4Terminated" "\5Response InfoValid");
 
 	if (sc->mps_debug & MPS_XINFO &&
 		scsi_state & MPI2_SCSI_STATE_AUTOSENSE_VALID) {
@@ -2122,7 +1976,10 @@ mps_sc_failed_io_info(struct mps_softc *sc, struct ccb_scsiio *csio,
 	if (scsi_state & MPI2_SCSI_STATE_RESPONSE_INFO_VALID) {
 		response_info = le32toh(mpi_reply->ResponseInfo);
 		response_bytes = (u8 *)&response_info;
-		mps_response_code(sc,response_bytes[0]);
+		mps_dprint(sc, MPS_XINFO, "response code(0x%1x): %s\n",
+		    response_bytes[0],
+		    mps_describe_table(mps_scsi_taskmgmt_string,
+		    response_bytes[0]));
 	}
 }
 
@@ -2180,12 +2037,13 @@ mpssas_scsiio_complete(struct mps_softc *sc, struct mps_command *cm)
 
 	if (cm->cm_state == MPS_CM_STATE_TIMEDOUT) {
 		TAILQ_REMOVE(&cm->cm_targ->timedout_commands, cm, cm_recovery);
+		cm->cm_state = MPS_CM_STATE_BUSY;
 		if (cm->cm_reply != NULL)
 			mpssas_log_command(cm, MPS_RECOVERY,
 			    "completed timedout cm %p ccb %p during recovery "
 			    "ioc %x scsi %x state %x xfer %u\n",
-			    cm, cm->cm_ccb,
-			    le16toh(rep->IOCStatus), rep->SCSIStatus, rep->SCSIState,
+			    cm, cm->cm_ccb, le16toh(rep->IOCStatus),
+			    rep->SCSIStatus, rep->SCSIState,
 			    le32toh(rep->TransferCount));
 		else
 			mpssas_log_command(cm, MPS_RECOVERY,
@@ -2196,8 +2054,8 @@ mpssas_scsiio_complete(struct mps_softc *sc, struct mps_command *cm)
 			mpssas_log_command(cm, MPS_RECOVERY,
 			    "completed cm %p ccb %p during recovery "
 			    "ioc %x scsi %x state %x xfer %u\n",
-			    cm, cm->cm_ccb,
-			    le16toh(rep->IOCStatus), rep->SCSIStatus, rep->SCSIState,
+			    cm, cm->cm_ccb, le16toh(rep->IOCStatus),
+			    rep->SCSIStatus, rep->SCSIState,
 			    le32toh(rep->TransferCount));
 		else
 			mpssas_log_command(cm, MPS_RECOVERY,
@@ -2490,10 +2348,10 @@ mpssas_scsiio_complete(struct mps_softc *sc, struct mps_command *cm)
 		 */
 		mpssas_set_ccbstatus(ccb, CAM_REQ_CMP_ERR);
 		mps_dprint(sc, MPS_INFO,
-		    "Controller reported %s status for target %u SMID %u, "
-		    "loginfo %x\n", ((rep->IOCStatus & MPI2_IOCSTATUS_MASK) ==
-		    MPI2_IOCSTATUS_SCSI_IOC_TERMINATED) ? "IOC_TERMINATED" :
-		    "EXT_TERMINATED", target_id, cm->cm_desc.Default.SMID,
+		    "Controller reported %s tgt %u SMID %u loginfo %x\n",
+		    mps_describe_table(mps_iocstatus_string,
+		    le16toh(rep->IOCStatus) & MPI2_IOCSTATUS_MASK),
+		    target_id, cm->cm_desc.Default.SMID,
 		    le32toh(rep->IOCLogInfo));
 		mps_dprint(sc, MPS_XINFO,
 		    "SCSIStatus %x SCSIState %x xfercount %u\n",
@@ -3373,8 +3231,19 @@ mpssas_async(void *callback_arg, uint32_t code, struct cam_path *path,
 
 		if ((mpssas_get_ccbstatus((union ccb *)&cdai) == CAM_REQ_CMP)
 		 && (rcap_buf.prot & SRC16_PROT_EN)) {
-			lun->eedp_formatted = TRUE;
-			lun->eedp_block_size = scsi_4btoul(rcap_buf.length);
+			switch (rcap_buf.prot & SRC16_P_TYPE) {
+			case SRC16_PTYPE_1:
+			case SRC16_PTYPE_3:
+				lun->eedp_formatted = TRUE;
+				lun->eedp_block_size =
+				    scsi_4btoul(rcap_buf.length);
+				break;
+			case SRC16_PTYPE_2:
+			default:
+				lun->eedp_formatted = FALSE;
+				lun->eedp_block_size = 0;
+				break;
+			}
 		} else {
 			lun->eedp_formatted = FALSE;
 			lun->eedp_block_size = 0;
@@ -3695,11 +3564,6 @@ mpssas_portenable_complete(struct mps_softc *sc, struct mps_command *cm)
 		mps_dprint(sc, MPS_FAULT, "Portenable failed\n");
 
 	mps_free_command(sc, cm);
-	if (sc->mps_ich.ich_arg != NULL) {
-		mps_dprint(sc, MPS_XINFO, "disestablish config intrhook\n");
-		config_intrhook_disestablish(&sc->mps_ich);
-		sc->mps_ich.ich_arg = NULL;
-	}
 
 	/*
 	 * Get WarpDrive info after discovery is complete but before the scan

@@ -44,21 +44,22 @@ ip_dev_find(struct vnet *vnet, uint32_t addr)
 	sin.sin_addr.s_addr = addr;
 	sin.sin_len = sizeof(sin);
 	sin.sin_family = AF_INET;
+	NET_EPOCH_ENTER();
 	CURVNET_SET_QUIET(vnet);
 	ifa = ifa_ifwithaddr((struct sockaddr *)&sin);
 	CURVNET_RESTORE();
 	if (ifa) {
 		ifp = ifa->ifa_ifp;
 		if_ref(ifp);
-		ifa_free(ifa);
 	} else {
 		ifp = NULL;
 	}
+	NET_EPOCH_EXIT();
 	return (ifp);
 }
 
 static inline struct net_device *
-ip6_dev_find(struct vnet *vnet, struct in6_addr addr)
+ip6_dev_find(struct vnet *vnet, struct in6_addr addr, uint16_t scope_id)
 {
 	struct sockaddr_in6 sin6;
 	struct ifaddr *ifa;
@@ -68,16 +69,22 @@ ip6_dev_find(struct vnet *vnet, struct in6_addr addr)
 	sin6.sin6_addr = addr;
 	sin6.sin6_len = sizeof(sin6);
 	sin6.sin6_family = AF_INET6;
+	if (IN6_IS_SCOPE_LINKLOCAL(&addr) ||
+	    IN6_IS_ADDR_MC_INTFACELOCAL(&addr)) {
+		/* embed the IPv6 scope ID */
+		sin6.sin6_addr.s6_addr16[1] = htons(scope_id);
+	}
+	NET_EPOCH_ENTER();
 	CURVNET_SET_QUIET(vnet);
 	ifa = ifa_ifwithaddr((struct sockaddr *)&sin6);
 	CURVNET_RESTORE();
-	if (ifa) {
+	if (ifa != NULL) {
 		ifp = ifa->ifa_ifp;
 		if_ref(ifp);
-		ifa_free(ifa);
 	} else {
-	  	ifp = NULL;
+		ifp = NULL;
 	}
+	NET_EPOCH_EXIT();
 	return (ifp);
 }
 

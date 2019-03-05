@@ -2,6 +2,8 @@
 /*	$NetBSD: msdosfs_denode.c,v 1.28 1998/02/10 14:10:00 mrg Exp $	*/
 
 /*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (C) 1994, 1995, 1997 Wolfgang Solfrank.
  * Copyright (C) 1994, 1995, 1997 TooLs GmbH.
  * All rights reserved.
@@ -295,7 +297,7 @@ deupdat(struct denode *dep, int waitfor)
 		    DE_MODIFIED);
 		return (0);
 	}
-	getnanotime(&ts);
+	vfs_timestamp(&ts);
 	DETIMES(dep, &ts, &ts, &ts);
 	if ((dep->de_flag & DE_MODIFIED) == 0 && waitfor == 0)
 		return (0);
@@ -381,7 +383,7 @@ detrunc(struct denode *dep, u_long length, int flags, struct ucred *cred)
 		dep->de_StartCluster = 0;
 		eofentry = ~0;
 	} else {
-		error = pcbmap(dep, de_clcount(pmp, length) - 1, 0, 
+		error = pcbmap(dep, de_clcount(pmp, length) - 1, 0,
 			       &eofentry, 0);
 		if (error) {
 #ifdef MSDOSFS_DEBUG
@@ -590,8 +592,9 @@ msdosfs_inactive(struct vop_inactive_args *ap)
 	 * as empty.  (This may not be necessary for the dos filesystem.)
 	 */
 #ifdef MSDOSFS_DEBUG
-	printf("msdosfs_inactive(): dep %p, refcnt %ld, mntflag %x, MNT_RDONLY %x\n",
-	       dep, dep->de_refcnt, vp->v_mount->mnt_flag, MNT_RDONLY);
+	printf("msdosfs_inactive(): dep %p, refcnt %ld, mntflag %llx, MNT_RDONLY %llx\n",
+	    dep, dep->de_refcnt, (unsigned long long)vp->v_mount->mnt_flag,
+	    (unsigned long long)MNT_RDONLY);
 #endif
 	if (dep->de_refcnt <= 0 && (vp->v_mount->mnt_flag & MNT_RDONLY) == 0) {
 		error = detrunc(dep, (u_long) 0, 0, NOCRED);

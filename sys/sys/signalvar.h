@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -347,7 +349,7 @@ static inline int
 sigdeferstop(int mode)
 {
 
-	if (mode == SIGDEFERSTOP_NOP)
+	if (__predict_true(mode == SIGDEFERSTOP_NOP))
 		return (SIGDEFERSTOP_VAL_NCHG);
 	return (sigdeferstop_impl(mode));
 }
@@ -356,7 +358,7 @@ static inline void
 sigallowstop(int prev)
 {
 
-	if (prev == SIGDEFERSTOP_VAL_NCHG)
+	if (__predict_true(prev == SIGDEFERSTOP_VAL_NCHG))
 		return;
 	sigallowstop_impl(prev);
 }

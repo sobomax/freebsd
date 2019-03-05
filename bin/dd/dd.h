@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1991, 1993, 1994
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -98,5 +100,10 @@ typedef struct {
 #define	C_STATUS	0x08000000
 #define	C_NOXFER	0x10000000
 #define	C_NOINFO	0x20000000
+#define	C_PROGRESS	0x40000000
 
 #define	C_PARITY	(C_PAREVEN | C_PARODD | C_PARNONE | C_PARSET)
+
+#define	BISZERO(p, s)	((s) > 0 && *((const char *)p) == 0 && !memcmp( \
+			    (const void *)(p), (const void *) \
+			    ((const char *)p + 1), (s) - 1))

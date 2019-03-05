@@ -45,6 +45,8 @@ INCS=	archive.h archive_entry.h
 
 # Sources to be compiled.
 SRCS=	archive_acl.c					\
+	archive_blake2sp_ref.c				\
+	archive_blake2s_ref.c				\
 	archive_check_magic.c				\
 	archive_cmdline.c				\
 	archive_cryptor.c				\
@@ -64,6 +66,7 @@ SRCS=	archive_acl.c					\
 	archive_pack_dev.c				\
 	archive_pathmatch.c				\
 	archive_ppmd7.c					\
+	archive_ppmd8.c					\
 	archive_random.c				\
 	archive_rb.c					\
 	archive_read.c					\
@@ -94,6 +97,7 @@ SRCS=	archive_acl.c					\
 	archive_read_support_filter_rpm.c		\
 	archive_read_support_filter_uu.c		\
 	archive_read_support_filter_xz.c		\
+	archive_read_support_filter_zstd.c		\
 	archive_read_support_format_7zip.c		\
 	archive_read_support_format_all.c		\
 	archive_read_support_format_ar.c		\
@@ -105,6 +109,7 @@ SRCS=	archive_acl.c					\
 	archive_read_support_format_lha.c		\
 	archive_read_support_format_mtree.c		\
 	archive_read_support_format_rar.c		\
+	archive_read_support_format_rar5.c		\
 	archive_read_support_format_raw.c		\
 	archive_read_support_format_tar.c		\
 	archive_read_support_format_warc.c		\
@@ -136,6 +141,7 @@ SRCS=	archive_acl.c					\
 	archive_write_add_filter_program.c		\
 	archive_write_add_filter_uuencode.c		\
 	archive_write_add_filter_xz.c			\
+	archive_write_add_filter_zstd.c			\
 	archive_write_set_format.c			\
 	archive_write_set_format_7zip.c			\
 	archive_write_set_format_ar.c			\

@@ -27,6 +27,8 @@ __FBSDID("$FreeBSD$");
  * http://www.ralinktech.com.tw/
  */
 
+#include "opt_wlan.h"
+
 #include <sys/param.h>
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
@@ -41,10 +43,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 #include <sys/endian.h>
 #include <sys/kdb.h>
-
-#include <machine/bus.h>
-#include <machine/resource.h>
-#include <sys/rman.h>
 
 #include <net/bpf.h>
 #include <net/if.h>
@@ -339,9 +337,6 @@ static const struct {
 	{ 102, 0x16 },
 	{ 107, 0x04 }
 };
-
-static const uint8_t rum_chan_2ghz[] =
-	{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
 
 static const uint8_t rum_chan_5ghz[] =
 	{ 34, 36, 38, 40, 42, 44, 46, 48, 52, 56, 60, 64,
@@ -1419,37 +1414,25 @@ rum_sendprot(struct rum_softc *sc,
     const struct mbuf *m, struct ieee80211_node *ni, int prot, int rate)
 {
 	struct ieee80211com *ic = ni->ni_ic;
-	const struct ieee80211_frame *wh;
 	struct rum_tx_data *data;
 	struct mbuf *mprot;
-	int protrate, pktlen, flags, isshort;
-	uint16_t dur;
+	int protrate, flags;
 
 	RUM_LOCK_ASSERT(sc);
-	KASSERT(prot == IEEE80211_PROT_RTSCTS || prot == IEEE80211_PROT_CTSONLY,
-	    ("protection %d", prot));
 
-	wh = mtod(m, const struct ieee80211_frame *);
-	pktlen = m->m_pkthdr.len + IEEE80211_CRC_LEN;
-
-	protrate = ieee80211_ctl_rate(ic->ic_rt, rate);
-
-	isshort = (ic->ic_flags & IEEE80211_F_SHPREAMBLE) != 0;
-	dur = ieee80211_compute_duration(ic->ic_rt, pktlen, rate, isshort)
-	    + ieee80211_ack_duration(ic->ic_rt, rate, isshort);
-	flags = 0;
-	if (prot == IEEE80211_PROT_RTSCTS) {
-		/* NB: CTS is the same size as an ACK */
-		dur += ieee80211_ack_duration(ic->ic_rt, rate, isshort);
-		flags |= RT2573_TX_NEED_ACK;
-		mprot = ieee80211_alloc_rts(ic, wh->i_addr1, wh->i_addr2, dur);
-	} else {
-		mprot = ieee80211_alloc_cts(ic, ni->ni_vap->iv_myaddr, dur);
-	}
+	mprot = ieee80211_alloc_prot(ni, m, rate, prot);
 	if (mprot == NULL) {
-		/* XXX stat + msg */
+		if_inc_counter(ni->ni_vap->iv_ifp, IFCOUNTER_OERRORS, 1);
+		device_printf(sc->sc_dev,
+		    "could not allocate mbuf for protection mode %d\n", prot);
 		return (ENOBUFS);
 	}
+
+	protrate = ieee80211_ctl_rate(ic->ic_rt, rate);
+	flags = 0;
+	if (prot == IEEE80211_PROT_RTSCTS)
+		flags |= RT2573_TX_NEED_ACK;
+
 	data = STAILQ_FIRST(&sc->tx_free);
 	STAILQ_REMOVE_HEAD(&sc->tx_free, next);
 	sc->tx_nfree--;
@@ -2301,10 +2284,13 @@ rum_update_slot(struct ieee80211com *ic)
 static int
 rum_wme_update(struct ieee80211com *ic)
 {
-	const struct wmeParams *chanp =
-	    ic->ic_wme.wme_chanParams.cap_wmeParams;
+	struct chanAccParams chp;
+	const struct wmeParams *chanp;
 	struct rum_softc *sc = ic->ic_softc;
 	int error = 0;
+
+	ieee80211_wme_ic_getparams(ic, &chp);
+	chanp = chp.cap_wmeParams;
 
 	RUM_LOCK(sc);
 	error = rum_write(sc, RT2573_AIFSN_CSR,
@@ -3227,8 +3213,7 @@ rum_getradiocaps(struct ieee80211com *ic,
 	memset(bands, 0, sizeof(bands));
 	setbit(bands, IEEE80211_MODE_11B);
 	setbit(bands, IEEE80211_MODE_11G);
-	ieee80211_add_channel_list_2ghz(chans, maxchans, nchans,
-	    rum_chan_2ghz, nitems(rum_chan_2ghz), bands, 0);
+	ieee80211_add_channels_default_2ghz(chans, maxchans, nchans, bands, 0);
 
 	if (sc->rf_rev == RT2573_RF_5225 || sc->rf_rev == RT2573_RF_5226) {
 		setbit(bands, IEEE80211_MODE_11A);

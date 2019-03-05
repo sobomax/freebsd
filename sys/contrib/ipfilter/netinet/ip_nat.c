@@ -1904,20 +1904,16 @@ ipf_nat_getent(softc, data, getlock)
 		}
 	}
 	if (error == 0) {
-		if (getlock) {
-			READ_ENTER(&softc->ipf_nat);
-			getlock = 0;
-		}
 		error = ipf_outobjsz(softc, data, ipn, IPFOBJ_NATSAVE,
 				     ipns.ipn_dsize);
 	}
 
 finished:
-	if (getlock) {
-		READ_ENTER(&softc->ipf_nat);
-	}
 	if (ipn != NULL) {
 		KFREES(ipn, ipns.ipn_dsize);
+	}
+	if (getlock) {
+		RWLOCK_EXIT(&softc->ipf_nat);
 	}
 	return error;
 }
@@ -2304,14 +2300,16 @@ ipf_nat_delete(softc, nat, logtype)
 
 		bkt = nat->nat_hv[0] % softn->ipf_nat_table_sz;
 		nss = &softn->ipf_nat_stats.ns_side[0];
-		nss->ns_bucketlen[bkt]--;
+		if (nss->ns_bucketlen[bkt] > 0)
+			nss->ns_bucketlen[bkt]--;
 		if (nss->ns_bucketlen[bkt] == 0) {
 			nss->ns_inuse--;
 		}
 
 		bkt = nat->nat_hv[1] % softn->ipf_nat_table_sz;
 		nss = &softn->ipf_nat_stats.ns_side[1];
-		nss->ns_bucketlen[bkt]--;
+		if (nss->ns_bucketlen[bkt] > 0)
+			nss->ns_bucketlen[bkt]--;
 		if (nss->ns_bucketlen[bkt] == 0) {
 			nss->ns_inuse--;
 		}
@@ -2676,6 +2674,7 @@ ipf_nat_newmap(fin, nat, ni)
 		if ((np->in_nsrcmsk == 0xffffffff) && (np->in_spnext == 0)) {
 			if (l > 0) {
 				NBUMPSIDEX(1, ns_exhausted, ns_exhausted_1);
+				DT4(ns_exhausted_1, fr_info_t *, fin, nat_t *, nat, natinfo_t *, ni, ipnat_t *, np);
 				return -1;
 			}
 		}
@@ -2693,6 +2692,7 @@ ipf_nat_newmap(fin, nat, ni)
 			if ((l >= np->in_ppip) || ((l > 0) &&
 			     !(flags & IPN_TCPUDP))) {
 				NBUMPSIDEX(1, ns_exhausted, ns_exhausted_2);
+				DT4(ns_exhausted_2, fr_info_t *, fin, nat_t *, nat, natinfo_t *, ni, ipnat_t *, np);
 				return -1;
 			}
 			/*
@@ -2728,6 +2728,7 @@ ipf_nat_newmap(fin, nat, ni)
 			    ipf_ifpaddr(softc, 4, FRI_NORMAL, fin->fin_ifp,
 				       &in6, NULL) == -1) {
 				NBUMPSIDEX(1, ns_new_ifpaddr, ns_new_ifpaddr_1);
+				DT4(ns_new_ifpaddr_1, fr_info_t *, fin, nat_t *, nat, natinfo_t *, ni, ipnat_t *, np);
 				return -1;
 			}
 			in.s_addr = ntohl(in6.in4.s_addr);
@@ -2738,6 +2739,7 @@ ipf_nat_newmap(fin, nat, ni)
 			 */
 			if (l > 0) {
 				NBUMPSIDEX(1, ns_exhausted, ns_exhausted_3);
+				DT4(ns_exhausted_3, fr_info_t *, fin, nat_t *, nat, natinfo_t *, ni, ipnat_t *, np);
 				return -1;
 			}
 			in.s_addr = ntohl(fin->fin_saddr);
@@ -2833,6 +2835,7 @@ ipf_nat_newmap(fin, nat, ni)
 		    (np->in_spnext != 0) && (st_port == np->in_spnext) &&
 		    (np->in_snip != 0) && (st_ip == np->in_snip)) {
 			NBUMPSIDED(1, ns_wrap);
+			DT4(ns_wrap, fr_info_t *, fin, nat_t *, nat, natinfo_t *, ni, ipnat_t *, np);
 			return -1;
 		}
 		l++;
@@ -2968,6 +2971,7 @@ ipf_nat_newrdr(fin, nat, ni)
 		if (ipf_ifpaddr(softc, 4, FRI_NORMAL, fin->fin_ifp,
 			       &in6, NULL) == -1) {
 			NBUMPSIDEX(0, ns_new_ifpaddr, ns_new_ifpaddr_2);
+			DT3(ns_new_ifpaddr_2, fr_info_t *, fin, nat_t *, nat, natinfo_t, ni);
 			return -1;
 		}
 		in.s_addr = ntohl(in6.in4.s_addr);
@@ -3114,6 +3118,7 @@ ipf_nat_add(fin, np, natsave, flags, direction)
 
 	if (nsp->ns_active >= softn->ipf_nat_table_max) {
 		NBUMPSIDED(fin->fin_out, ns_table_max);
+		DT2(ns_table_max, nat_stat_t *, nsp, ipf_nat_softc_t *, softn);
 		return NULL;
 	}
 
@@ -3128,6 +3133,7 @@ ipf_nat_add(fin, np, natsave, flags, direction)
 	/* Give me a new nat */
 	KMALLOC(nat, nat_t *);
 	if (nat == NULL) {
+		DT(ns_memfail);
 		NBUMPSIDED(fin->fin_out, ns_memfail);
 		/*
 		 * Try to automatically tune the max # of entries in the
@@ -3223,6 +3229,7 @@ ipf_nat_add(fin, np, natsave, flags, direction)
 	if ((np->in_apr != NULL) && ((nat->nat_flags & NAT_SLAVE) == 0)) {
 		if (ipf_proxy_new(fin, nat) == -1) {
 			NBUMPSIDED(fin->fin_out, ns_appr_fail);
+			DT3(ns_appr_fail, fr_info_t *, fin, nat_t *, nat, ipnat_t *, np);
 			goto badnat;
 		}
 	}
@@ -3259,7 +3266,7 @@ ipf_nat_add(fin, np, natsave, flags, direction)
 
 	goto done;
 badnat:
-	DT2(ns_badnatnew, fr_info_t *, fin, nat_t *, nat);
+	DT3(ns_badnatnew, fr_info_t *, fin, nat_t *, nat, ipnat_t *, np);
 	NBUMPSIDE(fin->fin_out, ns_badnatnew);
 	if ((hm = nat->nat_hm) != NULL)
 		ipf_nat_hostmapdel(softc, &hm);
@@ -3380,6 +3387,7 @@ ipf_nat_finalise(fin, nat)
 	}
 
 	NBUMPSIDED(fin->fin_out, ns_unfinalised);
+	DT2(ns_unfinalised, fr_info_t *, fin, nat_t *, nat);
 	/*
 	 * nat_insert failed, so cleanup time...
 	 */
@@ -4951,7 +4959,7 @@ retry_roundrobin:
 				case 0 :
 					continue;
 				case -1 :
-					rval = -1;
+					rval = -3;
 					goto outmatchfail;
 				case 1 :
 				default :
@@ -4996,7 +5004,7 @@ retry_roundrobin:
 				natfailed = 0;
 				break;
 			}
-			natfailed = -1;
+			natfailed = -2;
 		}
 		if ((np == NULL) && (nmsk < softn->ipf_nat_map_max)) {
 			nmsk++;
@@ -5021,15 +5029,23 @@ outmatchfail:
 
 	switch (rval)
 	{
+	case -3 :
+		/* ipf_nat_match() failure */
+		/* FALLTHROUGH */
+	case -2 :
+		/* retry_roundrobin loop failure */
+		/* FALLTHROUGH */
 	case -1 :
+		/* proxy failure detected by ipf_nat_out() */
 		if (passp != NULL) {
-			DT1(frb_natv4out, fr_info_t *, fin);
+			DT2(frb_natv4out, fr_info_t *, fin, int, rval);
 			NBUMPSIDED(1, ns_drop);
 			*passp = FR_BLOCK;
 			fin->fin_reason = FRB_NATV4;
 		}
 		fin->fin_flx |= FI_BADNAT;
 		NBUMPSIDED(1, ns_badnat);
+		rval = -1;	/* We only return -1 on error. */
 		break;
 	case 0 :
 		NBUMPSIDE(1, ns_ignored);
@@ -5437,7 +5453,7 @@ retry_roundrobin:
 				case 0 :
 					continue;
 				case -1 :
-					rval = -1;
+					rval = -3;
 					goto inmatchfail;
 				case 1 :
 				default :
@@ -5484,7 +5500,7 @@ retry_roundrobin:
 				natfailed = 0;
 				break;
 			}
-			natfailed = -1;
+			natfailed = -2;
 		}
 		if ((np == NULL) && (rmsk < softn->ipf_nat_rdr_max)) {
 			rmsk++;
@@ -5509,15 +5525,23 @@ inmatchfail:
 
 	switch (rval)
 	{
+	case -3 :
+		/* ipf_nat_match() failure */
+		/* FALLTHROUGH */
+	case -2 :
+		/* retry_roundrobin loop failure */
+		/* FALLTHROUGH */
 	case -1 :
+		/* proxy failure detected by ipf_nat_in() */
 		if (passp != NULL) {
-			DT1(frb_natv4in, fr_info_t *, fin);
+			DT2(frb_natv4in, fr_info_t *, fin, int, rval);
 			NBUMPSIDED(0, ns_drop);
 			*passp = FR_BLOCK;
 			fin->fin_reason = FRB_NATV4;
 		}
 		fin->fin_flx |= FI_BADNAT;
 		NBUMPSIDED(0, ns_badnat);
+		rval = -1;	/* We only return -1 on error. */
 		break;
 	case 0 :
 		NBUMPSIDE(0, ns_ignored);
@@ -6093,8 +6117,8 @@ ipf_nat_icmpquerytype(icmptype)
 	{
 	case ICMP_ECHOREPLY:
 	case ICMP_ECHO:
-	/* route aedvertisement/solliciation is currently unsupported: */
-	/* it would require rewriting the ICMP data section            */
+	/* route advertisement/solicitation is currently unsupported: */
+	/* it would require rewriting the ICMP data section          */
 	case ICMP_TSTAMP:
 	case ICMP_TSTAMPREPLY:
 	case ICMP_IREQ:
@@ -7049,6 +7073,7 @@ ipf_nat_newrewrite(fin, nat, nai)
 	do {
 		changed = -1;
 		/* TRACE (l, src_search, dst_search, np) */
+		DT4(ipf_nat_rewrite_1, int, l, int, src_search, int, dst_search, ipnat_t *, np);
 
 		if ((src_search == 0) && (np->in_spnext == 0) &&
 		    (dst_search == 0) && (np->in_dpnext == 0)) {
@@ -7113,6 +7138,7 @@ ipf_nat_newrewrite(fin, nat, nai)
 		 * Find a new destination address
 		 */
 		/* TRACE (fin, np, l, frnat) */
+		DT4(ipf_nat_rewrite_2, frinfo_t *, fin, ipnat_t *, np, int, l, frinfo_t *, &frnat);
 
 		if (ipf_nat_nextaddr(fin, &np->in_ndst, &frnat.fin_daddr,
 				     &frnat.fin_daddr) == -1)
@@ -7163,6 +7189,7 @@ ipf_nat_newrewrite(fin, nat, nai)
 		}
 
 		/* TRACE (frnat) */
+		DT1(ipf_nat_rewrite_3, frinfo_t *, &frnat);
 
 		/*
 		 * Here we do a lookup of the connection as seen from
@@ -7202,6 +7229,7 @@ ipf_nat_newrewrite(fin, nat, nai)
 		}
 
 		/* TRACE natl, in_stepnext, l */
+		DT3(ipf_nat_rewrite_2, nat_t *, natl, ipnat_t *, np , int, l);
 
 		if ((natl != NULL) && (l > 8))	/* XXX 8 is arbitrary */
 			return -1;
@@ -7294,6 +7322,7 @@ ipf_nat_newdivert(fin, nat, nai)
 
 	if (natl != NULL) {
 		NBUMPSIDED(fin->fin_out, ns_divert_exist);
+		DT3(ns_divert_exist, fr_info_t *, fin, nat_t *, nat, natinfo_t, nai);
 		return -1;
 	}
 
@@ -7546,6 +7575,7 @@ ipf_nat_nextaddr(fin, na, old, dst)
 	case FRI_PEERADDR :
 	case FRI_NETWORK :
 	default :
+		DT4(ns_na_atype, fr_info_t *, fin, nat_addr_t *, na, u_32_t *, old, u_32_t *, new);
 		return -1;
 	}
 
@@ -7557,6 +7587,7 @@ ipf_nat_nextaddr(fin, na, old, dst)
 							NULL);
 		} else {
 			NBUMPSIDE(fin->fin_out, ns_badnextaddr);
+			DT4(ns_badnextaddr_1, fr_info_t *, fin, nat_addr_t *, na, u_32_t *, old, u_32_t *, new);
 		}
 
 	} else if (na->na_atype == IPLT_NONE) {
@@ -7575,6 +7606,7 @@ ipf_nat_nextaddr(fin, na, old, dst)
 			if (ipf_ifpaddr(softc, 4, na->na_atype,
 					fin->fin_ifp, &newip, NULL) == -1) {
 				NBUMPSIDED(fin->fin_out, ns_ifpaddrfail);
+				DT4(ns_ifpaddrfail, fr_info_t *, fin, nat_addr_t *, na, u_32_t *, old, u_32_t *, new);
 				return -1;
 			}
 			new = newip.in4.s_addr;
@@ -7586,6 +7618,7 @@ ipf_nat_nextaddr(fin, na, old, dst)
 
 	} else {
 		NBUMPSIDE(fin->fin_out, ns_badnextaddr);
+		DT4(ns_badnextaddr_2, fr_info_t *, fin, nat_addr_t *, na, u_32_t *, old, u_32_t *, new);
 	}
 
 	return error;

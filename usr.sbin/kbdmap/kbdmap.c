@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2002 Jonathan Belson <jon@witchspace.com>
  * All rights reserved.
  *
@@ -239,8 +241,7 @@ get_font(void)
 				if (strcmp(buf, "NO")) {
 					if (fnt)
 						free(fnt);
-					fnt = (char *) malloc(strlen(buf) + 1);
-					strcpy(fnt, buf);
+					fnt = strdup(buf);
 				}
 			}
 		}

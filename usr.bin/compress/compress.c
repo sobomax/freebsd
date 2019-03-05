@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -320,6 +322,8 @@ decompress(const char *in, const char *out, int bits)
 	if ((ofp = fopen(out, "w")) == NULL ||
 	    (nr != 0 && fwrite(buf, 1, nr, ofp) != nr)) {
 		cwarn("%s", out);
+		if (ofp)
+			(void)fclose(ofp);
 		(void)fclose(ifp);
 		return;
 	}

@@ -32,8 +32,8 @@ SRCS+=	exconcat.c exconfig.c exconvrt.c excreate.c exdebug.c	\
 	exdump.c exfield.c exfldio.c exmisc.c exmutex.c		\
 	exnames.c exoparg1.c exoparg2.c exoparg3.c exoparg6.c	\
 	exprep.c exregion.c exresnte.c exresolv.c exresop.c	\
-	exstore.c exstoren.c exstorob.c exsystem.c extrace.c	\
-	exutils.c
+	exserial.c exstore.c exstoren.c exstorob.c exsystem.c	\
+	extrace.c exutils.c
 
 # components/hardware
 SRCS+=	hwacpi.c hwesleep.c hwgpe.c hwpci.c hwregs.c hwsleep.c	\
@@ -76,7 +76,17 @@ SRCS+=	osgendbg.c osunixxf.c
 MAN=	acpidb.8
 WARNS?=	3
 
-CFLAGS+= -DACPI_EXEC_APP -fno-strict-aliasing
+CFLAGS+= -DACPI_DB_APP -DACPI_EXEC_APP -fno-strict-aliasing
 LIBADD=	pthread
 
 .include <bsd.prog.mk>
+
+# clang 6.0.0 and higher warn about the ACPI_ROOT_OBJECT and
+# ACPI_TO_POINTER macros from sys/contrib/dev/acpica/include/actypes.h,
+# that they use arithmetic on a null pointer treated as a cast from
+# integer to pointer, which is a GNU extension.
+#
+# Turn off the warning, because this is in contributed code.
+.if ${COMPILER_TYPE} == "clang" && ${COMPILER_VERSION} >= 60000
+CWARNFLAGS+=	-Wno-null-pointer-arithmetic
+.endif

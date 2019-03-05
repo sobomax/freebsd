@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/domain.h>
 #include <sys/protosw.h>
 #include <sys/socket.h>
+#define	_WANT_SOCKET
 #include <sys/socketvar.h>
 #include <sys/sysctl.h>
 
@@ -158,12 +159,12 @@ sotoxsocket(struct socket *so, struct xsocket *xso)
 
 	bzero(xso, sizeof *xso);
 	xso->xso_len = sizeof *xso;
-	xso->xso_so = so;
+	xso->xso_so = (uintptr_t)so;
 	xso->so_type = so->so_type;
 	xso->so_options = so->so_options;
 	xso->so_linger = so->so_linger;
 	xso->so_state = so->so_state;
-	xso->so_pcb = so->so_pcb;
+	xso->so_pcb = (uintptr_t)so->so_pcb;
 	if (kread((uintptr_t)so->so_proto, &proto, sizeof(proto)) != 0)
 		return (-1);
 	xso->xso_protocol = proto.pr_protocol;
@@ -172,7 +173,7 @@ sotoxsocket(struct socket *so, struct xsocket *xso)
 	xso->xso_family = domain.dom_family;
 	xso->so_timeo = so->so_timeo;
 	xso->so_error = so->so_error;
-	if (SOLISTENING(so)) {
+	if ((so->so_options & SO_ACCEPTCONN) != 0) {
 		xso->so_qlen = so->sol_qlen;
 		xso->so_incqlen = so->sol_incqlen;
 		xso->so_qlimit = so->sol_qlimit;
@@ -320,7 +321,7 @@ protopr(u_long off, const char *name, int af1, int proto)
 				    "Proto", "Recv-Q", "Send-Q",
 				    "Local Address", "Foreign Address");
 				if (!xflag && !Rflag)
-					xo_emit(" (state)");
+					xo_emit(" {T:/%-11.11s}", "(state)");
 			}
 			if (xflag) {
 				xo_emit(" {T:/%-6.6s} {T:/%-6.6s} {T:/%-6.6s} "
@@ -338,6 +339,8 @@ protopr(u_long off, const char *name, int af1, int proto)
 				xo_emit("  {T:/%8.8s} {T:/%5.5s}",
 				    "flowid", "ftype");
 			}
+			if (Pflag)
+				xo_emit(" {T:/%s}", "Log ID");
 			xo_emit("\n");
 			first = 0;
 		}
@@ -477,9 +480,9 @@ protopr(u_long off, const char *name, int af1, int proto)
 		}
 		if (istcp && !Lflag && !xflag && !Tflag && !Rflag) {
 			if (tp->t_state < 0 || tp->t_state >= TCP_NSTATES)
-				xo_emit("{:tcp-state/%d}", tp->t_state);
+				xo_emit("{:tcp-state/%-11d}", tp->t_state);
 			else {
-				xo_emit("{:tcp-state/%s}",
+				xo_emit("{:tcp-state/%-11s}",
 				    tcpstates[tp->t_state]);
 #if defined(TF_NEEDSYN) && defined(TF_NEEDFIN)
 				/* Show T/TCP `hidden state' */
@@ -494,6 +497,9 @@ protopr(u_long off, const char *name, int af1, int proto)
 			    inp->inp_flowid,
 			    inp->inp_flowtype);
 		}
+		if (istcp && Pflag)
+			xo_emit(" {:log-id/%s}", tp->xt_logid[0] == '\0' ?
+			    "-" : tp->xt_logid);
 		xo_emit("\n");
 		xo_close_instance("socket");
 	}

@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -159,7 +159,7 @@ const AH_TABLE *
 AcpiAhGetTableInfo (
     char                    *Signature);
 
-extern const AH_TABLE      Gbl_AcpiSupportedTables[];
+extern const AH_TABLE      AcpiGbl_SupportedTables[];
 
 
 /*******************************************************************************
@@ -181,7 +181,7 @@ AcpiAhGetTableInfo (
     const AH_TABLE      *Info;
 
 
-    for (Info = Gbl_AcpiSupportedTables; Info->Signature; Info++)
+    for (Info = AcpiGbl_SupportedTables; Info->Signature; Info++)
     {
         if (ACPI_COMPARE_NAME (Signature, Info->Signature))
         {
@@ -197,7 +197,7 @@ AcpiAhGetTableInfo (
  * Note: Any tables added here should be duplicated within AcpiDmTableData
  * in the file common/dmtable.c
  */
-const AH_TABLE      Gbl_AcpiSupportedTables[] =
+const AH_TABLE      AcpiGbl_SupportedTables[] =
 {
     {ACPI_SIG_ASF,  "Alert Standard Format table"},
     {ACPI_SIG_BERT, "Boot Error Record Table"},
@@ -232,6 +232,7 @@ const AH_TABLE      Gbl_AcpiSupportedTables[] =
     {ACPI_SIG_MTMR, "MID Timer Table"},
     {ACPI_SIG_NFIT, "NVDIMM Firmware Interface Table"},
     {ACPI_SIG_PCCT, "Platform Communications Channel Table"},
+    {ACPI_SIG_PDTT, "Platform Debug Trigger Table"},
     {ACPI_SIG_PMTT, "Platform Memory Topology Table"},
     {ACPI_SIG_PPTT, "Processor Properties Topology Table"},
     {ACPI_SIG_RASF, "RAS Features Table"},
@@ -240,6 +241,7 @@ const AH_TABLE      Gbl_AcpiSupportedTables[] =
     {ACPI_SIG_S3PT, "S3 Performance Table"},
     {ACPI_SIG_SBST, "Smart Battery Specification Table"},
     {ACPI_SIG_SDEI, "Software Delegated Exception Interface Table"},
+    {ACPI_SIG_SDEV, "Secure Devices table"},
     {ACPI_SIG_SLIC, "Software Licensing Description Table"},
     {ACPI_SIG_SLIT, "System Locality Information Table"},
     {ACPI_SIG_SPCR, "Serial Port Console Redirection table"},

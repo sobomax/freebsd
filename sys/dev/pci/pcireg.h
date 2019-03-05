@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997, Stefan Esser <se@freebsd.org>
  * All rights reserved.
  *
@@ -119,6 +121,9 @@
 #define	PCIM_HDRTYPE_CARDBUS	0x02
 #define	PCIM_MFDEV		0x80
 #define	PCIR_BIST	0x0f
+
+/* PCI Spec rev 2.2: 0FFFFh is an invalid value for Vendor ID. */
+#define	PCIV_INVALID	0xffff 
 
 /* Capability Register Offsets */
 

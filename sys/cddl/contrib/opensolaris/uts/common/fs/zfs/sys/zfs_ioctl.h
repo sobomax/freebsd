@@ -21,7 +21,7 @@
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011-2012 Pawel Jakub Dawidek. All rights reserved.
- * Copyright (c) 2012, 2015 by Delphix. All rights reserved.
+ * Copyright (c) 2012, 2017 by Delphix. All rights reserved.
  * Copyright 2016 RackTop Systems.
  * Copyright (c) 2014 Integros [integros.com]
  */
@@ -93,7 +93,9 @@ typedef enum drr_headertype {
 #define	DMU_BACKUP_FEATURE_RESUMING		(1 << 20)
 /* flag #21 is reserved for a Delphix feature */
 #define	DMU_BACKUP_FEATURE_COMPRESSED		(1 << 22)
-/* flag #23 is reserved for the large dnode feature */
+#define	DMU_BACKUP_FEATURE_LARGE_DNODE		(1 << 23)
+/* flag #24 is reserved for the raw send (encryption) feature */
+/* flag #25 is reserved for the ZSTD compression feature */
 
 /*
  * Mask of all supported backup features
@@ -102,7 +104,7 @@ typedef enum drr_headertype {
     DMU_BACKUP_FEATURE_DEDUPPROPS | DMU_BACKUP_FEATURE_SA_SPILL | \
     DMU_BACKUP_FEATURE_EMBED_DATA | DMU_BACKUP_FEATURE_LZ4 | \
     DMU_BACKUP_FEATURE_RESUMING | \
-    DMU_BACKUP_FEATURE_LARGE_BLOCKS | \
+    DMU_BACKUP_FEATURE_LARGE_BLOCKS | DMU_BACKUP_FEATURE_LARGE_DNODE | \
     DMU_BACKUP_FEATURE_COMPRESSED)
 
 /* Are all features in the given flag word currently supported? */
@@ -192,7 +194,8 @@ typedef struct dmu_replay_record {
 			uint32_t drr_bonuslen;
 			uint8_t drr_checksumtype;
 			uint8_t drr_compress;
-			uint8_t drr_pad[6];
+			uint8_t drr_dn_slots;
+			uint8_t drr_pad[5];
 			uint64_t drr_toguid;
 			/* bonus content follows */
 		} drr_object;
@@ -412,19 +415,26 @@ typedef struct zfs_useracct {
 #define	ZPOOL_EXPORT_AFTER_SPLIT 0x1
 
 #ifdef _KERNEL
+struct objset;
+struct zfsvfs;
 
 typedef struct zfs_creat {
 	nvlist_t	*zct_zplprops;
 	nvlist_t	*zct_props;
 } zfs_creat_t;
 
-extern int zfs_secpolicy_snapshot_perms(const char *name, cred_t *cr);
-extern int zfs_secpolicy_rename_perms(const char *from,
-    const char *to, cred_t *cr);
-extern int zfs_secpolicy_destroy_perms(const char *name, cred_t *cr);
+extern int zfs_secpolicy_snapshot_perms(const char *, cred_t *);
+extern int zfs_secpolicy_rename_perms(const char *, const char *, cred_t *);
+extern int zfs_secpolicy_destroy_perms(const char *, cred_t *);
 extern int zfs_busy(void);
-extern int zfs_unmount_snap(const char *);
+extern void zfs_unmount_snap(const char *);
 extern void zfs_destroy_unmount_origin(const char *);
+#ifdef illumos
+extern int getzfsvfs_impl(struct objset *, struct zfsvfs **);
+#else
+extern int getzfsvfs_impl(struct objset *, vfs_t **);
+#endif
+extern int getzfsvfs(const char *, struct zfsvfs **);
 
 /*
  * ZFS minor numbers can refer to either a control device instance or

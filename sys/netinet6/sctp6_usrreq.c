@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2001-2007, by Cisco Systems, Inc. All rights reserved.
  * Copyright (c) 2008-2012, by Randall Stewart. All rights reserved.
  * Copyright (c) 2008-2012, by Michael Tuexen. All rights reserved.
@@ -69,9 +71,7 @@ sctp6_input_with_port(struct mbuf **i_pak, int *offp, uint16_t port)
 	struct sctphdr *sh;
 	struct sctp_chunkhdr *ch;
 	int length, offset;
-#if !defined(SCTP_WITH_NO_CSUM)
 	uint8_t compute_crc;
-#endif
 	uint32_t mflowid;
 	uint8_t mflowtype;
 	uint16_t fibnum;
@@ -142,9 +142,6 @@ sctp6_input_with_port(struct mbuf **i_pak, int *offp, uint16_t port)
 		goto out;
 	}
 	ecn_bits = ((ntohl(ip6->ip6_flow) >> 20) & 0x000000ff);
-#if defined(SCTP_WITH_NO_CSUM)
-	SCTP_STAT_INCR(sctps_recvnocrc);
-#else
 	if (m->m_pkthdr.csum_flags & CSUM_SCTP_VALID) {
 		SCTP_STAT_INCR(sctps_recvhwcrc);
 		compute_crc = 0;
@@ -152,14 +149,11 @@ sctp6_input_with_port(struct mbuf **i_pak, int *offp, uint16_t port)
 		SCTP_STAT_INCR(sctps_recvswcrc);
 		compute_crc = 1;
 	}
-#endif
 	sctp_common_input_processing(&m, iphlen, offset, length,
 	    (struct sockaddr *)&src,
 	    (struct sockaddr *)&dst,
 	    sh, ch,
-#if !defined(SCTP_WITH_NO_CSUM)
 	    compute_crc,
-#endif
 	    ecn_bits,
 	    mflowtype, mflowid, fibnum,
 	    vrf_id, port);
@@ -229,6 +223,10 @@ sctp6_notify(struct sctp_inpcb *inp,
 		}
 		break;
 	case ICMP6_PACKET_TOO_BIG:
+		if (net->dest_state & SCTP_ADDR_NO_PMTUD) {
+			SCTP_TCB_UNLOCK(stcb);
+			break;
+		}
 		if (SCTP_OS_TIMER_PENDING(&net->pmtu_timer.timer)) {
 			timer_stopped = 1;
 			sctp_timer_stop(SCTP_TIMER_TYPE_PATHMTURAISE, inp, stcb, net,
@@ -273,6 +271,7 @@ sctp6_ctlinput(int cmd, struct sockaddr *pktdst, void *d)
 	    pktdst->sa_len != sizeof(struct sockaddr_in6)) {
 		return;
 	}
+
 	if ((unsigned)cmd >= PRC_NCMDS) {
 		return;
 	}
@@ -296,6 +295,7 @@ sctp6_ctlinput(int cmd, struct sockaddr *pktdst, void *d)
 		if (ip6cp->ip6c_m == NULL) {
 			return;
 		}
+
 		/*
 		 * Check if we can safely examine the ports and the
 		 * verification tag of the SCTP common header.
@@ -304,6 +304,7 @@ sctp6_ctlinput(int cmd, struct sockaddr *pktdst, void *d)
 		    (int32_t)(ip6cp->ip6c_off + offsetof(struct sctphdr, checksum))) {
 			return;
 		}
+
 		/* Copy out the port numbers and the verification tag. */
 		memset(&sh, 0, sizeof(sh));
 		m_copydata(ip6cp->ip6c_m,
@@ -527,6 +528,7 @@ sctp6_attach(struct socket *so, int proto SCTP_UNUSED, struct thread *p SCTP_UNU
 		SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTP6_USRREQ, EINVAL);
 		return (EINVAL);
 	}
+
 	if (so->so_snd.sb_hiwat == 0 || so->so_rcv.sb_hiwat == 0) {
 		error = SCTP_SORESERVE(so, SCTP_BASE_SYSCTL(sctp_sendspace), SCTP_BASE_SYSCTL(sctp_recvspace));
 		if (error)
@@ -567,6 +569,7 @@ sctp6_bind(struct socket *so, struct sockaddr *addr, struct thread *p)
 		SCTP_LTRACE_ERR_RET(inp, NULL, NULL, SCTP_FROM_SCTP6_USRREQ, EINVAL);
 		return (EINVAL);
 	}
+
 	if (addr) {
 		switch (addr->sa_family) {
 #ifdef INET
@@ -879,7 +882,7 @@ sctp6_connect(struct socket *so, struct sockaddr *addr, struct thread *p)
 	if (inp->sctp_flags & SCTP_PCB_FLAGS_CONNECTED) {
 		stcb = LIST_FIRST(&inp->sctp_asoc_list);
 		if (stcb) {
-			SCTP_TCB_UNLOCK(stcb);
+			SCTP_TCB_LOCK(stcb);
 		}
 		SCTP_INP_RUNLOCK(inp);
 	} else {
@@ -916,7 +919,7 @@ sctp6_connect(struct socket *so, struct sockaddr *addr, struct thread *p)
 		/* Set the connected flag so we can queue data */
 		soisconnecting(so);
 	}
-	stcb->asoc.state = SCTP_STATE_COOKIE_WAIT;
+	SCTP_SET_STATE(stcb, SCTP_STATE_COOKIE_WAIT);
 	(void)SCTP_GETTIME_TIMEVAL(&stcb->asoc.time_entered);
 
 	/* initialize authentication parameters for the assoc */
@@ -1103,6 +1106,7 @@ sctp6_in6getaddr(struct socket *so, struct sockaddr **nam)
 		SCTP_LTRACE_ERR_RET(NULL, NULL, NULL, SCTP_FROM_SCTP6_USRREQ, EINVAL);
 		return (EINVAL);
 	}
+
 	/* allow v6 addresses precedence */
 	error = sctp6_getaddr(so, nam);
 #ifdef INET
@@ -1138,6 +1142,7 @@ sctp6_getpeeraddr(struct socket *so, struct sockaddr **nam)
 		SCTP_LTRACE_ERR_RET(NULL, NULL, NULL, SCTP_FROM_SCTP6_USRREQ, EINVAL);
 		return (EINVAL);
 	}
+
 	/* allow v6 addresses precedence */
 	error = sctp6_peeraddr(so, nam);
 #ifdef INET

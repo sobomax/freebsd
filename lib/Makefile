@@ -24,6 +24,7 @@ SUBDIR_BOOTSTRAP= \
 
 SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	.WAIT \
+	geom \
 	libalias \
 	libarchive \
 	libauditd \
@@ -35,6 +36,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libcalendar \
 	libcam \
 	libcapsicum \
+	libcasper \
 	libcompat \
 	libcrypt \
 	libdevctl \
@@ -43,6 +45,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	${_libdl} \
 	libdwarf \
 	libedit \
+	libelftc \
 	libevent \
 	libexecinfo \
 	libexpat \
@@ -64,10 +67,12 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libopenbsd \
 	libopie \
 	libpam \
+	libpathconv \
 	libpcap \
 	libpjdlog \
 	${_libproc} \
 	libprocstat \
+	libregex \
 	librpcsvc \
 	librss \
 	librt \
@@ -75,7 +80,6 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 	libsbuf \
 	libsmb \
 	libsqlite3 \
-	libstand \
 	libstdbuf \
 	libstdthreads \
 	libsysdecode \
@@ -97,6 +101,7 @@ SUBDIR=	${SUBDIR_BOOTSTRAP} \
 # Inter-library dependencies.  When the makefile for a library contains LDADD
 # libraries, those libraries should be listed as build order dependencies here.
 
+SUBDIR_DEPEND_geom=	libufs
 SUBDIR_DEPEND_libarchive= libz libbz2 libexpat liblzma libmd
 SUBDIR_DEPEND_libauditdm= libbsm
 SUBDIR_DEPEND_libbsnmp= ${_libnetgraph}
@@ -121,6 +126,9 @@ SUBDIR_DEPEND_libtacplus= libmd
 SUBDIR_DEPEND_libulog= libmd
 SUBDIR_DEPEND_libunbound= ${_libldns}
 SUBDIR_DEPEND_liblzma= ${_libthr}
+.if ${MK_OFED} != "no"
+SUBDIR_DEPEND_libpcap= ofed
+.endif
 
 # NB: keep these sorted by MK_* knobs
 
@@ -128,7 +136,6 @@ SUBDIR.${MK_ATM}+=	libngatm
 SUBDIR.${MK_BLACKLIST}+=libblacklist
 SUBDIR.${MK_BLUETOOTH}+=libbluetooth libsdp
 SUBDIR.${MK_BSNMP}+=	libbsnmp
-SUBDIR.${MK_CASPER}+=	libcasper
 
 .if !defined(COMPAT_32BIT) && !defined(COMPAT_SOFTFP)
 SUBDIR.${MK_CLANG}+=	clang
@@ -136,7 +143,7 @@ SUBDIR.${MK_CLANG}+=	clang
 
 SUBDIR.${MK_CUSE}+= 	libcuse
 SUBDIR.${MK_CXX}+=	libdevdctl
-SUBDIR.${MK_TOOLCHAIN}+=libelftc libpe
+SUBDIR.${MK_TOOLCHAIN}+=libpe
 SUBDIR.${MK_DIALOG}+=	libdpv
 SUBDIR.${MK_FILE}+=	libmagic
 SUBDIR.${MK_GPIO}+=	libgpio
@@ -150,17 +157,15 @@ SUBDIR.${MK_LDNS}+=	libldns
 # built for certain architectures.
 .if ${MK_CLANG} != "no" && ${COMPILER_TYPE} == "clang" && \
     (${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64" || \
-    (${MACHINE_CPUARCH} == "arm" && ${MACHINE_ARCH} != "armeb") || \
-    (${MACHINE_CPUARCH} == "i386"))
+    ${MACHINE_CPUARCH} == "arm" || ${MACHINE_CPUARCH} == "i386")
 _libclang_rt=	libclang_rt
 .endif
 
 .if ${MK_LIBCPLUSPLUS} != "no"
 _libcxxrt=	libcxxrt
 _libcplusplus=	libc++
-.if ${MACHINE_CPUARCH} != "arm" && ${MACHINE_CPUARCH} != "mips"
 _libcplusplus+=	libc++experimental
-.endif
+_libcplusplus+=	libc++fs
 .endif
 
 SUBDIR.${MK_EFI}+=	libefivar
@@ -175,7 +180,12 @@ SUBDIR.${MK_NIS}+=	libypclnt
 _libvgl=	libvgl
 .endif
 
+.if ${MACHINE_CPUARCH} == "aarch64"
+SUBDIR.${MK_PMC}+=	libopencsd
+.endif
+
 .if ${MACHINE_CPUARCH} == "amd64"
+SUBDIR.${MK_PMC}+=	libipt
 SUBDIR.${MK_BHYVE}+=	libvmmapi
 .endif
 
@@ -189,7 +199,7 @@ _libdl=		libdl
 .endif
 
 SUBDIR.${MK_OPENSSL}+=	libmp
-SUBDIR.${MK_PMC}+=	libpmc
+SUBDIR.${MK_PMC}+=	libpmc libpmcstat
 SUBDIR.${MK_RADIUS_SUPPORT}+=	libradius
 SUBDIR.${MK_SENDMAIL}+=	libmilter libsm libsmdb libsmutil
 SUBDIR.${MK_TELNET}+=	libtelnet
@@ -197,6 +207,8 @@ SUBDIR.${MK_TESTS_SUPPORT}+=	atf
 SUBDIR.${MK_TESTS}+=	tests
 SUBDIR.${MK_UNBOUND}+=	libunbound
 SUBDIR.${MK_USB}+=	libusbhid libusb
+SUBDIR.${MK_OFED}+=	ofed
+SUBDIR.${MK_ZFS}+=	libbe
 
 .if !make(install)
 SUBDIR_PARALLEL=

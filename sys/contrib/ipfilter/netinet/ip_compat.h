@@ -146,7 +146,6 @@ struct  ether_addr {
 #  define	COPYIN(a,b,c)	copyin((caddr_t)(a), (caddr_t)(b), (c))
 #  define	COPYOUT(a,b,c)	copyout((caddr_t)(a), (caddr_t)(b), (c))
 
-#   define NETBSD_PF
 # else
 #  include <inttypes.h>
 # endif /* _KERNEL */
@@ -227,7 +226,7 @@ struct route;
 struct mbuf;
 struct ifnet {
 	char			if_xname[IFNAMSIZ];
-	TAILQ_HEAD(, ifaddr)	if_addrlist;
+	STAILQ_HEAD(, ifaddr)	if_addrlist;
 	int	(*if_output)(struct ifnet *, struct mbuf *,
 	    const struct sockaddr *, struct route *);
 };
@@ -530,16 +529,16 @@ MALLOC_DECLARE(M_IPFILTER);
 #   endif /* M_PFIL */
 #  endif /* IPFILTER_M_IPFILTER */
 #  if !defined(KMALLOC)
-#   define	KMALLOC(a, b)	MALLOC((a), b, sizeof(*(a)), _M_IPF, M_NOWAIT)
+#   define	KMALLOC(a, b)		(a) = (b)malloc(sizeof(*(a)), _M_IPF, M_NOWAIT)
 #  endif
 #  if !defined(KMALLOCS)
-#   define	KMALLOCS(a, b, c)	MALLOC((a), b, (c), _M_IPF, M_NOWAIT)
+#   define	KMALLOCS(a, b, c)	(a) = (b)malloc((c), _M_IPF, M_NOWAIT)
 #  endif
 #  if !defined(KFREE)
-#   define	KFREE(x)	FREE((x), _M_IPF)
+#   define	KFREE(x)	free((x), _M_IPF)
 #  endif
 #   if !defined(KFREES)
-#  define	KFREES(x,s)	FREE((x), _M_IPF)
+#  define	KFREES(x,s)	free((x), _M_IPF)
 #  endif
 #  define	UIOMOVE(a,b,c,d)	uiomove((caddr_t)a,b,d)
 #  define	SLEEP(id, n)	tsleep((id), PPAUSE|PCATCH, n, 0)
@@ -757,16 +756,6 @@ typedef	struct	tcpiphdr	tcpiphdr_t;
 # define	TCP_OFF_A(x,y)	(x)->th_off = (y)
 #endif
 #define	IPMINLEN(i, h)	((i)->ip_len >= (IP_HL(i) * 4 + sizeof(struct h)))
-
-
-/*
- * XXX - This is one of those *awful* hacks which nobody likes
- */
-#ifdef	ultrix
-#define	A_A
-#else
-#define	A_A	&
-#endif
 
 #define	TCPF_ALL	(TH_FIN|TH_SYN|TH_RST|TH_PUSH|TH_ACK|TH_URG|\
 			 TH_ECN|TH_CWR)
@@ -1411,10 +1400,6 @@ typedef	struct	tcpiphdr	tcpiphdr_t;
 #undef	ICMP_MAXTYPE
 #define	ICMP_MAXTYPE		18
 
-#ifndef	IFNAMSIZ
-#define	IFNAMSIZ		16
-#endif
-
 #ifndef	LOG_FTP
 # define	LOG_FTP		(11<<3)
 #endif
@@ -1461,10 +1446,6 @@ typedef	struct	tcpiphdr	tcpiphdr_t;
 # define	DPRINT(x)	printf x
 #else
 # define	DPRINT(x)
-#endif
-
-#ifndef	AF_INET6
-# define	AF_INET6	26
 #endif
 
 #ifdef DTRACE_PROBE

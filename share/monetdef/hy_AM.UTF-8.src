@@ -25,19 +25,19 @@ AMD
 -
 #
 # int_frac_digits
-0
+2
 #
 # frac_digits
-0
+2
 #
 # p_cs_precedes
-1
+0
 #
 # p_sep_by_space
 1
 #
 # n_cs_precedes
-1
+0
 #
 # n_sep_by_space
 1

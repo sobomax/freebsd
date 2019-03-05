@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1999 Kazutaka YOKOTA <yokota@zodiac.mech.utsunomiya-u.ac.jp>
  * All rights reserved.
  *
@@ -107,11 +109,11 @@ smdev_evdev_write(int x, int y, int z, int buttons)
 		}
 		break;
 	case EVDEV_SYSMOUSE_T_AXIS_UMS:
-		/* XXX: Edge triggering should be used here */
-		if (buttons & (1 << 5))
+		if (buttons & (1 << 6))
 			evdev_push_rel(sysmouse_evdev, REL_HWHEEL, 1);
-		else if (buttons & (1 << 6))
+		else if (buttons & (1 << 5))
 			evdev_push_rel(sysmouse_evdev, REL_HWHEEL, -1);
+		buttons &= ~((1 << 5)|(1 << 6));
 		/* PASSTHROUGH */
 	case EVDEV_SYSMOUSE_T_AXIS_NONE:
 	default:
@@ -199,12 +201,6 @@ smdev_ioctl(struct tty *tp, u_long cmd, caddr_t data, struct thread *td)
 		mouse_status.dy = 0;
 		mouse_status.dz = 0;
 		return 0;
-
-#ifdef notyet
-	case MOUSE_GETVARS:	/* get internal mouse variables */
-	case MOUSE_SETVARS:	/* set internal mouse variables */
-		return ENODEV;
-#endif
 
 	case MOUSE_READSTATE:	/* read status from the device */
 	case MOUSE_READDATA:	/* read data from the device */

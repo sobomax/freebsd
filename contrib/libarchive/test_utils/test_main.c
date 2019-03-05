@@ -2115,7 +2115,7 @@ void assertVersion(const char *prog, const char *base)
 	int r;
 	char *p, *q;
 	size_t s;
-	unsigned int prog_len = strlen(base);
+	size_t prog_len = strlen(base);
 
 	r = systemf("%s --version >version.stdout 2>version.stderr", prog);
 	if (r != 0)
@@ -2166,7 +2166,7 @@ void assertVersion(const char *prog, const char *base)
 
 	/* Skip arbitrary third-party version numbers. */
 	while (s > 0 && (*q == ' ' || *q == '-' || *q == '/' || *q == '.' ||
-	    isalnum(*q))) {
+	    isalnum((unsigned char)*q))) {
 		++q;
 		--s;
 	}
@@ -2313,6 +2313,21 @@ canLz4(void)
 	if (!tested) {
 		tested = 1;
 		if (systemf("lz4 -V %s", redirectArgs) == 0)
+			value = 1;
+	}
+	return (value);
+}
+
+/*
+ * Can this platform run the zstd program?
+ */
+int
+canZstd(void)
+{
+	static int tested = 0, value = 0;
+	if (!tested) {
+		tested = 1;
+		if (systemf("zstd -V %s", redirectArgs) == 0)
 			value = 1;
 	}
 	return (value);
@@ -2575,10 +2590,8 @@ sunacl_get(int cmd, int *aclcnt, int fd, const char *path)
 					cnt = facl(fd, cmd, cnt, aclp);
 			}
 		} else {
-			if (aclp != NULL) {
-				free(aclp);
-				aclp = NULL;
-			}
+			free(aclp);
+			aclp = NULL;
 			break;
 		}
 	}
@@ -3245,7 +3258,11 @@ test_summarize(int failed, int skips_num)
 static int
 test_run(int i, const char *tmpdir)
 {
+#ifdef PATH_MAX
+	char workdir[PATH_MAX];
+#else
 	char workdir[1024];
+#endif
 	char logfilename[64];
 	int failures_before = failures;
 	int skips_before = skips;
@@ -3494,8 +3511,13 @@ main(int argc, char **argv)
 	const char *progname;
 	char **saved_argv;
 	const char *tmp, *option_arg, *p;
-	char tmpdir[256], *pwd, *testprogdir, *tmp2 = NULL, *vlevel = NULL;
-	char tmpdir_timestamp[256];
+#ifdef PATH_MAX
+	char tmpdir[PATH_MAX];
+#else
+	char tmpdir[256];
+#endif
+	char *pwd, *testprogdir, *tmp2 = NULL, *vlevel = NULL;
+	char tmpdir_timestamp[32];
 
 	(void)argc; /* UNUSED */
 
@@ -3719,8 +3741,15 @@ main(int argc, char **argv)
 		strftime(tmpdir_timestamp, sizeof(tmpdir_timestamp),
 		    "%Y-%m-%dT%H.%M.%S",
 		    localtime(&now));
-		sprintf(tmpdir, "%s/%s.%s-%03d", tmp, progname,
-		    tmpdir_timestamp, i);
+		if ((strlen(tmp) + 1 + strlen(progname) + 1 +
+		    strlen(tmpdir_timestamp) + 1 + 3) >
+		    (sizeof(tmpdir) / sizeof(char))) {
+			fprintf(stderr,
+			    "ERROR: Temp directory pathname too long\n");
+			exit(1);
+		}
+		snprintf(tmpdir, sizeof(tmpdir), "%s/%s.%s-%03d", tmp,
+		    progname, tmpdir_timestamp, i);
 		if (assertMakeDir(tmpdir,0755))
 			break;
 		if (i >= 999) {

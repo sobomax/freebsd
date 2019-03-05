@@ -1,6 +1,8 @@
 /*	$NetBSD: tmpfs_subr.c,v 1.35 2007/07/09 21:10:50 ad Exp $	*/
 
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-NetBSD
+ *
  * Copyright (c) 2005 The NetBSD Foundation, Inc.
  * All rights reserved.
  *
@@ -37,15 +39,18 @@
 __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
+#include <sys/systm.h>
+#include <sys/dirent.h>
 #include <sys/fnv_hash.h>
 #include <sys/lock.h>
+#include <sys/limits.h>
+#include <sys/mount.h>
 #include <sys/namei.h>
 #include <sys/priv.h>
 #include <sys/proc.h>
 #include <sys/random.h>
 #include <sys/rwlock.h>
 #include <sys/stat.h>
-#include <sys/systm.h>
 #include <sys/sysctl.h>
 #include <sys/vnode.h>
 #include <sys/vmmeter.h>
@@ -57,6 +62,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/vm_pageout.h>
 #include <vm/vm_pager.h>
 #include <vm/vm_extern.h>
+#include <vm/swap_pager.h>
 
 #include <fs/tmpfs/tmpfs.h>
 #include <fs/tmpfs/tmpfs_fifoops.h>
@@ -100,7 +106,7 @@ tmpfs_mem_avail(void)
 {
 	vm_ooffset_t avail;
 
-	avail = swap_pager_avail + vm_cnt.v_free_count - tmpfs_pages_reserved;
+	avail = swap_pager_avail + vm_free_count() - tmpfs_pages_reserved;
 	if (__predict_false(avail < 0))
 		avail = 0;
 	return (avail);
@@ -224,7 +230,7 @@ tmpfs_alloc_node(struct mount *mp, struct tmpfs_mount *tmp, enum vtype type,
 	nnode->tn_uid = uid;
 	nnode->tn_gid = gid;
 	nnode->tn_mode = mode;
-	nnode->tn_id = alloc_unr(tmp->tm_ino_unr);
+	nnode->tn_id = alloc_unr64(&tmp->tm_ino_unr);
 	nnode->tn_refcount = 1;
 
 	/* Type-specific initialization. */
@@ -350,7 +356,8 @@ tmpfs_free_node_locked(struct tmpfs_mount *tmp, struct tmpfs_node *node,
 	case VREG:
 		uobj = node->tn_reg.tn_aobj;
 		if (uobj != NULL) {
-			atomic_subtract_long(&tmp->tm_pages_used, uobj->size);
+			if (uobj->size != 0)
+				atomic_subtract_long(&tmp->tm_pages_used, uobj->size);
 			KASSERT((uobj->flags & OBJ_TMPFS) == 0,
 			    ("leaked OBJ_TMPFS node %p vm_obj %p", node, uobj));
 			vm_object_deallocate(uobj);
@@ -361,7 +368,6 @@ tmpfs_free_node_locked(struct tmpfs_mount *tmp, struct tmpfs_node *node,
 		panic("tmpfs_free_node: type %p %d", node, (int)node->tn_type);
 	}
 
-	free_unr(tmp->tm_ino_unr, node->tn_id);
 	uma_zfree(tmp->tm_node_pool, node);
 	TMPFS_LOCK(tmp);
 	tmpfs_free_tmp(tmp);
@@ -726,8 +732,8 @@ tmpfs_alloc_file(struct vnode *dvp, struct vnode **vpp, struct vattr *vap,
 	if (vap->va_type == VDIR) {
 		/* Ensure that we do not overflow the maximum number of links
 		 * imposed by the system. */
-		MPASS(dnode->tn_links <= LINK_MAX);
-		if (dnode->tn_links == LINK_MAX) {
+		MPASS(dnode->tn_links <= TMPFS_LINK_MAX);
+		if (dnode->tn_links == TMPFS_LINK_MAX) {
 			return (EMLINK);
 		}
 
@@ -1114,8 +1120,8 @@ tmpfs_dir_getdotdent(struct tmpfs_node *node, struct uio *uio)
 	dent.d_type = DT_DIR;
 	dent.d_namlen = 1;
 	dent.d_name[0] = '.';
-	dent.d_name[1] = '\0';
 	dent.d_reclen = GENERIC_DIRSIZ(&dent);
+	dirent_terminate(&dent);
 
 	if (dent.d_reclen > uio->uio_resid)
 		error = EJUSTRETURN;
@@ -1158,8 +1164,8 @@ tmpfs_dir_getdotdotdent(struct tmpfs_node *node, struct uio *uio)
 	dent.d_namlen = 2;
 	dent.d_name[0] = '.';
 	dent.d_name[1] = '.';
-	dent.d_name[2] = '\0';
 	dent.d_reclen = GENERIC_DIRSIZ(&dent);
+	dirent_terminate(&dent);
 
 	if (dent.d_reclen > uio->uio_resid)
 		error = EJUSTRETURN;
@@ -1279,8 +1285,8 @@ tmpfs_dir_getdents(struct tmpfs_node *node, struct uio *uio, int maxcookies,
 		d.d_namlen = de->td_namelen;
 		MPASS(de->td_namelen < sizeof(d.d_name));
 		(void)memcpy(d.d_name, de->ud.td_name, de->td_namelen);
-		d.d_name[de->td_namelen] = '\0';
 		d.d_reclen = GENERIC_DIRSIZ(&d);
+		dirent_terminate(&d);
 
 		/* Stop reading if the directory entry we are treating is
 		 * bigger than the amount of data that can be returned. */
@@ -1375,6 +1381,12 @@ tmpfs_reg_resize(struct vnode *vp, off_t newsize, boolean_t ignerr)
 	oldpages = OFF_TO_IDX(oldsize + PAGE_MASK);
 	MPASS(oldpages == uobj->size);
 	newpages = OFF_TO_IDX(newsize + PAGE_MASK);
+
+	if (__predict_true(newpages == oldpages && newsize >= oldsize)) {
+		node->tn_size = newsize;
+		return (0);
+	}
+
 	if (newpages > oldpages &&
 	    tmpfs_pages_check_avail(tmp, newpages - oldpages) == 0)
 		return (ENOSPC);
@@ -1394,13 +1406,10 @@ retry:
 					goto retry;
 				MPASS(m->valid == VM_PAGE_BITS_ALL);
 			} else if (vm_pager_has_page(uobj, idx, NULL, NULL)) {
-				m = vm_page_alloc(uobj, idx, VM_ALLOC_NORMAL);
-				if (m == NULL) {
-					VM_OBJECT_WUNLOCK(uobj);
-					VM_WAIT;
-					VM_OBJECT_WLOCK(uobj);
+				m = vm_page_alloc(uobj, idx, VM_ALLOC_NORMAL |
+				    VM_ALLOC_WAITFAIL);
+				if (m == NULL)
 					goto retry;
-				}
 				rv = vm_pager_get_pages(uobj, &m, 1, NULL,
 				    NULL);
 				vm_page_lock(m);
@@ -1807,7 +1816,7 @@ tmpfs_itimes(struct vnode *vp, const struct timespec *acc,
 	TMPFS_NODE_UNLOCK(node);
 
 	/* XXX: FIX? The entropy here is desirable, but the harvesting may be expensive */
-	random_harvest_queue(node, sizeof(*node), 1, RANDOM_FS_ATIME);
+	random_harvest_queue(node, sizeof(*node), RANDOM_FS_ATIME);
 }
 
 void

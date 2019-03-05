@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause OR GPL-2.0
+ *
  * Copyright (c) 2004, 2005 Topspin Communications.  All rights reserved.
  * Copyright (c) 2005 Sun Microsystems, Inc. All rights reserved.
  * Copyright (c) 2005 Mellanox Technologies. All rights reserved.
@@ -32,6 +34,9 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
 
 #include "ipoib.h"
 
@@ -256,7 +261,7 @@ ipoib_ib_handle_rx_wc(struct ipoib_dev_priv *priv, struct ib_wc *wc)
 	eh = mtod(mb, struct ipoib_header *);
 	bzero(eh->hwaddr, 4);	/* Zero the queue pair, only dgid is in grh */
 
-	if (test_bit(IPOIB_FLAG_CSUM, &priv->flags) && likely(wc->csum_ok))
+	if (test_bit(IPOIB_FLAG_CSUM, &priv->flags) && likely(wc->wc_flags & IB_WC_IP_CSUM_OK))
 		mb->m_pkthdr.csum_flags = CSUM_IP_CHECKED | CSUM_IP_VALID;
 
 	dev->if_input(dev, mb);
@@ -451,21 +456,20 @@ post_send(struct ipoib_dev_priv *priv, unsigned int wr_id,
 		priv->tx_sge[i].addr         = mapping[i];
 		priv->tx_sge[i].length       = m->m_len;
 	}
-	priv->tx_wr.num_sge	     = i;
-	priv->tx_wr.wr_id 	     = wr_id;
-	priv->tx_wr.wr.ud.remote_qpn = qpn;
-	priv->tx_wr.wr.ud.ah 	     = address;
-
+	priv->tx_wr.wr.num_sge	= i;
+	priv->tx_wr.wr.wr_id	= wr_id;
+	priv->tx_wr.remote_qpn	= qpn;
+	priv->tx_wr.ah		= address;
 
 	if (head) {
-		priv->tx_wr.wr.ud.mss	 = 0; /* XXX mb_shinfo(mb)->gso_size; */
-		priv->tx_wr.wr.ud.header = head;
-		priv->tx_wr.wr.ud.hlen	 = hlen;
-		priv->tx_wr.opcode	 = IB_WR_LSO;
+		priv->tx_wr.mss		= 0; /* XXX mb_shinfo(mb)->gso_size; */
+		priv->tx_wr.header	= head;
+		priv->tx_wr.hlen	= hlen;
+		priv->tx_wr.wr.opcode	= IB_WR_LSO;
 	} else
-		priv->tx_wr.opcode	 = IB_WR_SEND;
+		priv->tx_wr.wr.opcode	= IB_WR_SEND;
 
-	return ib_post_send(priv->qp, &priv->tx_wr, &bad_wr);
+	return ib_post_send(priv->qp, &priv->tx_wr.wr, &bad_wr);
 }
 
 void
@@ -524,9 +528,9 @@ ipoib_send(struct ipoib_dev_priv *priv, struct mbuf *mb,
 	}
 
 	if (mb->m_pkthdr.csum_flags & (CSUM_IP|CSUM_TCP|CSUM_UDP))
-		priv->tx_wr.send_flags |= IB_SEND_IP_CSUM;
+		priv->tx_wr.wr.send_flags |= IB_SEND_IP_CSUM;
 	else
-		priv->tx_wr.send_flags &= ~IB_SEND_IP_CSUM;
+		priv->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
 
 	if (++priv->tx_outstanding == ipoib_sendq_size) {
 		ipoib_dbg(priv, "TX ring full, stopping kernel net queue\n");
@@ -638,6 +642,8 @@ int ipoib_ib_dev_open(struct ipoib_dev_priv *priv)
 	clear_bit(IPOIB_STOP_REAPER, &priv->flags);
 	queue_delayed_work(ipoib_workqueue, &priv->ah_reap_task, HZ);
 
+	set_bit(IPOIB_FLAG_INITIALIZED, &priv->flags);
+
 	return 0;
 }
 
@@ -704,6 +710,30 @@ static int recvs_pending(struct ipoib_dev_priv *priv)
 	return pending;
 }
 
+static void check_qp_movement_and_print(struct ipoib_dev_priv *priv,
+					struct ib_qp *qp,
+					enum ib_qp_state new_state)
+{
+	struct ib_qp_attr qp_attr;
+	struct ib_qp_init_attr query_init_attr;
+	int ret;
+
+	ret = ib_query_qp(qp, &qp_attr, IB_QP_STATE, &query_init_attr);
+	if (ret) {
+		ipoib_warn(priv, "%s: Failed to query QP (%d)\n", __func__, ret);
+		return;
+	}
+
+	/* print according to the new-state and the previous state */
+	if (new_state == IB_QPS_ERR && qp_attr.qp_state == IB_QPS_RESET) {
+		ipoib_dbg(priv, "Failed to modify QP %d->%d, acceptable\n",
+			  qp_attr.qp_state, new_state);
+	} else {
+		ipoib_warn(priv, "Failed to modify QP %d->%d\n",
+			   qp_attr.qp_state, new_state);
+	}
+}
+
 void ipoib_drain_cq(struct ipoib_dev_priv *priv)
 {
 	int i, n;
@@ -745,6 +775,8 @@ int ipoib_ib_dev_stop(struct ipoib_dev_priv *priv, int flush)
 	struct ipoib_tx_buf *tx_req;
 	int i;
 
+	clear_bit(IPOIB_FLAG_INITIALIZED, &priv->flags);
+
 	ipoib_cm_dev_stop(priv);
 
 	/*
@@ -753,7 +785,7 @@ int ipoib_ib_dev_stop(struct ipoib_dev_priv *priv, int flush)
 	 */
 	qp_attr.qp_state = IB_QPS_ERR;
 	if (ib_modify_qp(priv->qp, &qp_attr, IB_QP_STATE))
-		ipoib_warn(priv, "Failed to modify QP to ERROR state\n");
+		check_qp_movement_and_print(priv, priv->qp, IB_QPS_ERR);
 
 	/* Wait for all sends and receives to complete */
 	begin = jiffies;

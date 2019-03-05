@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (C) 1996
  *	David L. Nugent.  All rights reserved.
  *
@@ -46,6 +48,14 @@ enum _mode
         M_NUM
 };
 
+enum _passmode
+{
+	P_NO,
+	P_NONE,
+	P_RANDOM,
+	P_YES
+};
+
 enum _which
 {
         W_USER,
@@ -54,7 +64,7 @@ enum _which
 };
 
 #define	_DEF_DIRMODE	(S_IRWXU | S_IRWXG | S_IRWXO)
-#define _PATH_PW_CONF	"/etc/pw.conf"
+#define	_PW_CONF	"pw.conf"
 #define _UC_MAXLINE	1024
 #define _UC_MAXSHELLS	32
 

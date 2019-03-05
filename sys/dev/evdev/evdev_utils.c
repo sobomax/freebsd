@@ -32,13 +32,13 @@
 #include <sys/conf.h>
 #include <sys/kbio.h>
 #include <sys/kernel.h>
+#include <sys/lock.h>
 #include <sys/malloc.h>
+#include <sys/mutex.h>
 #include <sys/systm.h>
 
 #include <dev/evdev/evdev.h>
 #include <dev/evdev/input.h>
-
-#include <dev/kbd/kbdreg.h>
 
 #define	NONE	KEY_RESERVED
 
@@ -62,7 +62,7 @@ static uint16_t evdev_usb_scancodes[256] = {
 	KEY_PAUSE,	KEY_INSERT,	KEY_HOME,	KEY_PAGEUP,
 	KEY_DELETE,	KEY_END,	KEY_PAGEDOWN,	KEY_RIGHT,
 	KEY_LEFT,	KEY_DOWN,	KEY_UP,		KEY_NUMLOCK,
-	KEY_SLASH,	KEY_KPASTERISK,	KEY_KPMINUS,	KEY_KPPLUS,
+	KEY_KPSLASH,	KEY_KPASTERISK,	KEY_KPMINUS,	KEY_KPPLUS,
 	KEY_KPENTER,	KEY_KP1,	KEY_KP2,	KEY_KP3,
 	KEY_KP4,	KEY_KP5,	KEY_KP6,	KEY_KP7,
 	/* 0x60 - 0x7f */
@@ -129,7 +129,7 @@ static uint16_t evdev_at_set1_scancodes[] = {
 	KEY_APOSTROPHE,	KEY_GRAVE,	KEY_LEFTSHIFT,	KEY_BACKSLASH,
 	KEY_Z,		KEY_X,		KEY_C,		KEY_V,
 	KEY_B,		KEY_N,		KEY_M,		KEY_COMMA,
-	KEY_DOT,	KEY_SLASH,	KEY_RIGHTSHIFT,	NONE,
+	KEY_DOT,	KEY_SLASH,	KEY_RIGHTSHIFT,	KEY_KPASTERISK,
 	KEY_LEFTALT,	KEY_SPACE,	KEY_CAPSLOCK,	KEY_F1,
 	KEY_F2,		KEY_F3,		KEY_F4,		KEY_F5,
 	/* 0x40 - 0x5f */
@@ -138,7 +138,7 @@ static uint16_t evdev_at_set1_scancodes[] = {
 	KEY_KP8,	KEY_KP9,	KEY_KPMINUS,	KEY_KP4,
 	KEY_KP5,	KEY_KP6,	KEY_KPPLUS,	KEY_KP1,
 	KEY_KP2,	KEY_KP3,	KEY_KP0,	KEY_KPDOT,
-	NONE,		NONE,		NONE,		KEY_F11,
+	NONE,		NONE,		KEY_102ND,	KEY_F11,
 	KEY_F12,	NONE,		NONE,		NONE,
 	NONE,		NONE,		NONE,		NONE,
 	/* 0x60 - 0x7f */
@@ -165,7 +165,7 @@ static uint16_t evdev_at_set1_scancodes[] = {
 	NONE,		NONE,		NONE,		NONE,
 	NONE,		NONE,		KEY_VOLUMEDOWN,	NONE,
 	KEY_VOLUMEUP,	NONE,		KEY_HOMEPAGE,	NONE,
-	NONE,		KEY_KPASTERISK,	NONE,		KEY_SYSRQ,
+	NONE,		KEY_KPSLASH,	NONE,		KEY_SYSRQ,
 	KEY_RIGHTALT,	NONE,		NONE,		NONE,
 	NONE,		NONE,		NONE,		NONE,
 	/* 0x40 - 0x5f. 0xE0 prefixed */
@@ -250,12 +250,15 @@ evdev_scancode2key(int *state, int scancode)
 		 */
 		*state = 0;
 		if ((scancode & 0x7f) == 0x1D)
-			*state = 0x1D;
+			*state = scancode;
 		return (NONE);
 		/* NOT REACHED */
 	case 0x1D:	/* pause / break */
+	case 0x9D:
+		if ((*state ^ scancode) & 0x80)
+			return (NONE);
 		*state = 0;
-		if (scancode != 0x45)
+		if ((scancode & 0x7f) != 0x45)
 			return (NONE);
 		keycode = KEY_PAUSE;
 		break;
@@ -296,37 +299,4 @@ evdev_push_repeats(struct evdev_dev *evdev, keyboard_t *kbd)
 
 	evdev_push_event(evdev, EV_REP, REP_DELAY, kbd->kb_delay1);
 	evdev_push_event(evdev, EV_REP, REP_PERIOD, kbd->kb_delay2);
-}
-
-void
-evdev_ev_kbd_event(struct evdev_dev *evdev, void *softc, uint16_t type,
-    uint16_t code, int32_t value)
-{
-	keyboard_t *kbd = (keyboard_t *)softc;
-	int delay[2], leds, oleds;
-	size_t i;
-
-	if (type == EV_LED) {
-		leds = oleds = KBD_LED_VAL(kbd);
-		for (i = 0; i < nitems(evdev_led_codes); i++) {
-			if (evdev_led_codes[i] == code) {
-				if (value)
-					leds |= 1 << i;
-				else
-					leds &= ~(1 << i);
-				if (leds != oleds)
-					kbdd_ioctl(kbd, KDSETLED,
-					    (caddr_t)&leds);
-				break;
-			}
-		}
-	} else if (type == EV_REP && code == REP_DELAY) {
-		delay[0] = value;
-		delay[1] = kbd->kb_delay2;
-		kbdd_ioctl(kbd, KDSETREPEAT, (caddr_t)delay);
-	} else if (type == EV_REP && code == REP_PERIOD) {
-		delay[0] = kbd->kb_delay1;
-		delay[1] = value;
-		kbdd_ioctl(kbd, KDSETREPEAT, (caddr_t)delay);
-	}
 }

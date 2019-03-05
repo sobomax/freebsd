@@ -145,12 +145,11 @@ static device_method_t ahci_methods[] = {
 	DEVMETHOD_END
 };
 
-static devclass_t ahci_devclass;
 static driver_t ahci_driver = {
 	"ahci",
 	ahci_methods,
 	sizeof(struct ahci_controller)
 };
 
-DRIVER_MODULE(ahci, simplebus, ahci_driver, ahci_devclass, NULL, NULL);
-DRIVER_MODULE(ahci, ofwbus, ahci_driver, ahci_devclass, NULL, NULL);
+DRIVER_MODULE(ahci_mv, simplebus, ahci_driver, ahci_devclass, NULL, NULL);
+DRIVER_MODULE(ahci_mv, ofwbus, ahci_driver, ahci_devclass, NULL, NULL);

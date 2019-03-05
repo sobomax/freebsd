@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -158,13 +158,6 @@
         ACPI_MODULE_NAME    ("aslparseop")
 
 
-/* Local prototypes */
-
-static ACPI_PARSE_OBJECT *
-TrGetOpFromCache (
-    void);
-
-
 /*******************************************************************************
  *
  * FUNCTION:    TrCreateOp
@@ -212,7 +205,7 @@ TrCreateOp (
     {
     case PARSEOP_ASL_CODE:
 
-        Gbl_ParseTreeRoot = Op;
+        AslGbl_ParseTreeRoot = Op;
         Op->Asl.ParseOpcode = PARSEOP_DEFAULT_ARG;
         DbgPrint (ASL_PARSE_OUTPUT, "ASLCODE (Tree Completed)->");
         break;
@@ -276,7 +269,7 @@ TrCreateOp (
              * FirstChild place it in the parent. This also means that
              * legitimate comments for the child gets put to the parent.
              */
-            if (Gbl_CaptureComments &&
+            if (AcpiGbl_CaptureComments &&
                 ((ParseOpcode == PARSEOP_CONNECTION) ||
                  (ParseOpcode == PARSEOP_EXTERNAL) ||
                  (ParseOpcode == PARSEOP_OFFSET) ||
@@ -315,7 +308,7 @@ TrCreateOp (
 
         /* Get the comment from last child in the resource template call */
 
-        if (Gbl_CaptureComments &&
+        if (AcpiGbl_CaptureComments &&
             (Op->Asl.ParseOpcode == PARSEOP_RESOURCETEMPLATE))
         {
             CvDbgPrint ("Transferred current comment list to this op.\n");
@@ -490,7 +483,7 @@ TrCreateTargetOp (
         return (NULL);
     }
 
-    Op = TrGetOpFromCache ();
+    Op = UtParseOpCacheCalloc ();
 
     /* Copy the pertinent values (omit link pointer fields) */
 
@@ -788,22 +781,22 @@ TrAllocateOp (
     ACPI_PARSE_OBJECT       *LatestOp;
 
 
-    Op = TrGetOpFromCache ();
+    Op = UtParseOpCacheCalloc ();
 
     Op->Asl.ParseOpcode       = (UINT16) ParseOpcode;
-    Op->Asl.Filename          = Gbl_Files[ASL_FILE_INPUT].Filename;
-    Op->Asl.LineNumber        = Gbl_CurrentLineNumber;
-    Op->Asl.LogicalLineNumber = Gbl_LogicalLineNumber;
-    Op->Asl.LogicalByteOffset = Gbl_CurrentLineOffset;
-    Op->Asl.Column            = Gbl_CurrentColumn;
+    Op->Asl.Filename          = AslGbl_Files[ASL_FILE_INPUT].Filename;
+    Op->Asl.LineNumber        = AslGbl_CurrentLineNumber;
+    Op->Asl.LogicalLineNumber = AslGbl_LogicalLineNumber;
+    Op->Asl.LogicalByteOffset = AslGbl_CurrentLineOffset;
+    Op->Asl.Column            = AslGbl_CurrentColumn;
 
     UtSetParseOpName (Op);
 
     /* The following is for capturing comments */
 
-    if(Gbl_CaptureComments)
+    if (AcpiGbl_CaptureComments)
     {
-        LatestOp = Gbl_CommentState.LatestParseOp;
+        LatestOp = AslGbl_CommentState.LatestParseOp;
         Op->Asl.InlineComment     = NULL;
         Op->Asl.EndNodeComment    = NULL;
         Op->Asl.CommentList       = NULL;
@@ -820,9 +813,9 @@ TrAllocateOp (
         {
             CvDbgPrint ("latest op: %s\n", LatestOp->Asl.ParseOpName);
             Op->Asl.FileChanged = TRUE;
-            if (Gbl_IncludeFileStack)
+            if (AslGbl_IncludeFileStack)
             {
-                Op->Asl.ParentFilename = Gbl_IncludeFileStack->Filename;
+                Op->Asl.ParentFilename = AslGbl_IncludeFileStack->Filename;
             }
             else
             {
@@ -830,10 +823,10 @@ TrAllocateOp (
             }
         }
 
-        Gbl_CommentState.LatestParseOp = Op;
+        AslGbl_CommentState.LatestParseOp = Op;
         CvDbgPrint ("TrAllocateOp=Set latest parse op to this op.\n");
         CvDbgPrint ("           Op->Asl.ParseOpName = %s\n",
-            Gbl_CommentState.LatestParseOp->Asl.ParseOpName);
+            AslGbl_CommentState.LatestParseOp->Asl.ParseOpName);
         CvDbgPrint ("           Op->Asl.ParseOpcode = 0x%x\n", ParseOpcode);
 
         if (Op->Asl.FileChanged)
@@ -850,72 +843,28 @@ TrAllocateOp (
             (ParseOpcode != PARSEOP_DEFINITION_BLOCK))
         {
             CvDbgPrint ("Parsing paren/Brace op now!\n");
-            Gbl_CommentState.ParsingParenBraceNode = Op;
+            AslGbl_CommentState.ParsingParenBraceNode = Op;
         }
 
-        if (Gbl_CommentListHead)
+        if (AslGbl_CommentListHead)
         {
             CvDbgPrint ("Transferring...\n");
-            Op->Asl.CommentList = Gbl_CommentListHead;
-            Gbl_CommentListHead = NULL;
-            Gbl_CommentListTail = NULL;
+            Op->Asl.CommentList = AslGbl_CommentListHead;
+            AslGbl_CommentListHead = NULL;
+            AslGbl_CommentListTail = NULL;
             CvDbgPrint ("    Transferred current comment list to this op.\n");
             CvDbgPrint ("    %s\n", Op->Asl.CommentList->Comment);
         }
 
-        if (Gbl_InlineCommentBuffer)
+        if (AslGbl_InlineCommentBuffer)
         {
-            Op->Asl.InlineComment = Gbl_InlineCommentBuffer;
-            Gbl_InlineCommentBuffer = NULL;
+            Op->Asl.InlineComment = AslGbl_InlineCommentBuffer;
+            AslGbl_InlineCommentBuffer = NULL;
             CvDbgPrint ("Transferred current inline comment list to this op.\n");
         }
     }
 
     return (Op);
-}
-
-
-/*******************************************************************************
- *
- * FUNCTION:    TrGetOpFromCache
- *
- * PARAMETERS:  None
- *
- * RETURN:      New parse op. Aborts on allocation failure
- *
- * DESCRIPTION: Allocate a new parse op for the parse tree. Bypass the local
- *              dynamic memory manager for performance reasons (This has a
- *              major impact on the speed of the compiler.)
- *
- ******************************************************************************/
-
-static ACPI_PARSE_OBJECT *
-TrGetOpFromCache (
-    void)
-{
-    ASL_CACHE_INFO          *Cache;
-
-
-    if (Gbl_ParseOpCacheNext >= Gbl_ParseOpCacheLast)
-    {
-        /* Allocate a new buffer */
-
-        Cache = UtLocalCalloc (sizeof (Cache->Next) +
-            (sizeof (ACPI_PARSE_OBJECT) * ASL_PARSEOP_CACHE_SIZE));
-
-        /* Link new cache buffer to head of list */
-
-        Cache->Next = Gbl_ParseOpCacheList;
-        Gbl_ParseOpCacheList = Cache;
-
-        /* Setup cache management pointers */
-
-        Gbl_ParseOpCacheNext = ACPI_CAST_PTR (ACPI_PARSE_OBJECT, Cache->Buffer);
-        Gbl_ParseOpCacheLast = Gbl_ParseOpCacheNext + ASL_PARSEOP_CACHE_SIZE;
-    }
-
-    Gbl_ParseOpCount++;
-    return (Gbl_ParseOpCacheNext++);
 }
 
 
@@ -945,7 +894,7 @@ TrPrintOpFlags (
     {
         if (Flags & FlagBit)
         {
-            DbgPrint (OutputLevel, " %s", Gbl_OpFlagNames[i]);
+            DbgPrint (OutputLevel, " %s", AslGbl_OpFlagNames[i]);
         }
 
         FlagBit <<= 1;

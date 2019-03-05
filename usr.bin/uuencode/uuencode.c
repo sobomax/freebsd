@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1983, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -75,7 +77,7 @@ main(int argc, char *argv[])
 	struct stat sb;
 	int base64;
 	int ch;
-	char *outfile;
+	const char *outfile;
 
 	base64 = 0;
 	outfile = NULL;

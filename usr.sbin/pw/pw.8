@@ -24,7 +24,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd September 12, 2016
+.Dd February 8, 2019
 .Dt PW 8
 .Os
 .Sh NAME
@@ -611,6 +611,14 @@ that the account expires.
 A value of 0 suppresses automatic calculation of the expiry date.
 .It Fl p Ar days
 Set the default password expiration period in days.
+When
+.Fl D
+is used, the
+.Ar days
+argument is interpreted differently.
+It must be numeric and represents the number of days after creation
+that the account expires.
+A value of 0 suppresses automatic calculation of the expiry date.
 .It Fl g Ar group
 Set the default group for new users.
 If a blank group is specified using
@@ -970,6 +978,12 @@ pw useradd -n gsmith -c "Glurmo Smith" -s /bin/csh -m -w random
 Delete the gsmith user and their home directory, including contents.
 .Bd -literal -offset indent
 pw userdel -n gsmith -r
+.Ed
+.Pp
+Add the existing user jsmith to the wheel group,
+in addition to the other groups jsmith is already a member of.
+.Bd -literal -offset indent
+pw groupmod wheel -m jsmith
 .Ed
 .Sh EXIT STATUS
 The

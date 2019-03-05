@@ -120,7 +120,7 @@ struct XX_PortalInfo {
 	uint32_t	portal_ci_size[2][MAXCPU];
 	vm_offset_t	portal_ce_va[2];
 	vm_offset_t	portal_ci_va[2];
-	uint32_t	portal_intr[2][MAXCPU];
+	uintptr_t	portal_intr[2][MAXCPU];
 };
 
 static struct XX_PortalInfo XX_PInfo;
@@ -283,16 +283,8 @@ XX_RestoreAllIntr(uint32_t flags)
 	intr_restore(flags);
 }
 
-t_Error
-XX_Call(uint32_t qid, t_Error (* f)(t_Handle), t_Handle id, t_Handle appId, uint16_t flags )
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-	return (E_OK);
-}
-
 static bool
-XX_IsPortalIntr(int irq)
+XX_IsPortalIntr(uintptr_t irq)
 {
 	int cpu, type;
 	/* Check interrupt numbers of all available portals */
@@ -600,71 +592,6 @@ XX_UnlockIntrSpinlock(t_Handle h_Spinlock, uint32_t intrFlags)
 }
 
 uint32_t
-XX_CurrentTime(void)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-	return (0);
-}
-
-
-t_Handle
-XX_CreateTimer(void)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-	return (NULL);
-}
-
-void
-XX_FreeTimer(t_Handle h_Timer)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-}
-
-void
-XX_StartTimer(t_Handle h_Timer,
-                   uint32_t msecs,
-                   bool     periodic,
-                   void     (*f_TimerExpired)(t_Handle),
-                   t_Handle h_Arg)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-}
-
-uint32_t
-XX_GetExpirationTime(t_Handle h_Timer)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-	return (0);
-}
-
-void
-XX_StopTimer(t_Handle h_Timer)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-}
-
-void
-XX_ModTimer(t_Handle h_Timer, uint32_t msecs)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-}
-
-int
-XX_TimerIsActive(t_Handle h_Timer)
-{
-	/* Not referenced */
-	printf("NetCommSW: Unimplemented function %s() called!\n", __func__);
-	return (0);
-}
-
-uint32_t
 XX_Sleep(uint32_t msecs)
 {
 
@@ -774,10 +701,15 @@ XX_VirtToPhys(void *addr)
 		return (XX_PInfo.portal_ci_pa[QM_PORTAL][cpu] +
 		    (vm_offset_t)addr - XX_PInfo.portal_ci_va[QM_PORTAL]);
 
-	paddr = pmap_kextract((vm_offset_t)addr);
+	if (PMAP_HAS_DMAP && (vm_offset_t)addr >= DMAP_BASE_ADDRESS &&
+	    (vm_offset_t)addr <= DMAP_MAX_ADDRESS)
+		return (DMAP_TO_PHYS((vm_offset_t)addr));
+	else
+		paddr = pmap_kextract((vm_offset_t)addr);
+
 	if (paddr == 0)
 		printf("NetCommSW: "
-		    "Unable to translate virtual address 0x%08X!\n", addr);
+		    "Unable to translate virtual address %p!\n", addr);
 	else
 		pmap_track_page(kernel_pmap, (vm_offset_t)addr);
 
@@ -830,8 +762,11 @@ XX_PhysToVirt(physAddress_t addr)
 	if (pv != NULL)
 		return ((void *)(pv->pv_va + ((vm_offset_t)addr & PAGE_MASK)));
 
+	if (PMAP_HAS_DMAP)
+		return ((void *)(uintptr_t)PHYS_TO_DMAP(addr));
+
 	printf("NetCommSW: "
-	    "Unable to translate physical address 0x%08llX!\n", addr);
+	    "Unable to translate physical address 0x%09jx!\n", (uintmax_t)addr);
 
 	return (NULL);
 }

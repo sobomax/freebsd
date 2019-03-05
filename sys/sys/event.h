@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1999,2000,2001 Jonathan Lemon <jlemon@FreeBSD.org>
  * All rights reserved.
  *
@@ -47,6 +49,22 @@
 #define EVFILT_EMPTY		(-13)	/* empty send socket buf */
 #define EVFILT_SYSCOUNT		13
 
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+#define	EV_SET(kevp_, a, b, c, d, e, f) do {	\
+	*(kevp_) = (struct kevent){		\
+	    .ident = (a),			\
+	    .filter = (b),			\
+	    .flags = (c),			\
+	    .fflags = (d),			\
+	    .data = (e),			\
+	    .udata = (f),			\
+	    .ext = {0},				\
+	};					\
+} while(0)
+#else /* Pre-C99 or not STDC (e.g., C++) */
+/* The definition of the local variable kevp could possibly conflict
+ * with a user-defined value passed in parameters a-f.
+ */
 #define EV_SET(kevp_, a, b, c, d, e, f) do {	\
 	struct kevent *kevp = (kevp_);		\
 	(kevp)->ident = (a);			\
@@ -60,16 +78,58 @@
 	(kevp)->ext[2] = 0;			\
 	(kevp)->ext[3] = 0;			\
 } while(0)
+#endif
 
 struct kevent {
 	__uintptr_t	ident;		/* identifier for this event */
 	short		filter;		/* filter for event */
+	unsigned short	flags;		/* action flags for kqueue */
+	unsigned int	fflags;		/* filter flag value */
+	__int64_t	data;		/* filter data value */
+	void		*udata;		/* opaque user data identifier */
+	__uint64_t	ext[4];		/* extensions */
+};
+
+#if defined(_WANT_FREEBSD11_KEVENT)
+/* Older structure used in FreeBSD 11.x and older. */
+struct kevent_freebsd11 {
+	__uintptr_t	ident;		/* identifier for this event */
+	short		filter;		/* filter for event */
 	unsigned short	flags;
 	unsigned int	fflags;
-	__int64_t	data;
+	__intptr_t	data;
 	void		*udata;		/* opaque user data identifier */
-	__uint64_t	ext[4];
 };
+#endif
+
+#if defined(_WANT_KEVENT32) || (defined(_KERNEL) && defined(__LP64__))
+struct kevent32 {
+	uint32_t	ident;		/* identifier for this event */
+	short		filter;		/* filter for event */
+	u_short		flags;
+	u_int		fflags;
+#ifndef __amd64__
+	uint32_t	pad0;
+#endif
+	int32_t		data1, data2;
+	uint32_t	udata;		/* opaque user data identifier */
+#ifndef __amd64__
+	uint32_t	pad1;
+#endif
+	uint32_t	ext64[8];
+};
+
+#ifdef _WANT_FREEBSD11_KEVENT
+struct kevent32_freebsd11 {
+	u_int32_t	ident;		/* identifier for this event */
+	short		filter;		/* filter for event */
+	u_short		flags;
+	u_int		fflags;
+	int32_t		data;
+	u_int32_t	udata;		/* opaque user data identifier */
+};
+#endif
+#endif
 
 /* actions */
 #define EV_ADD		0x0001		/* add event to kq (implies enable) */
@@ -234,7 +294,6 @@ struct knote {
 #define KN_DETACHED	0x08			/* knote is detached */
 #define KN_MARKER	0x20			/* ignore this knote */
 #define KN_KQUEUE	0x40			/* this knote belongs to a kq */
-#define KN_HASKQLOCK	0x80			/* for _inevent */
 #define	KN_SCAN		0x100			/* flux set in kqueue_scan() */
 	int			kn_influx;
 	int			kn_sfflags;	/* saved filter flags */
@@ -289,7 +348,7 @@ void	knlist_cleardel(struct knlist *knl, struct thread *td,
 	knlist_cleardel((knl), (td), (islocked), 1)
 void	knote_fdclose(struct thread *p, int fd);
 int 	kqfd_register(int fd, struct kevent *kev, struct thread *p,
-	    int waitok);
+	    int mflag);
 int	kqueue_add_filteropts(int filt, struct filterops *filtops);
 int	kqueue_del_filteropts(int filt);
 

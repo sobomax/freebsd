@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -204,7 +204,7 @@ MpSaveGpioInfo (
 
     /* Mapfile option enabled? */
 
-    if (!Gbl_MapfileFlag)
+    if (!AslGbl_MapfileFlag)
     {
         return;
     }
@@ -255,7 +255,7 @@ MpSaveSerialInfo (
 
     /* Mapfile option enabled? */
 
-    if (!Gbl_MapfileFlag)
+    if (!AslGbl_MapfileFlag)
     {
         return;
     }
@@ -332,14 +332,14 @@ MpCreateGpioInfo (
      * sorted by both source device name and then the pin number. There is
      * one block per pin.
      */
-    Buffer = UtStringCacheCalloc (sizeof (ACPI_GPIO_INFO));
+    Buffer = UtLocalCacheCalloc (sizeof (ACPI_GPIO_INFO));
     Info = ACPI_CAST_PTR (ACPI_GPIO_INFO, Buffer);
 
-    NextGpio = Gbl_GpioList;
+    NextGpio = AslGbl_GpioList;
     PrevGpio = NULL;
-    if (!Gbl_GpioList)
+    if (!AslGbl_GpioList)
     {
-        Gbl_GpioList = Info;
+        AslGbl_GpioList = Info;
         Info->Next = NULL;
         return (Info);
     }
@@ -371,7 +371,7 @@ MpCreateGpioInfo (
     }
     else
     {
-        Gbl_GpioList = Info;
+        AslGbl_GpioList = Info;
     }
 
     Info->Next = NextGpio;
@@ -409,14 +409,14 @@ MpCreateSerialInfo (
      * Allocate a new info block and insert it into the global Serial list
      * sorted by both source device name and then the address.
      */
-    Buffer = UtStringCacheCalloc (sizeof (ACPI_SERIAL_INFO));
+    Buffer = UtLocalCacheCalloc (sizeof (ACPI_SERIAL_INFO));
     Info = ACPI_CAST_PTR (ACPI_SERIAL_INFO, Buffer);
 
-    NextSerial = Gbl_SerialList;
+    NextSerial = AslGbl_SerialList;
     PrevSerial = NULL;
-    if (!Gbl_SerialList)
+    if (!AslGbl_SerialList)
     {
-        Gbl_SerialList = Info;
+        AslGbl_SerialList = Info;
         Info->Next = NULL;
         return (Info);
     }
@@ -448,7 +448,7 @@ MpCreateSerialInfo (
     }
     else
     {
-        Gbl_SerialList = Info;
+        AslGbl_SerialList = Info;
     }
 
     Info->Next = NextSerial;

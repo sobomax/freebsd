@@ -29,8 +29,8 @@
 #
 
 # Media geometry, only relevant if bios doesn't understand LBA.
-[ -z "$NANO_SECTS" ] || NANO_SECTS=63
-[ -z "$NANO_HEADS" ] || NANO_HEADS=16
+[ -n "$NANO_SECTS" ] || NANO_SECTS=63
+[ -n "$NANO_HEADS" ] || NANO_HEADS=16
 
 # Functions and variable definitions used by the legacy nanobsd
 # image building system.
@@ -197,8 +197,7 @@ create_diskimage ( ) (
 	fi
 	mdconfig -d -u $MD
 
-	trap - 1 2 15
-	trap nano_cleanup EXIT
+	trap - 1 2 15 EXIT
 
 	) > ${NANO_LOG}/_.di 2>&1
 )

@@ -1,8 +1,9 @@
 /*-
  * CAM IO Scheduler Interface
  *
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2015 Netflix, Inc.
- * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -221,6 +222,7 @@ struct iop_stats {
 	int		total;		/* Total for all time -- wraps */
 	int		in;		/* number queued all time -- wraps */
 	int		out;		/* number completed all time -- wraps */
+	int		errs;		/* Number of I/Os completed with error --  wraps */
 
 	/*
 	 * Statistics on different bits of the process.
@@ -415,6 +417,7 @@ cam_iosched_iops_init(struct iop_stats *ios)
 	ios->l_value1 = ios->current / ios->softc->quanta;
 	if (ios->l_value1 <= 0)
 		ios->l_value1 = 1;
+	ios->l_value2 = 0;
 
 	return 0;
 }
@@ -422,10 +425,30 @@ cam_iosched_iops_init(struct iop_stats *ios)
 static int
 cam_iosched_iops_tick(struct iop_stats *ios)
 {
+	int new_ios;
 
-	ios->l_value1 = (int)((ios->current * (uint64_t)ios->softc->this_frac) >> 16);
-	if (ios->l_value1 <= 0)
-		ios->l_value1 = 1;
+	/*
+	 * Allow at least one IO per tick until all
+	 * the IOs for this interval have been spent.
+	 */
+	new_ios = (int)((ios->current * (uint64_t)ios->softc->this_frac) >> 16);
+	if (new_ios < 1 && ios->l_value2 < ios->current) {
+		new_ios = 1;
+		ios->l_value2++;
+	}
+
+	/*
+	 * If this a new accounting interval, discard any "unspent" ios
+	 * granted in the previous interval.  Otherwise add the new ios to
+	 * the previously granted ones that haven't been spent yet.
+	 */
+	if ((ios->softc->total_ticks % ios->softc->quanta) == 0) {
+		ios->l_value1 = new_ios;
+		ios->l_value2 = 1;
+	} else {
+		ios->l_value1 += new_ios;
+	}
+
 
 	return 0;
 }
@@ -436,9 +459,10 @@ cam_iosched_iops_caniop(struct iop_stats *ios, struct bio *bp)
 
 	/*
 	 * So if we have any more IOPs left, allow it,
-	 * otherwise wait.
+	 * otherwise wait. If current iops is 0, treat that
+	 * as unlimited as a failsafe.
 	 */
-	if (ios->l_value1 <= 0)
+	if (ios->current > 0 && ios->l_value1 <= 0)
 		return EAGAIN;
 	return 0;
 }
@@ -504,8 +528,11 @@ cam_iosched_bw_caniop(struct iop_stats *ios, struct bio *bp)
 	 * what we let through this quantum (to prevent the
 	 * starvation), at the cost of getting a little less
 	 * next quantum.
+	 *
+	 * Also note that if the current limit is <= 0,
+	 * we treat it as unlimited as a failsafe.
 	 */
-	if (ios->l_value1 <= 0)
+	if (ios->current > 0 && ios->l_value1 <= 0)
 		return EAGAIN;
 
 
@@ -533,7 +560,7 @@ cam_iosched_ticker(void *arg)
 	sbintime_t now, delta;
 	int pending;
 
-	callout_reset(&isc->ticker, hz / isc->quanta - 1, cam_iosched_ticker, isc);
+	callout_reset(&isc->ticker, hz / isc->quanta, cam_iosched_ticker, isc);
 
 	now = sbinuptime();
 	delta = now - isc->last_time;
@@ -673,7 +700,10 @@ cam_iosched_cl_maybe_steer(struct control_loop *clp)
 }
 #endif
 
-			/* Trim or similar currently pending completion */
+/*
+ * Trim or similar currently pending completion. Should only be set for
+ * those drivers wishing only one Trim active at a time.
+ */
 #define CAM_IOSCHED_FLAG_TRIM_ACTIVE	(1ul << 0)
 			/* Callout active, and needs to be torn down */
 #define CAM_IOSCHED_FLAG_CALLOUT_ACTIVE (1ul << 1)
@@ -687,22 +717,22 @@ cam_iosched_io_metric_update(struct cam_iosched_softc *isc,
     sbintime_t sim_latency, int cmd, size_t size);
 #endif
 
-static inline int
+static inline bool
 cam_iosched_has_flagged_work(struct cam_iosched_softc *isc)
 {
 	return !!(isc->flags & CAM_IOSCHED_FLAG_WORK_FLAGS);
 }
 
-static inline int
+static inline bool
 cam_iosched_has_io(struct cam_iosched_softc *isc)
 {
 #ifdef CAM_IOSCHED_DYNAMIC
 	if (do_dynamic_iosched) {
 		struct bio *rbp = bioq_first(&isc->bio_queue);
 		struct bio *wbp = bioq_first(&isc->write_queue);
-		int can_write = wbp != NULL &&
+		bool can_write = wbp != NULL &&
 		    cam_iosched_limiter_caniop(&isc->write_stats, wbp) == 0;
-		int can_read = rbp != NULL &&
+		bool can_read = rbp != NULL &&
 		    cam_iosched_limiter_caniop(&isc->read_stats, rbp) == 0;
 		if (iosched_debug > 2) {
 			printf("can write %d: pending_writes %d max_writes %d\n", can_write, isc->write_stats.pending, isc->write_stats.max);
@@ -715,7 +745,7 @@ cam_iosched_has_io(struct cam_iosched_softc *isc)
 	return bioq_first(&isc->bio_queue) != NULL;
 }
 
-static inline int
+static inline bool
 cam_iosched_has_more_trim(struct cam_iosched_softc *isc)
 {
 	return !(isc->flags & CAM_IOSCHED_FLAG_TRIM_ACTIVE) &&
@@ -726,7 +756,7 @@ cam_iosched_has_more_trim(struct cam_iosched_softc *isc)
     (isc)->sort_io_queue : cam_sort_io_queues)
 
 
-static inline int
+static inline bool
 cam_iosched_has_work(struct cam_iosched_softc *isc)
 {
 #ifdef CAM_IOSCHED_DYNAMIC
@@ -747,17 +777,18 @@ cam_iosched_iop_stats_init(struct cam_iosched_softc *isc, struct iop_stats *ios)
 {
 
 	ios->limiter = none;
-	cam_iosched_limiter_init(ios);
 	ios->in = 0;
-	ios->max = 300000;
+	ios->max = ios->current = 300000;
 	ios->min = 1;
 	ios->out = 0;
+	ios->errs = 0;
 	ios->pending = 0;
 	ios->queued = 0;
 	ios->total = 0;
 	ios->ema = 0;
 	ios->emvar = 0;
 	ios->softc = isc;
+	cam_iosched_limiter_init(ios);
 }
 
 static int
@@ -795,7 +826,7 @@ cam_iosched_limiter_sysctl(SYSCTL_HANDLER_ARGS)
 			return error;
 		}
 		/* Note: disk load averate requires ticker to be always running */
-		callout_reset(&isc->ticker, hz / isc->quanta - 1, cam_iosched_ticker, isc);
+		callout_reset(&isc->ticker, hz / isc->quanta, cam_iosched_ticker, isc);
 		isc->flags |= CAM_IOSCHED_FLAG_CALLOUT_ACTIVE;
 
 		cam_periph_unlock(isc->periph);
@@ -880,6 +911,27 @@ cam_iosched_sysctl_latencies(SYSCTL_HANDLER_ARGS)
 	return (error);
 }
 
+static int
+cam_iosched_quanta_sysctl(SYSCTL_HANDLER_ARGS)
+{
+	int *quanta;
+	int error, value;
+
+	quanta = (unsigned *)arg1;
+	value = *quanta;
+
+	error = sysctl_handle_int(oidp, (int *)&value, 0, req);
+	if ((error != 0) || (req->newptr == NULL))
+		return (error);
+
+	if (value < 1 || value > hz)
+		return (EINVAL);
+
+	*quanta = value;
+
+	return (0);
+}
+
 static void
 cam_iosched_iop_stats_sysctl_init(struct cam_iosched_softc *isc, struct iop_stats *ios, char *name)
 {
@@ -920,7 +972,11 @@ cam_iosched_iop_stats_sysctl_init(struct cam_iosched_softc *isc, struct iop_stat
 	SYSCTL_ADD_INT(ctx, n,
 	    OID_AUTO, "out", CTLFLAG_RD,
 	    &ios->out, 0,
-	    "# of transactions completed");
+	    "# of transactions completed (including with error)");
+	SYSCTL_ADD_INT(ctx, n,
+	    OID_AUTO, "errs", CTLFLAG_RD,
+	    &ios->errs, 0,
+	    "# of transactions completed with an error");
 
 	SYSCTL_ADD_PROC(ctx, n,
 	    OID_AUTO, "limiter", CTLTYPE_STRING | CTLFLAG_RW,
@@ -1022,7 +1078,7 @@ cam_iosched_init(struct cam_iosched_softc **iscp, struct cam_periph *periph)
 		bioq_init(&(*iscp)->write_queue);
 		(*iscp)->read_bias = 100;
 		(*iscp)->current_read_bias = 100;
-		(*iscp)->quanta = 200;
+		(*iscp)->quanta = min(hz, 200);
 		cam_iosched_iop_stats_init(*iscp, &(*iscp)->read_stats);
 		cam_iosched_iop_stats_init(*iscp, &(*iscp)->write_stats);
 		cam_iosched_iop_stats_init(*iscp, &(*iscp)->trim_stats);
@@ -1031,7 +1087,7 @@ cam_iosched_init(struct cam_iosched_softc **iscp, struct cam_periph *periph)
 		callout_init_mtx(&(*iscp)->ticker, cam_periph_mtx(periph), 0);
 		(*iscp)->periph = periph;
 		cam_iosched_cl_init(&(*iscp)->cl, *iscp);
-		callout_reset(&(*iscp)->ticker, hz / (*iscp)->quanta - 1, cam_iosched_ticker, *iscp);
+		callout_reset(&(*iscp)->ticker, hz / (*iscp)->quanta, cam_iosched_ticker, *iscp);
 		(*iscp)->flags |= CAM_IOSCHED_FLAG_CALLOUT_ACTIVE;
 	}
 #endif
@@ -1101,9 +1157,9 @@ void cam_iosched_sysctl_init(struct cam_iosched_softc *isc,
 	    &isc->read_bias, 100,
 	    "How biased towards read should we be independent of limits");
 
-	SYSCTL_ADD_INT(ctx, n,
-	    OID_AUTO, "quanta", CTLFLAG_RW,
-	    &isc->quanta, 200,
+	SYSCTL_ADD_PROC(ctx, n,
+	    OID_AUTO, "quanta", CTLTYPE_UINT | CTLFLAG_RW,
+	    &isc->quanta, 0, cam_iosched_quanta_sysctl, "I",
 	    "How many quanta per second do we slice the I/O up into");
 
 	SYSCTL_ADD_INT(ctx, n,
@@ -1162,7 +1218,11 @@ cam_iosched_get_write(struct cam_iosched_softc *isc)
 	 */
 	if (bioq_first(&isc->bio_queue) && isc->current_read_bias) {
 		if (iosched_debug)
-			printf("Reads present and current_read_bias is %d queued writes %d queued reads %d\n", isc->current_read_bias, isc->write_stats.queued, isc->read_stats.queued);
+			printf(
+			    "Reads present and current_read_bias is %d queued "
+			    "writes %d queued reads %d\n",
+			    isc->current_read_bias, isc->write_stats.queued,
+    			    isc->read_stats.queued);
 		isc->current_read_bias--;
 		/* We're not limiting writes, per se, just doing reads first */
 		return NULL;
@@ -1247,7 +1307,25 @@ cam_iosched_get_trim(struct cam_iosched_softc *isc)
 
 	if (!cam_iosched_has_more_trim(isc))
 		return NULL;
-
+#ifdef CAM_IOSCHED_DYNAMIC
+	if (do_dynamic_iosched) {
+		/*
+		 * If pending read, prefer that based on current read bias
+		 * setting. The read bias is shared for both writes and
+		 * TRIMs, but on TRIMs the bias is for a combined TRIM
+		 * not a single TRIM request that's come in.
+		 */
+		if (bioq_first(&isc->bio_queue) && isc->current_read_bias) {
+			isc->current_read_bias--;
+			/* We're not limiting TRIMS, per se, just doing reads first */
+			return NULL;
+		}
+		/*
+		 * We're going to do a trim, so reset the bias.
+		 */
+		isc->current_read_bias = isc->read_bias;
+	}
+#endif
 	return cam_iosched_next_trim(isc);
 }
 
@@ -1335,15 +1413,14 @@ cam_iosched_queue_work(struct cam_iosched_softc *isc, struct bio *bp)
 	 * the work on the bio queue.
 	 */
 	if (bp->bio_cmd == BIO_DELETE) {
-		bioq_disksort(&isc->trim_queue, bp);
+		bioq_insert_tail(&isc->trim_queue, bp);
 #ifdef CAM_IOSCHED_DYNAMIC
 		isc->trim_stats.in++;
 		isc->trim_stats.queued++;
 #endif
 	}
 #ifdef CAM_IOSCHED_DYNAMIC
-	else if (do_dynamic_iosched &&
-	    (bp->bio_cmd == BIO_WRITE || bp->bio_cmd == BIO_FLUSH)) {
+	else if (do_dynamic_iosched && (bp->bio_cmd != BIO_READ)) {
 		if (cam_iosched_sort_queue(isc))
 			bioq_disksort(&isc->write_queue, bp);
 		else
@@ -1387,7 +1464,7 @@ cam_iosched_schedule(struct cam_iosched_softc *isc, struct cam_periph *periph)
 }
 
 /*
- * Complete a trim request
+ * Complete a trim request. Mark that we no longer have one in flight.
  */
 void
 cam_iosched_trim_done(struct cam_iosched_softc *isc)
@@ -1413,13 +1490,19 @@ cam_iosched_bio_complete(struct cam_iosched_softc *isc, struct bio *bp,
 		printf("done: %p %#x\n", bp, bp->bio_cmd);
 	if (bp->bio_cmd == BIO_WRITE) {
 		retval = cam_iosched_limiter_iodone(&isc->write_stats, bp);
+		if ((bp->bio_flags & BIO_ERROR) != 0)
+			isc->write_stats.errs++;
 		isc->write_stats.out++;
 		isc->write_stats.pending--;
 	} else if (bp->bio_cmd == BIO_READ) {
 		retval = cam_iosched_limiter_iodone(&isc->read_stats, bp);
+		if ((bp->bio_flags & BIO_ERROR) != 0)
+			isc->read_stats.errs++;
 		isc->read_stats.out++;
 		isc->read_stats.pending--;
 	} else if (bp->bio_cmd == BIO_DELETE) {
+		if ((bp->bio_flags & BIO_ERROR) != 0)
+			isc->trim_stats.errs++;
 		isc->trim_stats.out++;
 		isc->trim_stats.pending--;
 	} else if (bp->bio_cmd != BIO_FLUSH) {
@@ -1427,7 +1510,7 @@ cam_iosched_bio_complete(struct cam_iosched_softc *isc, struct bio *bp,
 			printf("Completing command with bio_cmd == %#x\n", bp->bio_cmd);
 	}
 
-	if (!(bp->bio_flags & BIO_ERROR))
+	if (!(bp->bio_flags & BIO_ERROR) && done_ccb != NULL)
 		cam_iosched_io_metric_update(isc,
 		    cam_iosched_sbintime_t(done_ccb->ccb_h.qos.periph_data),
 		    bp->bio_cmd, bp->bio_bcount);
@@ -1437,7 +1520,8 @@ cam_iosched_bio_complete(struct cam_iosched_softc *isc, struct bio *bp,
 
 /*
  * Tell the io scheduler that you've pushed a trim down into the sim.
- * xxx better place for this?
+ * This also tells the I/O scheduler not to push any more trims down, so
+ * some periphs do not call it if they can cope with multiple trims in flight.
  */
 void
 cam_iosched_submit_trim(struct cam_iosched_softc *isc)

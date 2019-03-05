@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1993 Jan-Simon Pendry
  * Copyright (c) 1993
  *	The Regents of the University of California.  All rights reserved.
@@ -36,8 +38,6 @@
  *	$Id: procfs_regs.c,v 3.2 1993/12/15 09:40:17 jsp Exp $
  * $FreeBSD$
  */
-
-#include "opt_compat.h"
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -102,7 +102,6 @@ procfs_doprocregs(PFS_FILL_ARGS)
 		return (EBUSY);
 	}
 
-	/* XXXKSE: */
 	td2 = FIRST_THREAD_IN_PROC(p);
 #ifdef COMPAT_FREEBSD32
 	if (SV_CURPROC_FLAG(SV_ILP32)) {
@@ -111,8 +110,10 @@ procfs_doprocregs(PFS_FILL_ARGS)
 			return (EINVAL);
 		}
 		wrap32 = 1;
-	}
+		memset(&r32, 0, sizeof(r32));
+	} else
 #endif
+		memset(&r, 0, sizeof(r));
 	error = PROC(read, regs, td2, &r);
 	if (error == 0) {
 		PROC_UNLOCK(p);

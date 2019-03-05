@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2008 Alexander Motin <mav@FreeBSD.org>
  * All rights reserved.
  *
@@ -106,15 +108,21 @@ static const struct sdhci_device {
 	{ 0x16bc14e4,	0xffff,	"Broadcom BCM577xx SDXC/MMC Card Reader",
 	    SDHCI_QUIRK_BCM577XX_400KHZ_CLKSRC },
 	{ 0x0f148086,	0xffff,	"Intel Bay Trail eMMC 4.5 Controller",
+	    /* DDR52 is supported but affected by the VLI54 erratum */
 	    SDHCI_QUIRK_INTEL_POWER_UP_RESET |
 	    SDHCI_QUIRK_WAIT_WHILE_BUSY |
-	    SDHCI_QUIRK_MMC_DDR52 |
 	    SDHCI_QUIRK_CAPS_BIT63_FOR_MMC_HS400 |
 	    SDHCI_QUIRK_PRESET_VALUE_BROKEN},
 	{ 0x0f158086,	0xffff,	"Intel Bay Trail SDXC Controller",
 	    SDHCI_QUIRK_WAIT_WHILE_BUSY |
 	    SDHCI_QUIRK_PRESET_VALUE_BROKEN },
 	{ 0x0f508086,	0xffff,	"Intel Bay Trail eMMC 4.5 Controller",
+	    /* DDR52 is supported but affected by the VLI54 erratum */
+	    SDHCI_QUIRK_INTEL_POWER_UP_RESET |
+	    SDHCI_QUIRK_WAIT_WHILE_BUSY |
+	    SDHCI_QUIRK_CAPS_BIT63_FOR_MMC_HS400 |
+	    SDHCI_QUIRK_PRESET_VALUE_BROKEN },
+	{ 0x19db8086,	0xffff,	"Intel Denverton eMMC 5.0 Controller",
 	    SDHCI_QUIRK_INTEL_POWER_UP_RESET |
 	    SDHCI_QUIRK_WAIT_WHILE_BUSY |
 	    SDHCI_QUIRK_MMC_DDR52 |
@@ -395,11 +403,7 @@ sdhci_pci_attach(device_t dev)
 	pci_enable_busmaster(dev);
 	/* Process cards detection. */
 	for (i = 0; i < sc->num_slots; i++) {
-#ifdef MMCCAM
-		sdhci_cam_start_slot(&sc->slots[i]);
-#else
 		sdhci_start_slot(&sc->slots[i]);
-#endif
 	}
 
 	return (0);
@@ -522,7 +526,7 @@ static devclass_t sdhci_pci_devclass;
 
 DRIVER_MODULE(sdhci_pci, pci, sdhci_pci_driver, sdhci_pci_devclass, NULL,
     NULL);
-MODULE_DEPEND(sdhci_pci, sdhci, 1, 1, 1);
+SDHCI_DEPEND(sdhci_pci);
 
 #ifndef MMCCAM
 MMC_DECLARE_BRIDGE(sdhci_pci);

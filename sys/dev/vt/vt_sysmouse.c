@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1999 Kazutaka YOKOTA <yokota@zodiac.mech.utsunomiya-u.ac.jp>
  * All rights reserved.
  *
@@ -139,11 +141,11 @@ sysmouse_evdev_store(int x, int y, int z, int buttons)
 		}
 		break;
 	case EVDEV_SYSMOUSE_T_AXIS_UMS:
-		/* XXX: Edge triggering should be used here */
-		if (buttons & (1 << 5))
+		if (buttons & (1 << 6))
 			evdev_push_rel(sysmouse_evdev, REL_HWHEEL, 1);
-		else if (buttons & (1 << 6))
+		else if (buttons & (1 << 5))
 			evdev_push_rel(sysmouse_evdev, REL_HWHEEL, -1);
+		buttons &= ~((1 << 5)|(1 << 6));
 		/* PASSTHROUGH */
 	case EVDEV_SYSMOUSE_T_AXIS_NONE:
 	default:
@@ -212,7 +214,7 @@ sysmouse_process_event(mouse_info_t *mi)
 	unsigned char buf[MOUSE_SYS_PACKETSIZE];
 	int x, y, iy, z;
 
-	random_harvest_queue(mi, sizeof *mi, 2, RANDOM_MOUSE);
+	random_harvest_queue(mi, sizeof *mi, RANDOM_MOUSE);
 
 	mtx_lock(&sysmouse_lock);
 	switch (mi->operation) {

@@ -135,6 +135,8 @@ extern const char *freebsd32_syscallnames[];
 #error 1 << SYSTRACE_SHIFT must exceed number of system calls
 #endif
 
+static int systrace_enabled_count;
+
 static void	systrace_load(void *);
 static void	systrace_unload(void *);
 
@@ -160,16 +162,16 @@ static dtrace_pattr_t systrace_attr = {
 };
 
 static dtrace_pops_t systrace_pops = {
-	systrace_provide,
-	NULL,
-	systrace_enable,
-	systrace_disable,
-	NULL,
-	NULL,
-	systrace_getargdesc,
-	systrace_getargval,
-	NULL,
-	systrace_destroy
+	.dtps_provide =		systrace_provide,
+	.dtps_provide_module =	NULL,
+	.dtps_enable =		systrace_enable,
+	.dtps_disable =		systrace_disable,
+	.dtps_suspend =		NULL,
+	.dtps_resume =		NULL,
+	.dtps_getargdesc =	systrace_getargdesc,
+	.dtps_getargval =	systrace_getargval,
+	.dtps_usermode =	NULL,
+	.dtps_destroy =		systrace_destroy
 };
 
 static dtrace_provider_id_t	systrace_id;
@@ -315,6 +317,9 @@ systrace_enable(void *arg, dtrace_id_t id, void *parg)
 		SYSENT[sysnum].sy_entry = id;
 	else
 		SYSENT[sysnum].sy_return = id;
+	systrace_enabled_count++;
+	if (systrace_enabled_count == 1)
+		systrace_enabled = true;
 }
 
 static void
@@ -324,6 +329,9 @@ systrace_disable(void *arg, dtrace_id_t id, void *parg)
 
 	SYSENT[sysnum].sy_entry = 0;
 	SYSENT[sysnum].sy_return = 0;
+	systrace_enabled_count--;
+	if (systrace_enabled_count == 0)
+		systrace_enabled = false;
 }
 
 static void

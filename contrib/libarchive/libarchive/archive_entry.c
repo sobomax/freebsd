@@ -1491,7 +1491,7 @@ archive_entry_acl_next(struct archive_entry *entry, int want_type, int *type,
  * the style of the generated ACL.
  */
 wchar_t *
-archive_entry_acl_to_text_w(struct archive_entry *entry, ssize_t *len,
+archive_entry_acl_to_text_w(struct archive_entry *entry, la_ssize_t *len,
     int flags)
 {
 	return (archive_acl_to_text_w(&entry->acl, len, flags,
@@ -1499,7 +1499,7 @@ archive_entry_acl_to_text_w(struct archive_entry *entry, ssize_t *len,
 }
 
 char *
-archive_entry_acl_to_text(struct archive_entry *entry, ssize_t *len,
+archive_entry_acl_to_text(struct archive_entry *entry, la_ssize_t *len,
     int flags)
 {
 	return (archive_acl_to_text_l(&entry->acl, len, flags, NULL));
@@ -1560,10 +1560,8 @@ archive_entry_acl_text_compat(int *flags)
 const wchar_t *
 archive_entry_acl_text_w(struct archive_entry *entry, int flags)
 {
-	if (entry->acl.acl_text_w != NULL) {
-		free(entry->acl.acl_text_w);
-		entry->acl.acl_text_w = NULL;
-	}
+	free(entry->acl.acl_text_w);
+	entry->acl.acl_text_w = NULL;
 	if (archive_entry_acl_text_compat(&flags) == 0)
 		entry->acl.acl_text_w = archive_acl_to_text_w(&entry->acl,
 		    NULL, flags, entry->archive);
@@ -1574,10 +1572,8 @@ archive_entry_acl_text_w(struct archive_entry *entry, int flags)
 const char *
 archive_entry_acl_text(struct archive_entry *entry, int flags)
 {
-	if (entry->acl.acl_text != NULL) {
-		free(entry->acl.acl_text);
-		entry->acl.acl_text = NULL;
-	}
+	free(entry->acl.acl_text);
+	entry->acl.acl_text = NULL;
 	if (archive_entry_acl_text_compat(&flags) == 0)
 		entry->acl.acl_text = archive_acl_to_text_l(&entry->acl, NULL,
 		    flags, NULL);
@@ -1590,10 +1586,8 @@ int
 _archive_entry_acl_text_l(struct archive_entry *entry, int flags,
     const char **acl_text, size_t *len, struct archive_string_conv *sc)
 {
-	if (entry->acl.acl_text != NULL) {
-		free(entry->acl.acl_text);
-		entry->acl.acl_text = NULL;
-        }
+	free(entry->acl.acl_text);
+	entry->acl.acl_text = NULL;
 
 	if (archive_entry_acl_text_compat(&flags) == 0)
 		entry->acl.acl_text = archive_acl_to_text_l(&entry->acl,

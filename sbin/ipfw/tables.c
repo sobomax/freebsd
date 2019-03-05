@@ -282,13 +282,14 @@ ipfw_table_handler(int ac, char *av[])
 		}
 		break;
 	case TOK_LIST:
+		arg = is_all ? (void*)1 : NULL;
 		if (is_all == 0) {
 			ipfw_xtable_info i;
 			if ((error = table_get_info(&oh, &i)) != 0)
 				err(EX_OSERR, "failed to request table info");
-			table_show_one(&i, NULL);
+			table_show_one(&i, arg);
 		} else {
-			error = tables_foreach(table_show_one, NULL, 1);
+			error = tables_foreach(table_show_one, arg, 1);
 			if (error != 0)
 				err(EX_OSERR, "failed to request tables list");
 		}
@@ -516,7 +517,7 @@ table_modify(ipfw_obj_header *oh, int ac, char *av[])
 			ac--; av++;
 			break;
 		default:
-			errx(EX_USAGE, "cmd is not supported for modificatiob");
+			errx(EX_USAGE, "cmd is not supported for modification");
 		}
 	}
 
@@ -821,13 +822,16 @@ table_show_one(ipfw_xtable_info *i, void *arg)
 {
 	ipfw_obj_header *oh;
 	int error;
+	int is_all;
+
+	is_all = arg == NULL ? 0 : 1;
 
 	if ((error = table_do_get_list(i, &oh)) != 0) {
 		err(EX_OSERR, "Error requesting table %s list", i->tablename);
 		return (error);
 	}
 
-	table_show_list(oh, 1);
+	table_show_list(oh, is_all);
 
 	free(oh);
 	return (0);	
@@ -885,6 +889,8 @@ table_do_modify_record(int cmd, ipfw_obj_header *oh,
 
 	sz += sizeof(*oh);
 	error = do_get3(cmd, &oh->opheader, &sz);
+	if (error != 0)
+		error = errno;
 	tent = (ipfw_obj_tentry *)(ctlv + 1);
 	/* Copy result back to provided buffer */
 	memcpy(tent_base, ctlv + 1, sizeof(*tent) * count);
@@ -1469,6 +1475,7 @@ tentry_fill_value(ipfw_obj_header *oh, ipfw_obj_tentry *tent, char *arg,
 	uint32_t i;
 	int dval;
 	char *comma, *e, *etype, *n, *p;
+	struct in_addr ipaddr;
 
 	v = &tent->v.value;
 
@@ -1485,8 +1492,8 @@ tentry_fill_value(ipfw_obj_header *oh, ipfw_obj_tentry *tent, char *arg,
 			return;
 		}
 		/* Try hostname */
-		if (lookup_host(arg, (struct in_addr *)&val) == 0) {
-			set_legacy_value(val, v);
+		if (lookup_host(arg, &ipaddr) == 0) {
+			set_legacy_value(ntohl(ipaddr.s_addr), v);
 			return;
 		}
 		errx(EX_OSERR, "Unable to parse value %s", arg);
@@ -1555,8 +1562,10 @@ tentry_fill_value(ipfw_obj_header *oh, ipfw_obj_tentry *tent, char *arg,
 				v->nh4 = ntohl(a4);
 				break;
 			}
-			if (lookup_host(n, (struct in_addr *)&v->nh4) == 0)
+			if (lookup_host(n, &ipaddr) == 0) {
+				v->nh4 = ntohl(ipaddr.s_addr);
 				break;
+			}
 			etype = "ipv4";
 			break;
 		case IPFW_VTYPE_DSCP:

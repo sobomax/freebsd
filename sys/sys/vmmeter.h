@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1982, 1986, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -39,35 +41,40 @@
  */
 #define	MAXSLP			20
 
-/* Systemwide totals computed every five seconds. */
 struct vmtotal {
-	int16_t	t_rq;		/* length of the run queue */
-	int16_t	t_dw;		/* jobs in ``disk wait'' (neg priority) */
-	int16_t	t_pw;		/* jobs in page wait */
-	int16_t	t_sl;		/* jobs sleeping in core */
-	int16_t	t_sw;		/* swapped out runnable/short block jobs */
-	int32_t	t_vm;		/* total virtual memory */
-	int32_t	t_avm;		/* active virtual memory */
-	int32_t	t_rm;		/* total real memory in use */
-	int32_t	t_arm;		/* active real memory */
-	int32_t	t_vmshr;	/* shared virtual memory */
-	int32_t	t_avmshr;	/* active shared virtual memory */
-	int32_t	t_rmshr;	/* shared real memory */
-	int32_t	t_armshr;	/* active shared real memory */
-	int32_t	t_free;		/* free memory pages */
+	uint64_t	t_vm;		/* total virtual memory */
+	uint64_t	t_avm;		/* active virtual memory */
+	uint64_t	t_rm;		/* total real memory in use */
+	uint64_t	t_arm;		/* active real memory */
+	uint64_t	t_vmshr;	/* shared virtual memory */
+	uint64_t	t_avmshr;	/* active shared virtual memory */
+	uint64_t	t_rmshr;	/* shared real memory */
+	uint64_t	t_armshr;	/* active shared real memory */
+	uint64_t	t_free;		/* free memory pages */
+	int16_t		t_rq;		/* length of the run queue */
+	int16_t		t_dw;		/* threads in ``disk wait'' (neg
+					   priority) */
+	int16_t		t_pw;		/* threads in page wait */
+	int16_t		t_sl;		/* threads sleeping in core */
+	int16_t		t_sw;		/* swapped out runnable/short
+					   block threads */
+	uint16_t	t_pad[3];
 };
 
 #if defined(_KERNEL) || defined(_WANT_VMMETER)
 #include <sys/counter.h>
 
+#ifdef _KERNEL
+#define VMMETER_ALIGNED	__aligned(CACHE_LINE_SIZE)
+#else
+#define VMMETER_ALIGNED
+#endif
+
 /*
  * System wide statistics counters.
  * Locking:
- *      a - locked by atomic operations
  *      c - constant after initialization
- *      f - locked by vm_page_queue_free_mtx
  *      p - uses counter(9)
- *      q - changes are synchronized by the corresponding vm_pagequeue lock
  */
 struct vmmeter {
 	/*
@@ -115,6 +122,7 @@ struct vmmeter {
 	counter_u64_t v_vforkpages;	/* (p) pages affected by vfork() */
 	counter_u64_t v_rforkpages;	/* (p) pages affected by rfork() */
 	counter_u64_t v_kthreadpages;	/* (p) ... and by kernel fork() */
+	counter_u64_t v_wire_count;	/* (p) pages wired down */
 #define	VM_METER_NCOUNTERS	\
 	(offsetof(struct vmmeter, v_page_size) / sizeof(counter_u64_t))
 	/*
@@ -125,12 +133,7 @@ struct vmmeter {
 	u_int v_free_reserved;	/* (c) pages reserved for deadlock */
 	u_int v_free_target;	/* (c) pages desired free */
 	u_int v_free_min;	/* (c) pages desired free */
-	u_int v_free_count;	/* (f) pages free */
-	u_int v_wire_count;	/* (a) pages wired down */
-	u_int v_active_count;	/* (q) pages active */
 	u_int v_inactive_target; /* (c) pages desired inactive */
-	u_int v_inactive_count;	/* (q) pages inactive */
-	u_int v_laundry_count;	/* (q) pages eligible for laundering */
 	u_int v_pageout_free_min;   /* (c) min pages reserved for kernel */
 	u_int v_interrupt_free_min; /* (c) reserved pages for int code */
 	u_int v_free_severe;	/* (c) severe page depletion point */
@@ -139,30 +142,70 @@ struct vmmeter {
 
 #ifdef _KERNEL
 
+#include <sys/domainset.h>
+
 extern struct vmmeter vm_cnt;
-extern u_int vm_pageout_wakeup_thresh;
+extern domainset_t all_domains;
+extern domainset_t vm_min_domains;
+extern domainset_t vm_severe_domains;
 
 #define	VM_CNT_ADD(var, x)	counter_u64_add(vm_cnt.var, x)
 #define	VM_CNT_INC(var)		VM_CNT_ADD(var, 1)
 #define	VM_CNT_FETCH(var)	counter_u64_fetch(vm_cnt.var)
 
+static inline void
+vm_wire_add(int cnt)
+{
+
+	VM_CNT_ADD(v_wire_count, cnt);
+}
+
+static inline void
+vm_wire_sub(int cnt)
+{
+
+	VM_CNT_ADD(v_wire_count, -cnt);
+}
+
+u_int vm_free_count(void);
+static inline u_int
+vm_wire_count(void)
+{
+
+	return (VM_CNT_FETCH(v_wire_count));
+}
+
 /*
  * Return TRUE if we are under our severe low-free-pages threshold
  *
- * This routine is typically used at the user<->system interface to determine
+ * These routines are typically used at the user<->system interface to determine
  * whether we need to block in order to avoid a low memory deadlock.
  */
 static inline int
 vm_page_count_severe(void)
 {
 
-	return (vm_cnt.v_free_severe > vm_cnt.v_free_count);
+	return (!DOMAINSET_EMPTY(&vm_severe_domains));
+}
+
+static inline int
+vm_page_count_severe_domain(int domain)
+{
+
+	return (DOMAINSET_ISSET(domain, &vm_severe_domains));
+}
+
+static inline int
+vm_page_count_severe_set(const domainset_t *mask)
+{
+
+	return (DOMAINSET_SUBSET(&vm_severe_domains, mask));
 }
 
 /*
  * Return TRUE if we are under our minimum low-free-pages threshold.
  *
- * This routine is typically used within the system to determine whether
+ * These routines are typically used within the system to determine whether
  * we can execute potentially very expensive code in terms of memory.  It
  * is also used by the pageout daemon to calculate when to sleep, when
  * to wake waiters up, and when (after making a pass) to become more
@@ -172,50 +215,22 @@ static inline int
 vm_page_count_min(void)
 {
 
-	return (vm_cnt.v_free_min > vm_cnt.v_free_count);
+	return (!DOMAINSET_EMPTY(&vm_min_domains));
 }
 
-/*
- * Return TRUE if we have not reached our free page target during
- * free page recovery operations.
- */
 static inline int
-vm_page_count_target(void)
+vm_page_count_min_domain(int domain)
 {
 
-	return (vm_cnt.v_free_target > vm_cnt.v_free_count);
+	return (DOMAINSET_ISSET(domain, &vm_min_domains));
 }
 
-/*
- * Return the number of pages we need to free-up or cache
- * A positive number indicates that we do not have enough free pages.
- */
 static inline int
-vm_paging_target(void)
+vm_page_count_min_set(const domainset_t *mask)
 {
 
-	return (vm_cnt.v_free_target - vm_cnt.v_free_count);
+	return (DOMAINSET_SUBSET(&vm_min_domains, mask));
 }
 
-/*
- * Returns TRUE if the pagedaemon needs to be woken up.
- */
-static inline int
-vm_paging_needed(void)
-{
-
-	return (vm_cnt.v_free_count < vm_pageout_wakeup_thresh);
-}
-
-/*
- * Return the number of pages we need to launder.
- * A positive number indicates that we have a shortfall of clean pages.
- */
-static inline int
-vm_laundry_target(void)
-{
-
-	return (vm_paging_target());
-}
 #endif	/* _KERNEL */
 #endif	/* _SYS_VMMETER_H_ */

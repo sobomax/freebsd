@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2009-2012 Alexander Motin <mav@FreeBSD.org>
  * All rights reserved.
  *
@@ -938,18 +940,22 @@ ahci_dmainit(device_t dev)
 	struct ahci_channel *ch = device_get_softc(dev);
 	struct ahci_dc_cb_args dcba;
 	size_t rfsize;
+	int error;
 
 	/* Command area. */
-	if (bus_dma_tag_create(bus_get_dma_tag(dev), 1024, 0,
+	error = bus_dma_tag_create(bus_get_dma_tag(dev), 1024, 0,
 	    BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR,
 	    NULL, NULL, AHCI_WORK_SIZE, 1, AHCI_WORK_SIZE,
-	    0, NULL, NULL, &ch->dma.work_tag))
+	    0, NULL, NULL, &ch->dma.work_tag);
+	if (error != 0)
 		goto error;
-	if (bus_dmamem_alloc(ch->dma.work_tag, (void **)&ch->dma.work,
-	    BUS_DMA_ZERO, &ch->dma.work_map))
+	error = bus_dmamem_alloc(ch->dma.work_tag, (void **)&ch->dma.work,
+	    BUS_DMA_ZERO, &ch->dma.work_map);
+	if (error != 0)
 		goto error;
-	if (bus_dmamap_load(ch->dma.work_tag, ch->dma.work_map, ch->dma.work,
-	    AHCI_WORK_SIZE, ahci_dmasetupc_cb, &dcba, 0) || dcba.error) {
+	error = bus_dmamap_load(ch->dma.work_tag, ch->dma.work_map, ch->dma.work,
+	    AHCI_WORK_SIZE, ahci_dmasetupc_cb, &dcba, BUS_DMA_NOWAIT);
+	if (error != 0 || (error = dcba.error) != 0) {
 		bus_dmamem_free(ch->dma.work_tag, ch->dma.work, ch->dma.work_map);
 		goto error;
 	}
@@ -959,33 +965,37 @@ ahci_dmainit(device_t dev)
 	    rfsize = 4096;
 	else
 	    rfsize = 256;
-	if (bus_dma_tag_create(bus_get_dma_tag(dev), rfsize, 0,
+	error = bus_dma_tag_create(bus_get_dma_tag(dev), rfsize, 0,
 	    BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR,
 	    NULL, NULL, rfsize, 1, rfsize,
-	    0, NULL, NULL, &ch->dma.rfis_tag))
+	    0, NULL, NULL, &ch->dma.rfis_tag);
+	if (error != 0)
 		goto error;
-	if (bus_dmamem_alloc(ch->dma.rfis_tag, (void **)&ch->dma.rfis, 0,
-	    &ch->dma.rfis_map))
+	error = bus_dmamem_alloc(ch->dma.rfis_tag, (void **)&ch->dma.rfis, 0,
+	    &ch->dma.rfis_map);
+	if (error != 0)
 		goto error;
-	if (bus_dmamap_load(ch->dma.rfis_tag, ch->dma.rfis_map, ch->dma.rfis,
-	    rfsize, ahci_dmasetupc_cb, &dcba, 0) || dcba.error) {
+	error = bus_dmamap_load(ch->dma.rfis_tag, ch->dma.rfis_map, ch->dma.rfis,
+	    rfsize, ahci_dmasetupc_cb, &dcba, BUS_DMA_NOWAIT);
+	if (error != 0 || (error = dcba.error) != 0) {
 		bus_dmamem_free(ch->dma.rfis_tag, ch->dma.rfis, ch->dma.rfis_map);
 		goto error;
 	}
 	ch->dma.rfis_bus = dcba.maddr;
 	/* Data area. */
-	if (bus_dma_tag_create(bus_get_dma_tag(dev), 2, 0,
+	error = bus_dma_tag_create(bus_get_dma_tag(dev), 2, 0,
 	    BUS_SPACE_MAXADDR, BUS_SPACE_MAXADDR,
 	    NULL, NULL,
 	    AHCI_SG_ENTRIES * PAGE_SIZE * ch->numslots,
 	    AHCI_SG_ENTRIES, AHCI_PRD_MAX,
-	    0, busdma_lock_mutex, &ch->mtx, &ch->dma.data_tag)) {
+	    0, busdma_lock_mutex, &ch->mtx, &ch->dma.data_tag);
+	if (error != 0)
 		goto error;
-	}
 	return;
 
 error:
-	device_printf(dev, "WARNING - DMA initialization failed\n");
+	device_printf(dev, "WARNING - DMA initialization failed, error %d\n",
+	    error);
 	ahci_dmafini(dev);
 }
 
@@ -1521,6 +1531,7 @@ ahci_execute_transaction(struct ahci_slot *slot)
 	int fis_size, i, softreset;
 	uint8_t *fis = ch->dma.rfis + 0x40;
 	uint8_t val;
+	uint16_t cmd_flags;
 
 	/* Get a piece of the workspace for this request */
 	ctp = (struct ahci_cmd_tab *)
@@ -1534,12 +1545,12 @@ ahci_execute_transaction(struct ahci_slot *slot)
 	/* Setup the command list entry */
 	clp = (struct ahci_cmd_list *)
 	    (ch->dma.work + AHCI_CL_OFFSET + (AHCI_CL_SIZE * slot->slot));
-	clp->cmd_flags = htole16(
+	cmd_flags =
 		    (ccb->ccb_h.flags & CAM_DIR_OUT ? AHCI_CMD_WRITE : 0) |
 		    (ccb->ccb_h.func_code == XPT_SCSI_IO ?
 		     (AHCI_CMD_ATAPI | AHCI_CMD_PREFETCH) : 0) |
 		    (fis_size / sizeof(u_int32_t)) |
-		    (port << 12));
+		    (port << 12);
 	clp->prd_length = htole16(slot->dma.nsegs);
 	/* Special handling for Soft Reset command. */
 	if ((ccb->ccb_h.func_code == XPT_ATA_IO) &&
@@ -1550,7 +1561,7 @@ ahci_execute_transaction(struct ahci_slot *slot)
 			ahci_stop(ch);
 			ahci_clo(ch);
 			ahci_start(ch, 0);
-			clp->cmd_flags |= AHCI_CMD_RESET | AHCI_CMD_CLR_BUSY;
+			cmd_flags |= AHCI_CMD_RESET | AHCI_CMD_CLR_BUSY;
 		} else {
 			softreset = 2;
 			/* Prepare FIS receive area for check. */
@@ -1560,6 +1571,7 @@ ahci_execute_transaction(struct ahci_slot *slot)
 	} else
 		softreset = 0;
 	clp->bytecount = 0;
+	clp->cmd_flags = htole16(cmd_flags);
 	clp->cmd_table_phys = htole64(ch->dma.work_bus + AHCI_CT_OFFSET +
 				  (AHCI_CT_SIZE * slot->slot));
 	bus_dmamap_sync(ch->dma.work_tag, ch->dma.work_map,
@@ -2747,5 +2759,8 @@ ahcipoll(struct cam_sim *sim)
 		ahci_reset_to(ch);
 	}
 }
+
+devclass_t ahci_devclass;
+
 MODULE_VERSION(ahci, 1);
 MODULE_DEPEND(ahci, cam, 1, 1, 1);

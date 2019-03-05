@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1989, 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -38,6 +40,7 @@
 #ifdef _KERNEL
 #include <sys/lock.h>
 #include <sys/lockmgr.h>
+#include <sys/tslog.h>
 #include <sys/_mutex.h>
 #include <sys/_sx.h>
 #endif
@@ -513,6 +516,7 @@ struct vfsconf {
 	int	vfc_typenum;		/* historic filesystem type number */
 	int	vfc_refcount;		/* number mounted of this type */
 	int	vfc_flags;		/* permanent flags */
+	int	vfc_prison_flag;	/* prison allow.mount.* flag */
 	struct	vfsoptdecl *vfc_opts;	/* mount options */
 	TAILQ_ENTRY(vfsconf) vfc_list;	/* list of vfscons */
 };
@@ -549,7 +553,8 @@ struct ovfsconf {
 #define	VFCF_UNICODE	0x00200000	/* stores file names as Unicode */
 #define	VFCF_JAIL	0x00400000	/* can be mounted from within a jail */
 #define	VFCF_DELEGADMIN	0x00800000	/* supports delegated administration */
-#define	VFCF_SBDRY	0x01000000	/* defer stop requests */
+#define	VFCF_SBDRY	0x01000000	/* Stop at Boundary: defer stop requests
+					   to kernel->user (AST) transition */
 
 typedef uint32_t fsctlop_t;
 
@@ -706,9 +711,11 @@ vfs_statfs_t	__vfs_statfs;
 #define	VFS_MOUNT(MP) ({						\
 	int _rc;							\
 									\
+	TSRAW(curthread, TS_ENTER, "VFS_MOUNT", (MP)->mnt_vfc->vfc_name);\
 	VFS_PROLOGUE(MP);						\
 	_rc = (*(MP)->mnt_op->vfs_mount)(MP);				\
 	VFS_EPILOGUE(MP);						\
+	TSRAW(curthread, TS_EXIT, "VFS_MOUNT", (MP)->mnt_vfc->vfc_name);\
 	_rc; })
 
 #define	VFS_UNMOUNT(MP, FORCE) ({					\
@@ -846,7 +853,8 @@ vfs_statfs_t	__vfs_statfs;
  */
 #define VFS_VERSION_00	0x19660120
 #define VFS_VERSION_01	0x20121030
-#define VFS_VERSION	VFS_VERSION_01
+#define VFS_VERSION_02	0x20180504
+#define VFS_VERSION	VFS_VERSION_02
 
 #define VFS_SET(vfsops, fsname, flags) \
 	static struct vfsconf fsname ## _vfsconf = {		\

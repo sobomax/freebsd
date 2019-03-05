@@ -1,4 +1,4 @@
-/*
+/*-
  * Copyright (c) 2002-2003 Luigi Rizzo
  * Copyright (c) 1996 Alex Nash, Paul Traina, Poul-Henning Kamp
  * Copyright (c) 1994 Ugen J.S.Antsilevich
@@ -37,8 +37,6 @@ struct cmdline_opts {
 	int	do_quiet;	/* Be quiet in add and flush */
 	int	do_pipe;	/* this cmd refers to a pipe/queue/sched */
 	int	do_nat; 	/* this cmd refers to a nat config */
-	int	do_dynamic;	/* display dynamic rules */
-	int	do_expired;	/* display expired dynamic rules */
 	int	do_compact;	/* show rules in compact mode */
 	int	do_force;	/* do not ask for confirmation */
 	int	show_sets;	/* display the set each rule belongs to */
@@ -48,12 +46,20 @@ struct cmdline_opts {
 
 	/* The options below can have multiple values. */
 
+	int	do_dynamic;	/* 1 - display dynamic rules */
+				/* 2 - display/delete only dynamic rules */
 	int	do_sort;	/* field to sort results (0 = no) */
 		/* valid fields are 1 and above */
 
 	int	use_set;	/* work with specified set number */
 		/* 0 means all sets, otherwise apply to set use_set - 1 */
 
+};
+
+enum {
+	TIMESTAMP_NONE = 0,
+	TIMESTAMP_STRING,
+	TIMESTAMP_NUMERIC,
 };
 
 extern struct cmdline_opts co;
@@ -81,6 +87,8 @@ enum tokens {
 	TOK_STARTBRACE,
 	TOK_ENDBRACE,
 
+	TOK_ABORT6,
+	TOK_ABORT,
 	TOK_ACCEPT,
 	TOK_COUNT,
 	TOK_EACTION,
@@ -116,7 +124,9 @@ enum tokens {
 	TOK_JAIL,
 	TOK_IN,
 	TOK_LIMIT,
+	TOK_SETLIMIT,
 	TOK_KEEPSTATE,
+	TOK_RECORDSTATE,
 	TOK_LAYER2,
 	TOK_OUT,
 	TOK_DIVERTED,
@@ -205,14 +215,14 @@ enum tokens {
 
 	TOK_IP,
 	TOK_IF,
- 	TOK_ALOG,
- 	TOK_DENY_INC,
- 	TOK_SAME_PORTS,
- 	TOK_UNREG_ONLY,
+	TOK_ALOG,
+	TOK_DENY_INC,
+	TOK_SAME_PORTS,
+	TOK_UNREG_ONLY,
 	TOK_SKIP_GLOBAL,
- 	TOK_RESET_ADDR,
- 	TOK_ALIAS_REV,
- 	TOK_PROXY_ONLY,
+	TOK_RESET_ADDR,
+	TOK_ALIAS_REV,
+	TOK_PROXY_ONLY,
 	TOK_REDIR_ADDR,
 	TOK_REDIR_PORT,
 	TOK_REDIR_PROTO,
@@ -284,8 +294,11 @@ enum tokens {
 	TOK_INTPREFIX,
 	TOK_EXTPREFIX,
 	TOK_PREFIXLEN,
+	TOK_EXTIF,
 
 	TOK_TCPSETMSS,
+
+	TOK_SKIPACTION,
 };
 
 /*
@@ -376,6 +389,7 @@ void ipfw_nat64lsn_handler(int ac, char *av[]);
 void ipfw_nat64stl_handler(int ac, char *av[]);
 void ipfw_nptv6_handler(int ac, char *av[]);
 int ipfw_check_object_name(const char *name);
+int ipfw_check_nat64prefix(const struct in6_addr *prefix, int length);
 
 #ifdef PF
 /* altq.c */
@@ -393,7 +407,7 @@ int ipfw_delete_pipe(int pipe_or_queue, int n);
 
 /* ipv6.c */
 void print_unreach6_code(struct buf_pr *bp, uint16_t code);
-void print_ip6(struct buf_pr *bp, struct _ipfw_insn_ip6 *cmd, char const *s);
+void print_ip6(struct buf_pr *bp, struct _ipfw_insn_ip6 *cmd);
 void print_flow6id(struct buf_pr *bp, struct _ipfw_insn_u32 *cmd);
 void print_icmp6types(struct buf_pr *bp, struct _ipfw_insn_u32 *cmd);
 void print_ext6hdr(struct buf_pr *bp, struct _ipfw_insn *cmd );

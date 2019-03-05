@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2001-2007, by Cisco Systems, Inc. All rights reserved.
  * Copyright (c) 2008-2012, by Randall Stewart. All rights reserved.
  * Copyright (c) 2008-2012, by Michael Tuexen. All rights reserved.
@@ -287,6 +289,7 @@ struct sctp_pcb {
 	sctp_auth_chklist_t *local_auth_chunks;
 	sctp_hmaclist_t *local_hmacs;
 	uint16_t default_keyid;
+	uint32_t default_mtu;
 
 	/* various thresholds */
 	/* Max times I will init at a guy */
@@ -314,10 +317,6 @@ struct sctp_pcb {
 	 */
 	struct sctp_timer signature_change;
 
-	/* Zero copy full buffer timer */
-	struct sctp_timer zero_copy_timer;
-	/* Zero copy app to transport (sendq) read repulse timer */
-	struct sctp_timer zero_copy_sendq_timer;
 	uint32_t def_cookie_life;
 	/* defaults to 0 */
 	int auto_close_time;
@@ -364,7 +363,7 @@ struct sctp_inpcb {
 	union {
 		struct inpcb inp;
 		char align[(sizeof(struct in6pcb) + SCTP_ALIGNM1) &
-		        ~SCTP_ALIGNM1];
+		    ~SCTP_ALIGNM1];
 	}     ip_inp;
 
 
@@ -390,7 +389,7 @@ struct sctp_inpcb {
 	uint64_t sctp_features;	/* Feature flags */
 	uint32_t sctp_flags;	/* INP state flag set */
 	uint32_t sctp_mobility_features;	/* Mobility  Feature flags */
-	struct sctp_pcb sctp_ep;/* SCTP ep data */
+	struct sctp_pcb sctp_ep;	/* SCTP ep data */
 	/* head of the hash of all associations */
 	struct sctpasochead *sctp_tcbhash;
 	u_long sctp_hashmark;
@@ -493,8 +492,7 @@ int SCTP6_ARE_ADDR_EQUAL(struct sockaddr_in6 *a, struct sockaddr_in6 *b);
 
 void sctp_fill_pcbinfo(struct sctp_pcbinfo *);
 
-struct sctp_ifn *
-         sctp_find_ifn(void *ifn, uint32_t ifn_index);
+struct sctp_ifn *sctp_find_ifn(void *ifn, uint32_t ifn_index);
 
 struct sctp_vrf *sctp_allocate_vrf(int vrfid);
 struct sctp_vrf *sctp_find_vrf(uint32_t vrfid);
@@ -525,7 +523,7 @@ void sctp_free_ifn(struct sctp_ifn *sctp_ifnp);
 void sctp_free_ifa(struct sctp_ifa *sctp_ifap);
 
 
-void 
+void
 sctp_del_addr_from_vrf(uint32_t vrfid, struct sockaddr *addr,
     uint32_t ifn_index, const char *if_name);
 
@@ -535,7 +533,7 @@ struct sctp_nets *sctp_findnet(struct sctp_tcb *, struct sockaddr *);
 
 struct sctp_inpcb *sctp_pcb_findep(struct sockaddr *, int, int, uint32_t);
 
-int 
+int
 sctp_inpcb_bind(struct socket *, struct sockaddr *,
     struct sctp_ifa *, struct thread *);
 
@@ -564,8 +562,7 @@ sctp_findassociation_ep_addr(struct sctp_inpcb **,
     struct sockaddr *, struct sctp_nets **, struct sockaddr *,
     struct sctp_tcb *);
 
-struct sctp_tcb *
-         sctp_findasoc_ep_asocid_locked(struct sctp_inpcb *inp, sctp_assoc_t asoc_id, int want_lock);
+struct sctp_tcb *sctp_findasoc_ep_asocid_locked(struct sctp_inpcb *inp, sctp_assoc_t asoc_id, int want_lock);
 
 struct sctp_tcb *
 sctp_findassociation_ep_asocid(struct sctp_inpcb *,

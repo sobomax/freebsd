@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1988, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -42,11 +44,16 @@ static char sccsid[] = "@(#)kdump.c	8.1 (Berkeley) 6/6/93";
 __FBSDID("$FreeBSD$");
 
 #define _WANT_KERNEL_ERRNO
+#ifdef __LP64__
+#define	_WANT_KEVENT32
+#endif
+#define	_WANT_FREEBSD11_KEVENT
 #include <sys/param.h>
 #include <sys/capsicum.h>
 #include <sys/errno.h>
 #include <sys/time.h>
 #include <sys/uio.h>
+#include <sys/event.h>
 #include <sys/ktrace.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -56,7 +63,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/un.h>
 #include <sys/queue.h>
 #include <sys/wait.h>
-#ifdef HAVE_LIBCASPER
+#ifdef WITH_CASPER
 #include <sys/nv.h>
 #endif
 #include <arpa/inet.h>
@@ -80,17 +87,17 @@ __FBSDID("$FreeBSD$");
 #include <vis.h>
 #include "ktrace.h"
 
-#ifdef HAVE_LIBCASPER
+#ifdef WITH_CASPER
 #include <libcasper.h>
 
 #include <casper/cap_grp.h>
 #include <casper/cap_pwd.h>
 #endif
 
-u_int abidump(struct ktr_header *);
 int fetchprocinfo(struct ktr_header *, u_int *);
+u_int findabi(struct ktr_header *);
 int fread_tail(void *, int, int);
-void dumpheader(struct ktr_header *);
+void dumpheader(struct ktr_header *, u_int);
 void ktrsyscall(struct ktr_syscall *, u_int);
 void ktrsysret(struct ktr_sysret *, u_int);
 void ktrnamei(char *, int);
@@ -110,6 +117,8 @@ void ktrstruct(char *, size_t);
 void ktrcapfail(struct ktr_cap_fail *);
 void ktrfault(struct ktr_fault *);
 void ktrfaultend(struct ktr_faultend *);
+void ktrkevent(struct kevent *);
+void ktrstructarray(struct ktr_struct_array *, size_t);
 void usage(void);
 
 #define	TIMESTAMP_NONE		0x0
@@ -117,8 +126,9 @@ void usage(void);
 #define	TIMESTAMP_ELAPSED	0x2
 #define	TIMESTAMP_RELATIVE	0x4
 
-static int timestamp, decimal, fancy = 1, suppressdata, tail, threads, maxdata,
-    resolv = 0, abiflag = 0, syscallno = 0;
+static bool abiflag, decimal, fancy = true, resolv, suppressdata, syscallno,
+    tail, threads;
+static int timestamp, maxdata;
 static const char *tracefile = DEF_TRACEFILE;
 static struct ktr_header ktr_header;
 
@@ -165,36 +175,9 @@ struct proc_info
 
 static TAILQ_HEAD(trace_procs, proc_info) trace_procs;
 
-#ifdef HAVE_LIBCASPER
+#ifdef WITH_CASPER
 static cap_channel_t *cappwd, *capgrp;
-#endif
 
-static void
-strerror_init(void)
-{
-
-	/*
-	 * Cache NLS data before entering capability mode.
-	 * XXXPJD: There should be strerror_init() and strsignal_init() in libc.
-	 */
-	(void)catopen("libc", NL_CAT_LOCALE);
-}
-
-static void
-localtime_init(void)
-{
-	time_t ltime;
-
-	/*
-	 * Allow localtime(3) to cache /etc/localtime content before entering
-	 * capability mode.
-	 * XXXPJD: There should be localtime_init() in libc.
-	 */
-	(void)time(&ltime);
-	(void)localtime(&ltime);
-}
-
-#ifdef HAVE_LIBCASPER
 static int
 cappwdgrp_setup(cap_channel_t **cappwdp, cap_channel_t **capgrpp)
 {
@@ -236,7 +219,7 @@ cappwdgrp_setup(cap_channel_t **cappwdp, cap_channel_t **capgrpp)
 	*capgrpp = capgrploc;
 	return (0);
 }
-#endif	/* HAVE_LIBCASPER */
+#endif	/* WITH_CASPER */
 
 static void
 print_integer_arg(const char *(*decoder)(int), int value)
@@ -382,40 +365,40 @@ main(int argc, char *argv[])
 	while ((ch = getopt(argc,argv,"f:dElm:np:AHRrSsTt:")) != -1)
 		switch (ch) {
 		case 'A':
-			abiflag = 1;
+			abiflag = true;
 			break;
 		case 'f':
 			tracefile = optarg;
 			break;
 		case 'd':
-			decimal = 1;
+			decimal = true;
 			break;
 		case 'l':
-			tail = 1;
+			tail = true;
 			break;
 		case 'm':
 			maxdata = atoi(optarg);
 			break;
 		case 'n':
-			fancy = 0;
+			fancy = false;
 			break;
 		case 'p':
 			pid = atoi(optarg);
 			break;
 		case 'r':
-			resolv = 1;
+			resolv = true;
 			break;
 		case 'S':
-			syscallno = 1;
+			syscallno = true;
 			break;
 		case 's':
-			suppressdata = 1;
+			suppressdata = true;
 			break;
 		case 'E':
 			timestamp |= TIMESTAMP_ELAPSED;
 			break;
 		case 'H':
-			threads = 1;
+			threads = true;
 			break;
 		case 'R':
 			timestamp |= TIMESTAMP_RELATIVE;
@@ -442,22 +425,23 @@ main(int argc, char *argv[])
 		if (!freopen(tracefile, "r", stdin))
 			err(1, "%s", tracefile);
 
-	strerror_init();
-	localtime_init();
-#ifdef HAVE_LIBCASPER
-	if (resolv != 0) {
+	caph_cache_catpages();
+	caph_cache_tzdata();
+
+#ifdef WITH_CASPER
+	if (resolv) {
 		if (cappwdgrp_setup(&cappwd, &capgrp) < 0) {
 			cappwd = NULL;
 			capgrp = NULL;
 		}
 	}
-	if (resolv == 0 || (cappwd != NULL && capgrp != NULL)) {
-		if (cap_enter() < 0 && errno != ENOSYS)
+	if (!resolv || (cappwd != NULL && capgrp != NULL)) {
+		if (caph_enter() < 0)
 			err(1, "unable to enter capability mode");
 	}
 #else
-	if (resolv == 0) {
-		if (cap_enter() < 0 && errno != ENOSYS)
+	if (!resolv) {
+		if (caph_enter() < 0)
 			err(1, "unable to enter capability mode");
 	}
 #endif
@@ -484,10 +468,6 @@ main(int argc, char *argv[])
 				drop_logged = 1;
 			}
 		}
-		if (trpoints & (1<<ktr_header.ktr_type))
-			if (pid == 0 || ktr_header.ktr_pid == pid ||
-			    ktr_header.ktr_tid == pid)
-				dumpheader(&ktr_header);
 		if ((ktrlen = ktr_header.ktr_len) < 0)
 			errx(1, "bogus length 0x%x", ktrlen);
 		if (ktrlen > size) {
@@ -500,12 +480,13 @@ main(int argc, char *argv[])
 			errx(1, "data too short");
 		if (fetchprocinfo(&ktr_header, (u_int *)m) != 0)
 			continue;
-		sv_flags = abidump(&ktr_header);
 		if (pid && ktr_header.ktr_pid != pid &&
 		    ktr_header.ktr_tid != pid)
 			continue;
 		if ((trpoints & (1<<ktr_header.ktr_type)) == 0)
 			continue;
+		sv_flags = findabi(&ktr_header);
+		dumpheader(&ktr_header, sv_flags);
 		drop_logged = 0;
 		switch (ktr_header.ktr_type) {
 		case KTR_SYSCALL:
@@ -544,6 +525,9 @@ main(int argc, char *argv[])
 			break;
 		case KTR_FAULTEND:
 			ktrfaultend((struct ktr_faultend *)m);
+			break;
+		case KTR_STRUCT_ARRAY:
+			ktrstructarray((struct ktr_struct_array *)m, ktrlen);
 			break;
 		default:
 			printf("\n");
@@ -603,56 +587,26 @@ fetchprocinfo(struct ktr_header *kth, u_int *flags)
 }
 
 u_int
-abidump(struct ktr_header *kth)
+findabi(struct ktr_header *kth)
 {
 	struct proc_info *pi;
-	const char *abi;
-	const char *arch;
-	u_int flags = 0;
 
 	TAILQ_FOREACH(pi, &trace_procs, info) {
 		if (pi->pid == kth->ktr_pid) {
-			flags = pi->sv_flags;
-			break;
+			return (pi->sv_flags);
 		}
 	}
-
-	if (abiflag == 0)
-		return (flags);
-
-	switch (flags & SV_ABI_MASK) {
-	case SV_ABI_LINUX:
-		abi = "L";
-		break;
-	case SV_ABI_FREEBSD:
-		abi = "F";
-		break;
-	case SV_ABI_CLOUDABI:
-		abi = "C";
-		break;
-	default:
-		abi = "U";
-		break;
-	}
-
-	if (flags & SV_LP64)
-		arch = "64";
-	else if (flags & SV_ILP32)
-		arch = "32";
-	else
-		arch = "00";
-
-	printf("%s%s  ", abi, arch);
-
-	return (flags);
+	return (0);
 }
 
 void
-dumpheader(struct ktr_header *kth)
+dumpheader(struct ktr_header *kth, u_int sv_flags)
 {
 	static char unknown[64];
 	static struct timeval prevtime, prevtime_e;
 	struct timeval temp;
+	const char *abi;
+	const char *arch;
 	const char *type;
 	const char *sign;
 
@@ -679,15 +633,12 @@ dumpheader(struct ktr_header *kth)
 		type = "USER";
 		break;
 	case KTR_STRUCT:
+	case KTR_STRUCT_ARRAY:
 		type = "STRU";
 		break;
 	case KTR_SYSCTL:
 		type = "SCTL";
 		break;
-	case KTR_PROCCTOR:
-		/* FALLTHROUGH */
-	case KTR_PROCDTOR:
-		return;
 	case KTR_CAPFAIL:
 		type = "CAP ";
 		break;
@@ -745,6 +696,31 @@ dumpheader(struct ktr_header *kth)
 		}
 	}
 	printf("%s  ", type);
+	if (abiflag != 0) {
+		switch (sv_flags & SV_ABI_MASK) {
+		case SV_ABI_LINUX:
+			abi = "L";
+			break;
+		case SV_ABI_FREEBSD:
+			abi = "F";
+			break;
+		case SV_ABI_CLOUDABI:
+			abi = "C";
+			break;
+		default:
+			abi = "U";
+			break;
+		}
+
+		if ((sv_flags & SV_LP64) != 0)
+			arch = "64";
+		else if ((sv_flags & SV_ILP32) != 0)
+			arch = "32";
+		else
+			arch = "00";
+
+		printf("%s%s  ", abi, arch);
+	}
 }
 
 #include <sys/syscall.h>
@@ -772,18 +748,14 @@ syscallabi(u_int sv_flags)
 	switch (sv_flags & SV_ABI_MASK) {
 	case SV_ABI_FREEBSD:
 		return (SYSDECODE_ABI_FREEBSD);
-#if defined(__amd64__) || defined(__i386__)
 	case SV_ABI_LINUX:
-#ifdef __amd64__
+#ifdef __LP64__
 		if (sv_flags & SV_ILP32)
 			return (SYSDECODE_ABI_LINUX32);
 #endif
 		return (SYSDECODE_ABI_LINUX);
-#endif
-#if defined(__aarch64__) || defined(__amd64__)
 	case SV_ABI_CLOUDABI:
 		return (SYSDECODE_ABI_CLOUDABI64);
-#endif
 	default:
 		return (SYSDECODE_ABI_UNKNOWN);
 	}
@@ -1865,17 +1837,17 @@ ktrstat(struct stat *statp)
 	printf("struct stat {");
 	printf("dev=%ju, ino=%ju, ",
 		(uintmax_t)statp->st_dev, (uintmax_t)statp->st_ino);
-	if (resolv == 0)
+	if (!resolv)
 		printf("mode=0%jo, ", (uintmax_t)statp->st_mode);
 	else {
 		strmode(statp->st_mode, mode);
 		printf("mode=%s, ", mode);
 	}
 	printf("nlink=%ju, ", (uintmax_t)statp->st_nlink);
-	if (resolv == 0) {
+	if (!resolv) {
 		pwd = NULL;
 	} else {
-#ifdef HAVE_LIBCASPER
+#ifdef WITH_CASPER
 		if (cappwd != NULL)
 			pwd = cap_getpwuid(cappwd, statp->st_uid);
 		else
@@ -1886,10 +1858,10 @@ ktrstat(struct stat *statp)
 		printf("uid=%ju, ", (uintmax_t)statp->st_uid);
 	else
 		printf("uid=\"%s\", ", pwd->pw_name);
-	if (resolv == 0) {
+	if (!resolv) {
 		grp = NULL;
 	} else {
-#ifdef HAVE_LIBCASPER
+#ifdef WITH_CASPER
 		if (capgrp != NULL)
 			grp = cap_getgrgid(capgrp, statp->st_gid);
 		else
@@ -1902,7 +1874,7 @@ ktrstat(struct stat *statp)
 		printf("gid=\"%s\", ", grp->gr_name);
 	printf("rdev=%ju, ", (uintmax_t)statp->st_rdev);
 	printf("atime=");
-	if (resolv == 0)
+	if (!resolv)
 		printf("%jd", (intmax_t)statp->st_atim.tv_sec);
 	else {
 		tm = localtime(&statp->st_atim.tv_sec);
@@ -1914,7 +1886,7 @@ ktrstat(struct stat *statp)
 	else
 		printf(", ");
 	printf("mtime=");
-	if (resolv == 0)
+	if (!resolv)
 		printf("%jd", (intmax_t)statp->st_mtim.tv_sec);
 	else {
 		tm = localtime(&statp->st_mtim.tv_sec);
@@ -1926,7 +1898,7 @@ ktrstat(struct stat *statp)
 	else
 		printf(", ");
 	printf("ctime=");
-	if (resolv == 0)
+	if (!resolv)
 		printf("%jd", (intmax_t)statp->st_ctim.tv_sec);
 	else {
 		tm = localtime(&statp->st_ctim.tv_sec);
@@ -1938,7 +1910,7 @@ ktrstat(struct stat *statp)
 	else
 		printf(", ");
 	printf("birthtime=");
-	if (resolv == 0)
+	if (!resolv)
 		printf("%jd", (intmax_t)statp->st_birthtim.tv_sec);
 	else {
 		tm = localtime(&statp->st_birthtim.tv_sec);
@@ -2081,6 +2053,137 @@ ktrfaultend(struct ktr_faultend *ktr)
 	else
 		printf("<invalid=%d>", ktr->result);
 	printf("\n");
+}
+
+void
+ktrkevent(struct kevent *kev)
+{
+
+	printf("{ ident=");
+	switch (kev->filter) {
+	case EVFILT_READ:
+	case EVFILT_WRITE:
+	case EVFILT_VNODE:
+	case EVFILT_PROC:
+	case EVFILT_TIMER:
+	case EVFILT_PROCDESC:
+	case EVFILT_EMPTY:
+		printf("%ju", (uintmax_t)kev->ident);
+		break;
+	case EVFILT_SIGNAL:
+		print_signal(kev->ident);
+		break;
+	default:
+		printf("%p", (void *)kev->ident);
+	}
+	printf(", filter=");
+	print_integer_arg(sysdecode_kevent_filter, kev->filter);
+	printf(", flags=");
+	print_mask_arg0(sysdecode_kevent_flags, kev->flags);
+	printf(", fflags=");
+	sysdecode_kevent_fflags(stdout, kev->filter, kev->fflags,
+	    decimal ? 10 : 16);
+	printf(", data=%#jx, udata=%p }", (uintmax_t)kev->data, kev->udata);
+}
+
+void
+ktrstructarray(struct ktr_struct_array *ksa, size_t buflen)
+{
+	struct kevent kev;
+	char *name, *data;
+	size_t namelen, datalen;
+	int i;
+	bool first;
+
+	buflen -= sizeof(*ksa);
+	for (name = (char *)(ksa + 1), namelen = 0;
+	     namelen < buflen && name[namelen] != '\0';
+	     ++namelen)
+		/* nothing */;
+	if (namelen == buflen)
+		goto invalid;
+	if (name[namelen] != '\0')
+		goto invalid;
+	/* sanity check */
+	for (i = 0; i < (int)namelen; ++i)
+		if (!isalnum(name[i]) && name[i] != '_')
+			goto invalid;
+	data = name + namelen + 1;
+	datalen = buflen - namelen - 1;
+	printf("struct %s[] = { ", name);
+	first = true;
+	for (; datalen >= ksa->struct_size;
+	    data += ksa->struct_size, datalen -= ksa->struct_size) {
+		if (!first)
+			printf("\n             ");
+		else
+			first = false;
+		if (strcmp(name, "kevent") == 0) {
+			if (ksa->struct_size != sizeof(kev))
+				goto bad_size;
+			memcpy(&kev, data, sizeof(kev));
+			ktrkevent(&kev);
+		} else if (strcmp(name, "kevent_freebsd11") == 0) {
+			struct kevent_freebsd11 kev11;
+
+			if (ksa->struct_size != sizeof(kev11))
+				goto bad_size;
+			memcpy(&kev11, data, sizeof(kev11));
+			memset(&kev, 0, sizeof(kev));
+			kev.ident = kev11.ident;
+			kev.filter = kev11.filter;
+			kev.flags = kev11.flags;
+			kev.fflags = kev11.fflags;
+			kev.data = kev11.data;
+			kev.udata = kev11.udata;
+			ktrkevent(&kev);
+#ifdef _WANT_KEVENT32
+		} else if (strcmp(name, "kevent32") == 0) {
+			struct kevent32 kev32;
+
+			if (ksa->struct_size != sizeof(kev32))
+				goto bad_size;
+			memcpy(&kev32, data, sizeof(kev32));
+			memset(&kev, 0, sizeof(kev));
+			kev.ident = kev32.ident;
+			kev.filter = kev32.filter;
+			kev.flags = kev32.flags;
+			kev.fflags = kev32.fflags;
+#if BYTE_ORDER == BIG_ENDIAN
+			kev.data = kev32.data2 | ((int64_t)kev32.data1 << 32);
+#else
+			kev.data = kev32.data1 | ((int64_t)kev32.data2 << 32);
+#endif
+			kev.udata = (void *)(uintptr_t)kev32.udata;
+			ktrkevent(&kev);
+		} else if (strcmp(name, "kevent32_freebsd11") == 0) {
+			struct kevent32_freebsd11 kev32;
+
+			if (ksa->struct_size != sizeof(kev32))
+				goto bad_size;
+			memcpy(&kev32, data, sizeof(kev32));
+			memset(&kev, 0, sizeof(kev));
+			kev.ident = kev32.ident;
+			kev.filter = kev32.filter;
+			kev.flags = kev32.flags;
+			kev.fflags = kev32.fflags;
+			kev.data = kev32.data;
+			kev.udata = (void *)(uintptr_t)kev32.udata;
+			ktrkevent(&kev);
+#endif
+		} else {
+			printf("<unknown structure> }\n");
+			return;
+		}
+	}
+	printf(" }\n");
+	return;
+invalid:
+	printf("invalid record\n");
+	return;
+bad_size:
+	printf("<bad size> }\n");
+	return;
 }
 
 void

@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2008-2010 Lawrence Stewart <lstewart@freebsd.org>
  * Copyright (c) 2010 The FreeBSD Foundation
  * All rights reserved.
@@ -193,9 +195,7 @@ cubic_ack_received(struct cc_var *ccv, uint16_t type)
 static void
 cubic_cb_destroy(struct cc_var *ccv)
 {
-
-	if (ccv->cc_data != NULL)
-		free(ccv->cc_data, M_CUBIC);
+	free(ccv->cc_data, M_CUBIC);
 }
 
 static int

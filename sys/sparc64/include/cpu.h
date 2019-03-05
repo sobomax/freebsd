@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1990 The Regents of the University of California.
  * All rights reserved.
  *
@@ -46,6 +48,7 @@
 #define	cpu_getstack(td)	((td)->td_frame->tf_sp)
 #define	cpu_setstack(td, sp)	((td)->td_frame->tf_sp = (sp))
 #define	cpu_spinwait()		/* nothing */
+#define	cpu_lock_delay()	DELAY(1)
 
 #ifdef _KERNEL
 

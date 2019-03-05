@@ -83,6 +83,49 @@ HERE
 	atf_check cmp expectfile outpipe
 }
 
+# Regression test for PR 222671
+# https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=222671
+atf_test_case pipe_leading_newline_r
+pipe_leading_newline_r_head()
+{
+	atf_set "descr" "Reverse a pipe whose first character is a newline"
+}
+pipe_leading_newline_r_body()
+{
+	cat > expectfile << HERE
+3
+2
+1
+
+HERE
+	printf '\n1\n2\n3\n' | tail -r > outfile
+	printf '\n1\n2\n3\n' | tail -r > outpipe
+	atf_check cmp expectfile outfile
+	atf_check cmp expectfile outpipe
+}
+
+atf_test_case file_rc28
+file_rc28_head()
+{
+	atf_set "descr" "Reverse a file and display the last 28 characters"
+}
+file_rc28_body()
+{
+	cat > infile <<HERE
+This is the first line
+This is the second line
+This is the third line
+HERE
+	cat > expectfile << HERE
+This is the third line
+line
+HERE
+	tail -rc28 infile > outfile
+	tail -rc28 < infile > outpipe
+	atf_check cmp expectfile outfile
+	atf_check cmp expectfile outpipe
+}
+
 atf_test_case file_rc28
 file_rc28_head()
 {
@@ -222,10 +265,10 @@ broken_pipe_head()
 }
 broken_pipe_body()
 {
-	atf_expect_fail "Can't seem to get testcase to work in test environment.  Reproduces easily in interactive shell."
-
-	seq -f '%128g' 1 1000 > ints
-	atf_check -s exit:1 -o ignore -e "inline:tail: stdout" tail -n 856 ints | awk '{ exit }'
+	atf_check -o save:ints seq -f '%128g' 1 1000
+	atf_check -s ignore \
+	    -e "inline:tail: stdout\nexit code: 1\n" \
+	    -x '(tail -n 856 ints; echo exit code: $? >&2) | sleep 2'
 }
 
 
@@ -235,6 +278,7 @@ atf_init_test_cases()
 	atf_add_test_case file_r
 	atf_add_test_case file_rc28
 	atf_add_test_case file_rn2
+	atf_add_test_case pipe_leading_newline_r
 	# The longfile tests are designed to exercise behavior in r_buf(),
 	# which operates on 128KB blocks
 	atf_add_test_case longfile_r
@@ -243,5 +287,5 @@ atf_init_test_cases()
 	atf_add_test_case longfile_rc135782
 	atf_add_test_case longfile_rc145782_longlines
 	atf_add_test_case longfile_rn2500
-	#atf_add_test_case broken_pipe
+	atf_add_test_case broken_pipe
 }

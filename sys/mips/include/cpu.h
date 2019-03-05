@@ -1,6 +1,8 @@
 /*	$OpenBSD: cpu.h,v 1.4 1998/09/15 10:50:12 pefo Exp $	*/
 
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1992, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -69,6 +71,7 @@
 #define	cpu_getstack(td)	((td)->td_frame->sp)
 #define	cpu_setstack(td, nsp)	((td)->td_frame->sp = (nsp))
 #define	cpu_spinwait()		/* nothing */
+#define	cpu_lock_delay()	DELAY(1)
 
 /*
  * A machine-independent interface to the CPU's counter.

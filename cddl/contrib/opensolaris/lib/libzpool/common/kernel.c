@@ -32,6 +32,7 @@
 #include <string.h>
 #include <zlib.h>
 #include <libgen.h>
+#include <sys/assfail.h>
 #include <sys/spa.h>
 #include <sys/stat.h>
 #include <sys/processor.h>
@@ -735,11 +736,10 @@ static char ce_suffix[CE_IGNORE][2] = { "", "\n", "\n", "" };
 void
 vpanic(const char *fmt, va_list adx)
 {
-	(void) fprintf(stderr, "error: ");
-	(void) vfprintf(stderr, fmt, adx);
-	(void) fprintf(stderr, "\n");
-
-	abort();	/* think of it as a "user-level crash dump" */
+	char buf[512];
+	(void) vsnprintf(buf, 512, fmt, adx);
+	assfail(buf, NULL, 0);
+	abort(); /* necessary to make vpanic meet noreturn requirements */
 }
 
 void
@@ -1006,6 +1006,16 @@ kernel_fini(void)
 
 	random_fd = -1;
 	urandom_fd = -1;
+}
+
+/* ARGSUSED */
+uint32_t
+zone_get_hostid(void *zonep)
+{
+	/*
+	 * We're emulating the system's hostid in userland.
+	 */
+	return (strtoul(hw_serial, NULL, 10));
 }
 
 int

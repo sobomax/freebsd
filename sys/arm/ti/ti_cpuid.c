@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2011
  *	Ben Gray <ben.r.gray@gmail.com>.
  * All rights reserved.
@@ -39,6 +41,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/mutex.h>
 
 #include <machine/bus.h>
+#include <machine/cpu.h>
 #include <machine/fdt.h>
 #include <machine/resource.h>
 #include <machine/intr.h>
@@ -122,7 +125,7 @@ omap4_get_revision(void)
 	 * the ARM cpuid to get the correct revision.
 	 */
 	if (revision == 0) {
-		id_code = cpu_ident();
+		id_code = cp15_midr_get();
 		revision = (id_code & 0xf) - 1;
 	}
 
@@ -272,11 +275,7 @@ am335x_get_revision(void)
 static void
 ti_cpu_ident(void *dummy)
 {
-	phandle_t root;
-
-	root = OF_finddevice("/");
-	if (!ofw_bus_node_is_compatible(root, "ti,omap4") &&
-	    !ofw_bus_node_is_compatible(root, "ti,am33xx"))
+	if (!ti_soc_is_supported())
 		return;
 	switch(ti_chip()) {
 	case CHIP_OMAP_4:

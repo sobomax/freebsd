@@ -47,7 +47,7 @@
 
 #include "_elftc.h"
 
-ELFTC_VCSID("$Id: readelf.c 3519 2017-04-09 23:15:58Z kaiwang27 $");
+ELFTC_VCSID("$Id: readelf.c 3580 2017-09-15 23:29:59Z emaste $");
 
 /* Backwards compatability for older FreeBSD releases. */
 #ifndef	STB_GNU_UNIQUE
@@ -822,6 +822,7 @@ dt_type(unsigned int mach, unsigned int dtype)
 	case DT_SUNW_RTLDINF: return "SUNW_RTLDINF";
 	case DT_SUNW_FILTER: return "SUNW_FILTER";
 	case DT_SUNW_CAP: return "SUNW_CAP";
+	case DT_SUNW_ASLR: return "SUNW_ASLR";
 	case DT_CHECKSUM: return "CHECKSUM";
 	case DT_PLTPADSZ: return "PLTPADSZ";
 	case DT_MOVEENT: return "MOVEENT";
@@ -1120,6 +1121,7 @@ note_type_freebsd(unsigned int nt)
 	case 1: return "NT_FREEBSD_ABI_TAG";
 	case 2: return "NT_FREEBSD_NOINIT_TAG";
 	case 3: return "NT_FREEBSD_ARCH_TAG";
+	case 4: return "NT_FREEBSD_FEATURE_CTL";
 	default: return (note_type_unknown(nt));
 	}
 }
@@ -1141,7 +1143,9 @@ note_type_freebsd_core(unsigned int nt)
 	case 14: return "NT_PROCSTAT_OSREL";
 	case 15: return "NT_PROCSTAT_PSSTRINGS";
 	case 16: return "NT_PROCSTAT_AUXV";
+	case 17: return "NT_PTLWPINFO";
 	case 0x202: return "NT_X86_XSTATE (x86 XSAVE extended state)";
+	case 0x400: return "NT_ARM_VFP (arm VFP registers)";
 	default: return (note_type_unknown(nt));
 	}
 }
@@ -1186,6 +1190,7 @@ note_type_gnu(unsigned int nt)
 	case 2: return "NT_GNU_HWCAP (Hardware capabilities)";
 	case 3: return "NT_GNU_BUILD_ID (Build id set by ld(1))";
 	case 4: return "NT_GNU_GOLD_VERSION (GNU gold version)";
+	case 5: return "NT_GNU_PROPERTY_TYPE_0";
 	default: return (note_type_unknown(nt));
 	}
 }
@@ -2375,11 +2380,22 @@ dump_phdr(struct readelf *re)
 		}
 		printf("   %2.2d     ", i);
 		/* skip NULL section. */
-		for (j = 1; (size_t)j < re->shnum; j++)
-			if (re->sl[j].addr >= phdr.p_vaddr &&
-			    re->sl[j].addr + re->sl[j].sz <=
+		for (j = 1; (size_t)j < re->shnum; j++) {
+			if (re->sl[j].off < phdr.p_offset)
+				continue;
+			if (re->sl[j].off + re->sl[j].sz >
+			    phdr.p_offset + phdr.p_filesz &&
+			    re->sl[j].type != SHT_NOBITS)
+				continue;
+			if (re->sl[j].addr < phdr.p_vaddr ||
+			    re->sl[j].addr + re->sl[j].sz >
 			    phdr.p_vaddr + phdr.p_memsz)
-				printf("%s ", re->sl[j].name);
+				continue;
+			if (phdr.p_type == PT_TLS &&
+			    (re->sl[j].flags & SHF_TLS) == 0)
+				continue;
+			printf("%s ", re->sl[j].name);
+		}
 		printf("\n");
 	}
 #undef	PH_HDR
@@ -2693,6 +2709,9 @@ dump_arch_dyn_val(struct readelf *re, GElf_Dyn *dyn)
 		case DT_MIPS_TIME_STAMP:
 			printf(" %s\n", timestamp(dyn->d_un.d_val));
 			break;
+		default:
+			printf("\n");
+			break;
 		}
 		break;
 	default:
@@ -2748,6 +2767,7 @@ dump_dyn_val(struct readelf *re, GElf_Dyn *dyn, uint32_t stab)
 	case DT_SYMENT:
 	case DT_RELSZ:
 	case DT_RELENT:
+	case DT_PREINIT_ARRAYSZ:
 	case DT_INIT_ARRAYSZ:
 	case DT_FINI_ARRAYSZ:
 	case DT_GNU_CONFLICTSZ:
@@ -4700,7 +4720,7 @@ dump_dwarf_line_decoded(struct readelf *re)
 		    DW_DLV_OK)
 			dir = NULL;
 		printf("CU: ");
-		if (dir && file)
+		if (dir && file && file[0] != '/')
 			printf("%s/", dir);
 		if (file)
 			printf("%s", file);

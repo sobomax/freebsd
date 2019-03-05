@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997, 1998 Justin T. Gibbs.
  * Copyright (c) 2013 The FreeBSD Foundation
  * All rights reserved.
@@ -41,8 +43,12 @@ __FBSDID("$FreeBSD$");
 #include <sys/memdesc.h>
 #include <sys/mutex.h>
 #include <sys/uio.h>
+#include <sys/vmmeter.h>
 #include <vm/vm.h>
 #include <vm/vm_extern.h>
+#include <vm/vm_param.h>
+#include <vm/vm_page.h>
+#include <vm/vm_phys.h>
 #include <vm/pmap.h>
 #include <machine/bus.h>
 #include <x86/include/busdma_impl.h>
@@ -93,14 +99,15 @@ bus_dma_dflt_lock(void *arg, bus_dma_lock_op_t op)
  * to check for a match, if there is no filter callback then assume a match.
  */
 int
-bus_dma_run_filter(struct bus_dma_tag_common *tc, bus_addr_t paddr)
+bus_dma_run_filter(struct bus_dma_tag_common *tc, vm_paddr_t paddr)
 {
 	int retval;
 
 	retval = 0;
 	do {
-		if (((paddr > tc->lowaddr && paddr <= tc->highaddr) ||
-		    ((paddr & (tc->alignment - 1)) != 0)) &&
+		if ((paddr >= BUS_SPACE_MAXADDR ||
+		    (paddr > tc->lowaddr && paddr <= tc->highaddr) ||
+		    (paddr & (tc->alignment - 1)) != 0) &&
 		    (tc->filter == NULL ||
 		    (*tc->filter)(tc->filterarg, paddr) != 0))
 			retval = 1;
@@ -178,10 +185,27 @@ common_bus_dma_tag_create(struct bus_dma_tag_common *parent,
 			common->filterarg = parent->filterarg;
 			common->parent = parent->parent;
 		}
+		common->domain = parent->domain;
 		atomic_add_int(&parent->ref_count, 1);
 	}
+	common->domain = vm_phys_domain_match(common->domain, 0ul,
+	    common->lowaddr);
 	*dmat = common;
 	return (0);
+}
+
+int
+bus_dma_tag_set_domain(bus_dma_tag_t dmat, int domain)
+{
+	struct bus_dma_tag_common *tc;
+
+	tc = (struct bus_dma_tag_common *)dmat;
+	domain = vm_phys_domain_match(domain, 0ul, tc->lowaddr);
+	/* Only call the callback if it changes. */
+	if (domain == tc->domain)
+		return (0);
+	tc->domain = domain;
+	return (tc->impl->tag_set_domain(dmat));
 }
 
 /*

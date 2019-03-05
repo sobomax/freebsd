@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2007, by Cisco Systems, Inc. All rights reserved.
  * Copyright (c) 2008-2012, by Randall Stewart. All rights reserved.
  * Copyright (c) 2008-2012, by Michael Tuexen. All rights reserved.
@@ -393,6 +395,9 @@ sctp_sysctl_handle_assoclist(SYSCTL_HANDLER_ARGS)
 		SCTP_LTRACE_ERR_RET(NULL, NULL, NULL, SCTP_FROM_SCTP_SYSCTL, EPERM);
 		return (EPERM);
 	}
+	memset(&xinpcb, 0, sizeof(xinpcb));
+	memset(&xstcb, 0, sizeof(xstcb));
+	memset(&xraddr, 0, sizeof(xraddr));
 	LIST_FOREACH(inp, &SCTP_BASE_INFO(listhead), sctp_list) {
 		SCTP_INP_RLOCK(inp);
 		if (inp->sctp_flags & SCTP_PCB_FLAGS_SOCKET_ALLGONE) {
@@ -407,7 +412,7 @@ sctp_sysctl_handle_assoclist(SYSCTL_HANDLER_ARGS)
 		xinpcb.total_recvs = inp->total_recvs;
 		xinpcb.total_nospaces = inp->total_nospaces;
 		xinpcb.fragmentation_point = inp->sctp_frag_point;
-		xinpcb.socket = inp->sctp_socket;
+		xinpcb.socket = (uintptr_t)inp->sctp_socket;
 		so = inp->sctp_socket;
 		if ((so == NULL) ||
 		    (!SCTP_IS_LISTENING(inp)) ||
@@ -506,6 +511,14 @@ sctp_sysctl_handle_assoclist(SYSCTL_HANDLER_ARGS)
 				xraddr.rtt = net->rtt / 1000;
 				xraddr.heartbeat_interval = net->heart_beat_delay;
 				xraddr.ssthresh = net->ssthresh;
+				xraddr.encaps_port = net->port;
+				if (net->dest_state & SCTP_ADDR_UNCONFIRMED) {
+					xraddr.state = SCTP_UNCONFIRMED;
+				} else if (net->dest_state & SCTP_ADDR_REACHABLE) {
+					xraddr.state = SCTP_ACTIVE;
+				} else {
+					xraddr.state = SCTP_INACTIVE;
+				}
 				xraddr.start_time.tv_sec = (uint32_t)net->start_time.tv_sec;
 				xraddr.start_time.tv_usec = (uint32_t)net->start_time.tv_usec;
 				SCTP_INP_RUNLOCK(inp);
@@ -706,7 +719,6 @@ sctp_sysctl_handle_stats(SYSCTL_HANDLER_ARGS)
 		sb.sctps_recvauthfailed += sarry->sctps_recvauthfailed;
 		sb.sctps_recvexpress += sarry->sctps_recvexpress;
 		sb.sctps_recvexpressm += sarry->sctps_recvexpressm;
-		sb.sctps_recvnocrc += sarry->sctps_recvnocrc;
 		sb.sctps_recvswcrc += sarry->sctps_recvswcrc;
 		sb.sctps_recvhwcrc += sarry->sctps_recvhwcrc;
 		sb.sctps_sendpackets += sarry->sctps_sendpackets;
@@ -719,7 +731,6 @@ sctp_sysctl_handle_stats(SYSCTL_HANDLER_ARGS)
 		sb.sctps_sendecne += sarry->sctps_sendecne;
 		sb.sctps_sendauth += sarry->sctps_sendauth;
 		sb.sctps_senderrors += sarry->sctps_senderrors;
-		sb.sctps_sendnocrc += sarry->sctps_sendnocrc;
 		sb.sctps_sendswcrc += sarry->sctps_sendswcrc;
 		sb.sctps_sendhwcrc += sarry->sctps_sendhwcrc;
 		sb.sctps_pdrpfmbox += sarry->sctps_pdrpfmbox;

@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -174,12 +174,6 @@ UtAttachNameseg (
     ACPI_PARSE_OBJECT       *Op,
     char                    *Name);
 
-static void
-UtReallocLineBuffers (
-    char                    **Buffer,
-    UINT32                  OldSize,
-    UINT32                  NewSize);
-
 
 /*******************************************************************************
  *
@@ -244,6 +238,97 @@ UtQueryForOverwrite (
 
 /*******************************************************************************
  *
+ * FUNCTION:    UtNodeIsDescendantOf
+ *
+ * PARAMETERS:  Node1                   - Child node
+ *              Node2                   - Possible parent node
+ *
+ * RETURN:      Boolean
+ *
+ * DESCRIPTION: Returns TRUE if Node1 is a descendant of Node2. Otherwise,
+ *              return FALSE. Note, we assume a NULL Node2 element to be the
+ *              topmost (root) scope. All nodes are descendants of the root.
+ *              Note: Nodes at the same level (siblings) are not considered
+ *              descendants.
+ *
+ ******************************************************************************/
+
+BOOLEAN
+UtNodeIsDescendantOf (
+    ACPI_NAMESPACE_NODE     *Node1,
+    ACPI_NAMESPACE_NODE     *Node2)
+{
+
+    if (Node1 == Node2)
+    {
+        return (FALSE);
+    }
+
+    if (!Node2)
+    {
+        return (TRUE); /* All nodes descend from the root */
+    }
+
+    /* Walk upward until the root is reached or parent is found */
+
+    while (Node1)
+    {
+        if (Node1 == Node2)
+        {
+            return (TRUE);
+        }
+
+        Node1 = Node1->Parent;
+    }
+
+    return (FALSE);
+}
+
+
+/*******************************************************************************
+ *
+ * FUNCTION:    UtGetParentMethod
+ *
+ * PARAMETERS:  Node                    - Namespace node for any object
+ *
+ * RETURN:      Namespace node for the parent method
+ *              NULL - object is not within a method
+ *
+ * DESCRIPTION: Find the parent (owning) method node for a namespace object
+ *
+ ******************************************************************************/
+
+void *
+UtGetParentMethod (
+    ACPI_NAMESPACE_NODE     *Node)
+{
+    ACPI_NAMESPACE_NODE     *ParentNode;
+
+
+    if (!Node)
+    {
+        return (NULL);
+    }
+
+    /* Walk upward until a method is found, or the root is reached */
+
+    ParentNode = Node->Parent;
+    while (ParentNode)
+    {
+        if (ParentNode->Type == ACPI_TYPE_METHOD)
+        {
+            return (ParentNode);
+        }
+
+        ParentNode = ParentNode->Parent;
+    }
+
+    return (NULL); /* Object is not within a control method */
+}
+
+
+/*******************************************************************************
+ *
  * FUNCTION:    UtDisplaySupportedTables
  *
  * PARAMETERS:  None
@@ -269,7 +354,7 @@ UtDisplaySupportedTables (
     /* All ACPI tables with the common table header */
 
     printf ("\n  Supported ACPI tables:\n");
-    for (TableData = Gbl_AcpiSupportedTables, i = 1;
+    for (TableData = AcpiGbl_SupportedTables, i = 1;
          TableData->Signature; TableData++, i++)
     {
         printf ("%8u) %s    %s\n", i,
@@ -306,45 +391,6 @@ UtDisplayConstantOpcodes (
             printf ("%s\n", AcpiGbl_AmlOpInfo[i].Name);
         }
     }
-}
-
-
-/*******************************************************************************
- *
- * FUNCTION:    UtLocalCalloc
- *
- * PARAMETERS:  Size                - Bytes to be allocated
- *
- * RETURN:      Pointer to the allocated memory. Guaranteed to be valid.
- *
- * DESCRIPTION: Allocate zero-initialized memory. Aborts the compile on an
- *              allocation failure, on the assumption that nothing more can be
- *              accomplished.
- *
- ******************************************************************************/
-
-void *
-UtLocalCalloc (
-    UINT32                  Size)
-{
-    void                    *Allocated;
-
-
-    Allocated = ACPI_ALLOCATE_ZEROED (Size);
-    if (!Allocated)
-    {
-        AslCommonError (ASL_ERROR, ASL_MSG_MEMORY_ALLOCATION,
-            Gbl_CurrentLineNumber, Gbl_LogicalLineNumber,
-            Gbl_InputByteCount, Gbl_CurrentColumn,
-            Gbl_Files[ASL_FILE_INPUT].Filename, NULL);
-
-        CmCleanupAndExit ();
-        exit (1);
-    }
-
-    TotalAllocations++;
-    TotalAllocated += Size;
-    return (Allocated);
 }
 
 
@@ -432,7 +478,7 @@ DbgPrint (
     va_list                 Args;
 
 
-    if (!Gbl_DebugFlag)
+    if (!AslGbl_DebugFlag)
     {
         return;
     }
@@ -467,7 +513,7 @@ UtSetParseOpName (
     ACPI_PARSE_OBJECT       *Op)
 {
 
-    strncpy (Op->Asl.ParseOpName, UtGetOpName (Op->Asl.ParseOpcode),
+    AcpiUtSafeStrncpy (Op->Asl.ParseOpName, UtGetOpName (Op->Asl.ParseOpcode),
         ACPI_MAX_PARSEOP_NAME);
 }
 
@@ -501,20 +547,20 @@ UtDisplaySummary (
 
     /* Summary of main input and output files */
 
-    if (Gbl_FileType == ASL_INPUT_TYPE_ASCII_DATA)
+    if (AslGbl_FileType == ASL_INPUT_TYPE_ASCII_DATA)
     {
         FlPrintFile (FileId,
             "%-14s %s - %u lines, %u bytes, %u fields\n",
             "Table Input:",
-            Gbl_Files[ASL_FILE_INPUT].Filename, Gbl_CurrentLineNumber,
-            Gbl_InputByteCount, Gbl_InputFieldCount);
+            AslGbl_Files[ASL_FILE_INPUT].Filename, AslGbl_CurrentLineNumber,
+            AslGbl_InputByteCount, AslGbl_InputFieldCount);
 
-        if ((Gbl_ExceptionCount[ASL_ERROR] == 0) || (Gbl_IgnoreErrors))
+        if ((AslGbl_ExceptionCount[ASL_ERROR] == 0) || (AslGbl_IgnoreErrors))
         {
             FlPrintFile (FileId,
                 "%-14s %s - %u bytes\n",
                 "Binary Output:",
-                Gbl_Files[ASL_FILE_AML_OUTPUT].Filename, Gbl_TableLength);
+                AslGbl_Files[ASL_FILE_AML_OUTPUT].Filename, AslGbl_TableLength);
         }
     }
     else
@@ -522,22 +568,22 @@ UtDisplaySummary (
         FlPrintFile (FileId,
             "%-14s %s - %u lines, %u bytes, %u keywords\n",
             "ASL Input:",
-            Gbl_Files[ASL_FILE_INPUT].Filename, Gbl_CurrentLineNumber,
-            Gbl_OriginalInputFileSize, TotalKeywords);
+            AslGbl_Files[ASL_FILE_INPUT].Filename, AslGbl_CurrentLineNumber,
+            AslGbl_OriginalInputFileSize, AslGbl_TotalKeywords);
 
         /* AML summary */
 
-        if ((Gbl_ExceptionCount[ASL_ERROR] == 0) || (Gbl_IgnoreErrors))
+        if ((AslGbl_ExceptionCount[ASL_ERROR] == 0) || (AslGbl_IgnoreErrors))
         {
-            if (Gbl_Files[ASL_FILE_AML_OUTPUT].Handle)
+            if (AslGbl_Files[ASL_FILE_AML_OUTPUT].Handle)
             {
                 FlPrintFile (FileId,
                     "%-14s %s - %u bytes, %u named objects, "
                     "%u executable opcodes\n",
                     "AML Output:",
-                    Gbl_Files[ASL_FILE_AML_OUTPUT].Filename,
+                    AslGbl_Files[ASL_FILE_AML_OUTPUT].Filename,
                     FlGetFileSize (ASL_FILE_AML_OUTPUT),
-                    TotalNamedObjects, TotalExecutableOpcodes);
+                    AslGbl_TotalNamedObjects, AslGbl_TotalExecutableOpcodes);
             }
         }
     }
@@ -546,48 +592,48 @@ UtDisplaySummary (
 
     for (i = ASL_FILE_SOURCE_OUTPUT; i <= ASL_MAX_FILE_TYPE; i++)
     {
-        if (!Gbl_Files[i].Filename || !Gbl_Files[i].Handle)
+        if (!AslGbl_Files[i].Filename || !AslGbl_Files[i].Handle)
         {
             continue;
         }
 
         /* .SRC is a temp file unless specifically requested */
 
-        if ((i == ASL_FILE_SOURCE_OUTPUT) && (!Gbl_SourceOutputFlag))
+        if ((i == ASL_FILE_SOURCE_OUTPUT) && (!AslGbl_SourceOutputFlag))
         {
             continue;
         }
 
         /* .PRE is the preprocessor intermediate file */
 
-        if ((i == ASL_FILE_PREPROCESSOR)  && (!Gbl_KeepPreprocessorTempFile))
+        if ((i == ASL_FILE_PREPROCESSOR)  && (!AslGbl_KeepPreprocessorTempFile))
         {
             continue;
         }
 
         FlPrintFile (FileId, "%14s %s - %u bytes\n",
-            Gbl_Files[i].ShortDescription,
-            Gbl_Files[i].Filename, FlGetFileSize (i));
+            AslGbl_Files[i].ShortDescription,
+            AslGbl_Files[i].Filename, FlGetFileSize (i));
     }
 
     /* Error summary */
 
     FlPrintFile (FileId,
         "\nCompilation complete. %u Errors, %u Warnings, %u Remarks",
-        Gbl_ExceptionCount[ASL_ERROR],
-        Gbl_ExceptionCount[ASL_WARNING] +
-            Gbl_ExceptionCount[ASL_WARNING2] +
-            Gbl_ExceptionCount[ASL_WARNING3],
-        Gbl_ExceptionCount[ASL_REMARK]);
+        AslGbl_ExceptionCount[ASL_ERROR],
+        AslGbl_ExceptionCount[ASL_WARNING] +
+            AslGbl_ExceptionCount[ASL_WARNING2] +
+            AslGbl_ExceptionCount[ASL_WARNING3],
+        AslGbl_ExceptionCount[ASL_REMARK]);
 
-    if (Gbl_FileType != ASL_INPUT_TYPE_ASCII_DATA)
+    if (AslGbl_FileType != ASL_INPUT_TYPE_ASCII_DATA)
     {
         FlPrintFile (FileId, ", %u Optimizations",
-            Gbl_ExceptionCount[ASL_OPTIMIZATION]);
+            AslGbl_ExceptionCount[ASL_OPTIMIZATION]);
 
-        if (TotalFolds)
+        if (AslGbl_TotalFolds)
         {
-            FlPrintFile (FileId, ", %u Constants Folded", TotalFolds);
+            FlPrintFile (FileId, ", %u Constants Folded", AslGbl_TotalFolds);
         }
     }
 
@@ -624,188 +670,14 @@ UtCheckIntegerRange (
     if ((Op->Asl.Value.Integer < LowValue) ||
         (Op->Asl.Value.Integer > HighValue))
     {
-        sprintf (MsgBuffer, "0x%X, allowable: 0x%X-0x%X",
+        sprintf (AslGbl_MsgBuffer, "0x%X, allowable: 0x%X-0x%X",
             (UINT32) Op->Asl.Value.Integer, LowValue, HighValue);
 
-        AslError (ASL_ERROR, ASL_MSG_RANGE, Op, MsgBuffer);
+        AslError (ASL_ERROR, ASL_MSG_RANGE, Op, AslGbl_MsgBuffer);
         return (NULL);
     }
 
     return (Op);
-}
-
-
-/*******************************************************************************
- *
- * FUNCTION:    UtStringCacheCalloc
- *
- * PARAMETERS:  Length              - Size of buffer requested
- *
- * RETURN:      Pointer to the buffer. Aborts compiler on allocation failure
- *
- * DESCRIPTION: Allocate a string buffer. Bypass the local
- *              dynamic memory manager for performance reasons (This has a
- *              major impact on the speed of the compiler.)
- *
- ******************************************************************************/
-
-char *
-UtStringCacheCalloc (
-    UINT32                  Length)
-{
-    char                    *Buffer;
-    ASL_CACHE_INFO          *Cache;
-    UINT32                  CacheSize = ASL_STRING_CACHE_SIZE;
-
-
-    if (Length > CacheSize)
-    {
-        CacheSize = Length;
-
-        if (Gbl_StringCacheList)
-        {
-            Cache = UtLocalCalloc (sizeof (Cache->Next) + CacheSize);
-
-            /* Link new cache buffer just following head of list */
-
-            Cache->Next = Gbl_StringCacheList->Next;
-            Gbl_StringCacheList->Next = Cache;
-
-            /* Leave cache management pointers alone as they pertain to head */
-
-            Gbl_StringCount++;
-            Gbl_StringSize += Length;
-
-            return (Cache->Buffer);
-        }
-    }
-
-    if ((Gbl_StringCacheNext + Length) >= Gbl_StringCacheLast)
-    {
-        /* Allocate a new buffer */
-
-        Cache = UtLocalCalloc (sizeof (Cache->Next) + CacheSize);
-
-        /* Link new cache buffer to head of list */
-
-        Cache->Next = Gbl_StringCacheList;
-        Gbl_StringCacheList = Cache;
-
-        /* Setup cache management pointers */
-
-        Gbl_StringCacheNext = Cache->Buffer;
-        Gbl_StringCacheLast = Gbl_StringCacheNext + CacheSize;
-    }
-
-    Gbl_StringCount++;
-    Gbl_StringSize += Length;
-
-    Buffer = Gbl_StringCacheNext;
-    Gbl_StringCacheNext += Length;
-    return (Buffer);
-}
-
-
-/******************************************************************************
- *
- * FUNCTION:    UtExpandLineBuffers
- *
- * PARAMETERS:  None. Updates global line buffer pointers.
- *
- * RETURN:      None. Reallocates the global line buffers
- *
- * DESCRIPTION: Called if the current line buffer becomes filled. Reallocates
- *              all global line buffers and updates Gbl_LineBufferSize. NOTE:
- *              Also used for the initial allocation of the buffers, when
- *              all of the buffer pointers are NULL. Initial allocations are
- *              of size ASL_DEFAULT_LINE_BUFFER_SIZE
- *
- *****************************************************************************/
-
-void
-UtExpandLineBuffers (
-    void)
-{
-    UINT32                  NewSize;
-
-
-    /* Attempt to double the size of all line buffers */
-
-    NewSize = Gbl_LineBufferSize * 2;
-    if (Gbl_CurrentLineBuffer)
-    {
-        DbgPrint (ASL_DEBUG_OUTPUT,
-            "Increasing line buffer size from %u to %u\n",
-            Gbl_LineBufferSize, NewSize);
-    }
-
-    UtReallocLineBuffers (&Gbl_CurrentLineBuffer, Gbl_LineBufferSize, NewSize);
-    UtReallocLineBuffers (&Gbl_MainTokenBuffer, Gbl_LineBufferSize, NewSize);
-    UtReallocLineBuffers (&Gbl_MacroTokenBuffer, Gbl_LineBufferSize, NewSize);
-    UtReallocLineBuffers (&Gbl_ExpressionTokenBuffer, Gbl_LineBufferSize, NewSize);
-
-    Gbl_LineBufPtr = Gbl_CurrentLineBuffer;
-    Gbl_LineBufferSize = NewSize;
-}
-
-
-/******************************************************************************
- *
- * FUNCTION:    UtReallocLineBuffers
- *
- * PARAMETERS:  Buffer              - Buffer to realloc
- *              OldSize             - Old size of Buffer
- *              NewSize             - New size of Buffer
- *
- * RETURN:      none
- *
- * DESCRIPTION: Reallocate and initialize Buffer
- *
- *****************************************************************************/
-
-static void
-UtReallocLineBuffers (
-    char                    **Buffer,
-    UINT32                  OldSize,
-    UINT32                  NewSize)
-{
-
-    *Buffer = realloc (*Buffer, NewSize);
-    if (*Buffer)
-    {
-        memset (*Buffer + OldSize, 0, NewSize - OldSize);
-        return;
-    }
-
-    printf ("Could not increase line buffer size from %u to %u\n",
-        OldSize, NewSize);
-
-    AslError (ASL_ERROR, ASL_MSG_BUFFER_ALLOCATION, NULL, NULL);
-    AslAbort ();
-}
-
-
-/******************************************************************************
- *
- * FUNCTION:    UtFreeLineBuffers
- *
- * PARAMETERS:  None
- *
- * RETURN:      None
- *
- * DESCRIPTION: Free all line buffers
- *
- *****************************************************************************/
-
-void
-UtFreeLineBuffers (
-    void)
-{
-
-    free (Gbl_CurrentLineBuffer);
-    free (Gbl_MainTokenBuffer);
-    free (Gbl_MacroTokenBuffer);
-    free (Gbl_ExpressionTokenBuffer);
 }
 
 
@@ -843,7 +715,7 @@ UtInternalizeName (
 
     /* We need a segment to store the internal name */
 
-    Info.InternalName = UtStringCacheCalloc (Info.Length);
+    Info.InternalName = UtLocalCacheCalloc (Info.Length);
 
     /* Build the name */
 
@@ -1027,9 +899,9 @@ UtDoConstant (
         sprintf (ErrBuf, "While creating 64-bit constant: %s\n",
             AcpiFormatException (Status));
 
-        AslCommonError (ASL_ERROR, ASL_MSG_SYNTAX, Gbl_CurrentLineNumber,
-            Gbl_LogicalLineNumber, Gbl_CurrentLineOffset,
-            Gbl_CurrentColumn, Gbl_Files[ASL_FILE_INPUT].Filename, ErrBuf);
+        AslCommonError (ASL_ERROR, ASL_MSG_SYNTAX, AslGbl_CurrentLineNumber,
+            AslGbl_LogicalLineNumber, AslGbl_CurrentLineOffset,
+            AslGbl_CurrentColumn, AslGbl_Files[ASL_FILE_INPUT].Filename, ErrBuf);
     }
 
     return (ConvertedInteger);

@@ -1,6 +1,8 @@
 /*	$KAME: if.c,v 1.27 2003/10/05 00:09:36 itojun Exp $	*/
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (C) 1995, 1996, 1997, and 1998 WIDE Project.
  * All rights reserved.
  * 
@@ -328,37 +330,6 @@ if_nametosdl(char *name)
 
 	free(buf);
 	return (ret_sdl);
-}
-
-int
-getinet6sysctl(int code)
-{
-	int mib[] = { CTL_NET, PF_INET6, IPPROTO_IPV6, 0 };
-	int value;
-	size_t size;
-
-	mib[3] = code;
-	size = sizeof(value);
-	if (sysctl(mib, nitems(mib), &value, &size, NULL, 0) < 0)
-		return (-1);
-	else
-		return (value);
-}
-
-int
-setinet6sysctl(int code, int newval)
-{
-	int mib[] = { CTL_NET, PF_INET6, IPPROTO_IPV6, 0 };
-	int value;
-	size_t size;
-
-	mib[3] = code;
-	size = sizeof(value);
-	if (sysctl(mib, nitems(mib), &value, &size,
-	    &newval, sizeof(newval)) < 0)
-		return (-1);
-	else
-		return (value);
 }
 
 /*------------------------------------------------------------*/

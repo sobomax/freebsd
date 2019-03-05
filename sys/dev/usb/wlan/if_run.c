@@ -25,6 +25,8 @@ __FBSDID("$FreeBSD$");
  * http://www.ralinktech.com/
  */
 
+#include "opt_wlan.h"
+
 #include <sys/param.h>
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
@@ -41,10 +43,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/linker.h>
 #include <sys/firmware.h>
 #include <sys/kdb.h>
-
-#include <machine/bus.h>
-#include <machine/resource.h>
-#include <sys/rman.h>
 
 #include <net/bpf.h>
 #include <net/if.h>
@@ -206,6 +204,7 @@ static const STRUCT_USB_HOST_ID run_devs[] = {
     RUN_DEV(CYBERTAN,		RT2870),
     RUN_DEV(DLINK,		RT2870),
     RUN_DEV(DLINK,		RT3072),
+    RUN_DEV(DLINK,		DWA125A3),
     RUN_DEV(DLINK,		DWA127),
     RUN_DEV(DLINK,		DWA140B3),
     RUN_DEV(DLINK,		DWA160B2),
@@ -299,6 +298,7 @@ static const STRUCT_USB_HOST_ID run_devs[] = {
     RUN_DEV(RALINK,		RT3572),
     RUN_DEV(RALINK,		RT3573),
     RUN_DEV(RALINK,		RT5370),
+    RUN_DEV(RALINK,		RT5372),
     RUN_DEV(RALINK,		RT5572),
     RUN_DEV(RALINK,		RT8070),
     RUN_DEV(SAMSUNG,		WIS09ABGN),
@@ -2029,7 +2029,8 @@ run_read_eeprom(struct run_softc *sc)
 static struct ieee80211_node *
 run_node_alloc(struct ieee80211vap *vap, const uint8_t mac[IEEE80211_ADDR_LEN])
 {
-	return malloc(sizeof (struct run_node), M_DEVBUF, M_NOWAIT | M_ZERO);
+	return malloc(sizeof (struct run_node), M_80211_NODE,
+	    M_NOWAIT | M_ZERO);
 }
 
 static int
@@ -2217,10 +2218,13 @@ run_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 static int
 run_wme_update(struct ieee80211com *ic)
 {
+	struct chanAccParams chp;
 	struct run_softc *sc = ic->ic_softc;
-	const struct wmeParams *ac =
-	    ic->ic_wme.wme_chanParams.cap_wmeParams;
+	const struct wmeParams *ac;
 	int aci, error = 0;
+
+	ieee80211_wme_ic_getparams(ic, &chp);
+	ac = chp.cap_wmeParams;
 
 	/* update MAC TX configuration registers */
 	RUN_LOCK(sc);
@@ -2817,68 +2821,79 @@ run_rx_frame(struct run_softc *sc, struct mbuf *m, uint32_t dmalen)
 	uint8_t ant, rssi;
 	int8_t nf;
 
-	rxwi = mtod(m, struct rt2860_rxwi *);
-	len = le16toh(rxwi->len) & 0xfff;
 	rxwisize = sizeof(struct rt2860_rxwi);
 	if (sc->mac_ver == 0x5592)
 		rxwisize += sizeof(uint64_t);
 	else if (sc->mac_ver == 0x3593)
 		rxwisize += sizeof(uint32_t);
-	if (__predict_false(len > dmalen)) {
-		m_freem(m);
-		counter_u64_add(ic->ic_ierrors, 1);
+
+	if (__predict_false(dmalen <
+	    rxwisize + sizeof(struct ieee80211_frame_ack))) {
+		RUN_DPRINTF(sc, RUN_DEBUG_RECV,
+		    "payload is too short: dma length %u < %zu\n",
+		    dmalen, rxwisize + sizeof(struct ieee80211_frame_ack));
+		goto fail;
+	}
+
+	rxwi = mtod(m, struct rt2860_rxwi *);
+	len = le16toh(rxwi->len) & 0xfff;
+
+	if (__predict_false(len > dmalen - rxwisize)) {
 		RUN_DPRINTF(sc, RUN_DEBUG_RECV,
 		    "bad RXWI length %u > %u\n", len, dmalen);
-		return;
+		goto fail;
 	}
+
 	/* Rx descriptor is located at the end */
 	rxd = (struct rt2870_rxd *)(mtod(m, caddr_t) + dmalen);
 	flags = le32toh(rxd->flags);
 
 	if (__predict_false(flags & (RT2860_RX_CRCERR | RT2860_RX_ICVERR))) {
-		m_freem(m);
-		counter_u64_add(ic->ic_ierrors, 1);
 		RUN_DPRINTF(sc, RUN_DEBUG_RECV, "%s error.\n",
 		    (flags & RT2860_RX_CRCERR)?"CRC":"ICV");
-		return;
-	}
-
-	m->m_data += rxwisize;
-	m->m_pkthdr.len = m->m_len -= rxwisize;
-
-	wh = mtod(m, struct ieee80211_frame *);
-
-	if (wh->i_fc[1] & IEEE80211_FC1_PROTECTED) {
-		wh->i_fc[1] &= ~IEEE80211_FC1_PROTECTED;
-		m->m_flags |= M_WEP;
+		goto fail;
 	}
 
 	if (flags & RT2860_RX_L2PAD) {
+		/*
+		 * XXX OpenBSD removes padding between header
+		 * and payload here...
+		 */
 		RUN_DPRINTF(sc, RUN_DEBUG_RECV,
 		    "received RT2860_RX_L2PAD frame\n");
 		len += 2;
 	}
 
-	ni = ieee80211_find_rxnode(ic,
-	    mtod(m, struct ieee80211_frame_min *));
+	m->m_data += rxwisize;
+	m->m_pkthdr.len = m->m_len = len;
+
+	wh = mtod(m, struct ieee80211_frame *);
+
+	/* XXX wrong for monitor mode */
+	if (wh->i_fc[1] & IEEE80211_FC1_PROTECTED) {
+		wh->i_fc[1] &= ~IEEE80211_FC1_PROTECTED;
+		m->m_flags |= M_WEP;
+	}
+
+	if (len >= sizeof(struct ieee80211_frame_min)) {
+		ni = ieee80211_find_rxnode(ic,
+		    mtod(m, struct ieee80211_frame_min *));
+	} else
+		ni = NULL;
 
 	if (__predict_false(flags & RT2860_RX_MICERR)) {
 		/* report MIC failures to net80211 for TKIP */
 		if (ni != NULL)
 			ieee80211_notify_michael_failure(ni->ni_vap, wh,
 			    rxwi->keyidx);
-		m_freem(m);
-		counter_u64_add(ic->ic_ierrors, 1);
 		RUN_DPRINTF(sc, RUN_DEBUG_RECV,
 		    "MIC error. Someone is lying.\n");
-		return;
+		goto fail;
 	}
 
 	ant = run_maxrssi_chain(sc, rxwi);
 	rssi = rxwi->rssi[ant];
 	nf = run_rssi2dbm(sc, rssi, ant);
-
-	m->m_pkthdr.len = m->m_len = len;
 
 	if (__predict_false(ieee80211_radiotap_active(ic))) {
 		struct run_rx_radiotap_header *tap = &sc->sc_rxtap;
@@ -2927,6 +2942,12 @@ run_rx_frame(struct run_softc *sc, struct mbuf *m, uint32_t dmalen)
 	} else {
 		(void)ieee80211_input_all(ic, m, rssi, nf);
 	}
+
+	return;
+
+fail:
+	m_freem(m);
+	counter_u64_add(ic->ic_ierrors, 1);
 }
 
 static void
@@ -2936,7 +2957,7 @@ run_bulk_rx_callback(struct usb_xfer *xfer, usb_error_t error)
 	struct ieee80211com *ic = &sc->sc_ic;
 	struct mbuf *m = NULL;
 	struct mbuf *m0;
-	uint32_t dmalen;
+	uint32_t dmalen, mbuf_len;
 	uint16_t rxwisize;
 	int xferlen;
 
@@ -3042,6 +3063,14 @@ tr_setup:
 			break;
 		}
 
+		mbuf_len = dmalen + sizeof(struct rt2870_rxd);
+		if (__predict_false(mbuf_len > MCLBYTES)) {
+			RUN_DPRINTF(sc, RUN_DEBUG_RECV_DESC | RUN_DEBUG_USB,
+			    "payload is too big: mbuf_len %u\n", mbuf_len);
+			counter_u64_add(ic->ic_ierrors, 1);
+			break;
+		}
+
 		/* copy aggregated frames to another mbuf */
 		m0 = m_getcl(M_NOWAIT, MT_DATA, M_PKTHDR);
 		if (__predict_false(m0 == NULL)) {
@@ -3051,14 +3080,13 @@ tr_setup:
 			break;
 		}
 		m_copydata(m, 4 /* skip 32-bit DMA-len header */,
-		    dmalen + sizeof(struct rt2870_rxd), mtod(m0, caddr_t));
-		m0->m_pkthdr.len = m0->m_len =
-		    dmalen + sizeof(struct rt2870_rxd);
+		    mbuf_len, mtod(m0, caddr_t));
+		m0->m_pkthdr.len = m0->m_len = mbuf_len;
 		run_rx_frame(sc, m0, dmalen);
 
 		/* update data ptr */
-		m->m_data += dmalen + 8;
-		m->m_pkthdr.len = m->m_len -= dmalen + 8;
+		m->m_data += mbuf_len + 4;
+		m->m_pkthdr.len = m->m_len -= mbuf_len + 4;
 	}
 
 	/* make sure we free the source buffer, if any */
@@ -3480,15 +3508,12 @@ run_tx_mgt(struct run_softc *sc, struct mbuf *m, struct ieee80211_node *ni)
 	struct rt2860_txwi *txwi;
 	uint16_t dur;
 	uint8_t ridx = rn->mgt_ridx;
-	uint8_t type;
 	uint8_t xflags = 0;
 	uint8_t wflags = 0;
 
 	RUN_LOCK_ASSERT(sc, MA_OWNED);
 
 	wh = mtod(m, struct ieee80211_frame *);
-
-	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 
 	/* tell hardware to add timestamp for probe responses */
 	if ((wh->i_fc[0] &
@@ -3540,56 +3565,34 @@ run_sendprot(struct run_softc *sc,
     const struct mbuf *m, struct ieee80211_node *ni, int prot, int rate)
 {
 	struct ieee80211com *ic = ni->ni_ic;
-	struct ieee80211_frame *wh;
 	struct run_tx_data *data;
 	struct rt2870_txd *txd;
 	struct rt2860_txwi *txwi;
 	struct mbuf *mprot;
 	int ridx;
 	int protrate;
-	int ackrate;
-	int pktlen;
-	int isshort;
-	uint16_t dur;
-	uint8_t type;
 	uint8_t wflags = 0;
 	uint8_t xflags = 0;
 
 	RUN_LOCK_ASSERT(sc, MA_OWNED);
-
-	KASSERT(prot == IEEE80211_PROT_RTSCTS || prot == IEEE80211_PROT_CTSONLY,
-	    ("protection %d", prot));
-
-	wh = mtod(m, struct ieee80211_frame *);
-	pktlen = m->m_pkthdr.len + IEEE80211_CRC_LEN;
-	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
-
-	protrate = ieee80211_ctl_rate(ic->ic_rt, rate);
-	ackrate = ieee80211_ack_rate(ic->ic_rt, rate);
-
-	isshort = (ic->ic_flags & IEEE80211_F_SHPREAMBLE) != 0;
-	dur = ieee80211_compute_duration(ic->ic_rt, pktlen, rate, isshort)
-	    + ieee80211_ack_duration(ic->ic_rt, rate, isshort);
-	wflags = RT2860_TX_FRAG;
 
 	/* check that there are free slots before allocating the mbuf */
 	if (sc->sc_epq[0].tx_nfree == 0)
 		/* let caller free mbuf */
 		return (ENOBUFS);
 
-	if (prot == IEEE80211_PROT_RTSCTS) {
-		/* NB: CTS is the same size as an ACK */
-		dur += ieee80211_ack_duration(ic->ic_rt, rate, isshort);
-		xflags |= RT2860_TX_ACK;
-		mprot = ieee80211_alloc_rts(ic, wh->i_addr1, wh->i_addr2, dur);
-	} else {
-		mprot = ieee80211_alloc_cts(ic, ni->ni_vap->iv_myaddr, dur);
-	}
+	mprot = ieee80211_alloc_prot(ni, m, rate, prot);
 	if (mprot == NULL) {
 		if_inc_counter(ni->ni_vap->iv_ifp, IFCOUNTER_OERRORS, 1);
 		RUN_DPRINTF(sc, RUN_DEBUG_XMIT, "could not allocate mbuf\n");
 		return (ENOBUFS);
 	}
+
+	protrate = ieee80211_ctl_rate(ic->ic_rt, rate);
+	wflags = RT2860_TX_FRAG;
+	xflags = 0;
+	if (prot == IEEE80211_PROT_RTSCTS)
+		xflags |= RT2860_TX_ACK;
 
         data = STAILQ_FIRST(&sc->sc_epq[0].tx_fh);
         STAILQ_REMOVE_HEAD(&sc->sc_epq[0].tx_fh, next);
@@ -3628,11 +3631,9 @@ run_tx_param(struct run_softc *sc, struct mbuf *m, struct ieee80211_node *ni,
     const struct ieee80211_bpf_params *params)
 {
 	struct ieee80211com *ic = ni->ni_ic;
-	struct ieee80211_frame *wh;
 	struct run_tx_data *data;
 	struct rt2870_txd *txd;
 	struct rt2860_txwi *txwi;
-	uint8_t type;
 	uint8_t ridx;
 	uint8_t rate;
 	uint8_t opflags = 0;
@@ -3642,9 +3643,6 @@ run_tx_param(struct run_softc *sc, struct mbuf *m, struct ieee80211_node *ni,
 	RUN_LOCK_ASSERT(sc, MA_OWNED);
 
 	KASSERT(params != NULL, ("no raw xmit params"));
-
-	wh = mtod(m, struct ieee80211_frame *);
-	type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
 
 	rate = params->ibp_rate0;
 	if (!ieee80211_isratevalid(ic->ic_rt, rate)) {
@@ -4858,8 +4856,7 @@ run_getradiocaps(struct ieee80211com *ic,
 	memset(bands, 0, sizeof(bands));
 	setbit(bands, IEEE80211_MODE_11B);
 	setbit(bands, IEEE80211_MODE_11G);
-	ieee80211_add_channel_list_2ghz(chans, maxchans, nchans,
-	    run_chan_2ghz, nitems(run_chan_2ghz), bands, 0);
+	ieee80211_add_channels_default_2ghz(chans, maxchans, nchans, bands, 0);
 
 	if (sc->rf_rev == RT2860_RF_2750 || sc->rf_rev == RT2860_RF_2850 ||
 	    sc->rf_rev == RT3070_RF_3052 || sc->rf_rev == RT3593_RF_3053 ||

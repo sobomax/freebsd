@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2002 Marcel Moolenaar
  * Copyright (c) 2002 Thomas Moestl
  * All rights reserved.
@@ -49,7 +51,6 @@ __FBSDID("$FreeBSD$");
 
 static off_t fileofs;
 
-extern off_t dumplo;
 extern struct dump_pa dump_map[DUMPSYS_MD_PA_NPAIRS];
 
 int do_minidump = 0;
@@ -97,11 +98,11 @@ dumpsys(struct dumperinfo *di)
 	dump_init_header(di, &kdh, KERNELDUMPMAGIC, KERNELDUMP_SPARC64_VERSION,
 	    size);
 
-	printf("Dumping %lu MB (%d chunks)\n", (u_long)(size >> 20), nreg);
-
-	error = dump_start(di, &kdh, &dumplo);
+	error = dump_start(di, &kdh);
 	if (error != 0)
 		goto fail;
+
+	printf("Dumping %lu MB (%d chunks)\n", (u_long)(size >> 20), nreg);
 
 	/* Dump the private header. */
 	hdr.dh_hdr_size = hdrsize;
@@ -128,7 +129,7 @@ dumpsys(struct dumperinfo *di)
 	if (error < 0)
 		goto fail;
 
-	error = dump_finish(di, &kdh, dumplo);
+	error = dump_finish(di, &kdh);
 	if (error != 0)
 		goto fail;
 

@@ -1,5 +1,7 @@
 #!/bin/sh -
 #
+# SPDX-License-Identifier: BSD-3-Clause
+#
 # Copyright (c) 1984, 1986, 1990, 1993
 #	The Regents of the University of California.  All rights reserved.
 #
@@ -44,7 +46,7 @@
 
 TYPE="FreeBSD"
 REVISION="12.0"
-BRANCH="CURRENT"
+BRANCH="STABLE"
 if [ -n "${BRANCH_OVERRIDE}" ]; then
 	BRANCH=${BRANCH_OVERRIDE}
 fi
@@ -63,7 +65,8 @@ findvcs()
 	cd ${SYSDIR}/..
 	while [ $(pwd) != "/" ]; do
 		if [ -e "./$1" ]; then
-			VCSDIR=$(pwd)"/$1"
+			VCSTOP=$(pwd)
+			VCSDIR=${VCSTOP}"/$1"
 			cd ${savedir}
 			return 0
 		fi
@@ -180,7 +183,7 @@ done
 if findvcs .git; then
 	for dir in /usr/bin /usr/local/bin; do
 		if [ -x "${dir}/git" ] ; then
-			git_cmd="${dir}/git --git-dir=${VCSDIR}"
+			git_cmd="${dir}/git -c help.autocorrect=0 --git-dir=${VCSDIR}"
 			break
 		fi
 	done
@@ -218,8 +221,9 @@ if [ -n "$git_cmd" ] ; then
 		svn=" r${svn}"
 		git="=${git}"
 	else
-		svn=`$git_cmd log | fgrep 'git-svn-id:' | head -1 | \
-		     sed -n 's/^.*@\([0-9][0-9]*\).*$/\1/p'`
+		svn=`$git_cmd log --grep '^git-svn-id:' | \
+		    grep '^    git-svn-id:' | head -1 | \
+		    sed -n 's/^.*@\([0-9][0-9]*\).*$/\1/p'`
 		if [ -z "$svn" ] ; then
 			svn=`$git_cmd log --format='format:%N' | \
 			     grep '^svn ' | head -1 | \
@@ -236,7 +240,7 @@ if [ -n "$git_cmd" ] ; then
 	if [ -n "$git_b" ] ; then
 		git="${git}(${git_b})"
 	fi
-	if $git_cmd --work-tree=${VCSDIR}/.. diff-index \
+	if $git_cmd --work-tree=${VCSTOP} diff-index \
 	    --name-only HEAD | read dummy; then
 		git="${git}-dirty"
 		modified=true
@@ -289,7 +293,7 @@ done
 shift $((OPTIND - 1))
 
 if [ -z "${include_metadata}" ]; then
-	VERINFO="${VERSION} ${svn}${git}${hg}${p4version}"
+	VERINFO="${VERSION}${svn}${git}${hg}${p4version} ${i}"
 	VERSTR="${VERINFO}\\n"
 else
 	VERINFO="${VERSION} #${v}${svn}${git}${hg}${p4version}: ${t}"

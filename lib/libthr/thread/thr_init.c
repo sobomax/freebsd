@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 2003 Daniel M. Eischen <deischen@freebsd.org>
  * Copyright (c) 1995-1998 John Birrell <jb@cimlogic.com.au>
  * All rights reserved.
@@ -459,6 +461,7 @@ init_private(void)
 	 */
 	if (init_once == 0) {
 		__thr_pshared_init();
+		__thr_malloc_init();
 		/* Find the stack top */
 		mib[0] = CTL_KERN;
 		mib[1] = KERN_USRSTACK;

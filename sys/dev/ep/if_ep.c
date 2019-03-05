@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-4-Clause
+ *
  * Copyright (c) 1994 Herb Peyerl <hpeyerl@novatel.ca>
  * All rights reserved.
  *
@@ -347,6 +349,8 @@ ep_attach(struct ep_softc *sc)
 	EP_LOCK(sc);
 	epstop(sc);
 	EP_UNLOCK(sc);
+
+	gone_by_fcp101_dev(sc->dev);
 
 	return (0);
 }

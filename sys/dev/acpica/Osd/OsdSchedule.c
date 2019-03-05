@@ -37,7 +37,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/bus.h>
-#include <sys/interrupt.h>
 #include <sys/kernel.h>
 #include <sys/kthread.h>
 #include <sys/malloc.h>
@@ -273,9 +272,6 @@ AcpiOsGetTimer(void)
 {
     struct bintime bt;
     UINT64 t;
-
-    /* XXX During early boot there is no (decent) timer available yet. */
-    KASSERT(cold == 0, ("acpi: timer op not yet supported during boot"));
 
     binuptime(&bt);
     t = (uint64_t)bt.sec * 10000000;

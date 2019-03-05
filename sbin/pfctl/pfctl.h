@@ -1,6 +1,8 @@
 /*	$OpenBSD: pfctl.h,v 1.42 2007/12/05 12:01:47 chl Exp $ */
 
-/*
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
  * Copyright (c) 2001 Daniel Hartmeier
  * All rights reserved.
  *
@@ -112,7 +114,6 @@ extern	int loadopt;
 
 int		 check_commit_altq(int, int);
 void		 pfaltq_store(struct pf_altq *);
-struct pf_altq	*pfaltq_lookup(const char *);
 char		*rate2str(double);
 
 void	 print_addr(struct pf_addr_wrap *, sa_family_t, int);

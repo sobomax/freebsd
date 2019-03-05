@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (C) 2005 Daniel M. Eischen <deischen@freebsd.org>
  * Copyright (c) 2005 David Xu <davidxu@freebsd.org>
  * Copyright (c) 1995-1998 John Birrell <jb@cimlogic.com.au>.
@@ -570,6 +572,8 @@ struct pthread {
 	/* Sleep queue */
 	struct	sleepqueue	*sleepqueue;
 
+	/* pthread_set/get_name_np */
+	char			*name;
 };
 
 #define THR_SHOULD_GC(thrd) 						\
@@ -719,6 +723,8 @@ extern char		*_usrstack __hidden;
 extern int		_libthr_debug;
 extern int		_thread_event_mask;
 extern struct pthread	*_thread_last_event;
+/* Used in symbol lookup of libthread_db */
+extern struct pthread_key	_thread_keytable[];
 
 /* List of all threads: */
 extern pthreadlist	_thread_list;
@@ -1002,6 +1008,14 @@ void *__thr_pshared_offpage(void *key, int doalloc) __hidden;
 void __thr_pshared_destroy(void *key) __hidden;
 void __thr_pshared_atfork_pre(void) __hidden;
 void __thr_pshared_atfork_post(void) __hidden;
+
+void *__thr_calloc(size_t num, size_t size);
+void __thr_free(void *cp);
+void *__thr_malloc(size_t nbytes);
+void *__thr_realloc(void *cp, size_t nbytes);
+void __thr_malloc_init(void);
+void __thr_malloc_prefork(struct pthread *curthread);
+void __thr_malloc_postfork(struct pthread *curthread);
 
 __END_DECLS
 __NULLABILITY_PRAGMA_POP

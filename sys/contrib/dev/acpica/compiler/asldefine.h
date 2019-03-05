@@ -8,7 +8,7 @@
  *
  * 1. Copyright Notice
  *
- * Some or all of this work - Copyright (c) 1999 - 2017, Intel Corp.
+ * Some or all of this work - Copyright (c) 1999 - 2018, Intel Corp.
  * All rights reserved.
  *
  * 2. License
@@ -162,7 +162,7 @@
 #define ASL_CREATOR_ID              "INTL"
 #define ASL_DEFINE                  "__IASL__"
 #define ASL_PREFIX                  "iASL: "
-#define ASL_COMPLIANCE              "Supports ACPI Specification Revision 6.2"
+#define ASL_COMPLIANCE              "Supports ACPI Specification Revision 6.2A"
 
 
 /* Configuration constants */
@@ -295,8 +295,8 @@
 /*
  * Macros for ASL/ASL+ converter
  */
-#define COMMENT_CAPTURE_ON    Gbl_CommentState.CaptureComments = TRUE;
-#define COMMENT_CAPTURE_OFF   Gbl_CommentState.CaptureComments = FALSE;
+#define COMMENT_CAPTURE_ON    AslGbl_CommentState.CaptureComments = TRUE;
+#define COMMENT_CAPTURE_OFF   AslGbl_CommentState.CaptureComments = FALSE;
 
 
 #endif /* ASLDEFINE.H */

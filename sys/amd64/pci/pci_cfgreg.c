@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 1997, Stefan Esser <se@freebsd.org>
  * Copyright (c) 2000, Michael Smith <msmith@freebsd.org>
  * Copyright (c) 2000, BSDi
@@ -269,7 +271,7 @@ pcie_cfgregopen(uint64_t base, uint8_t minbus, uint8_t maxbus)
 		    base);
 
 	/* XXX: We should make sure this really fits into the direct map. */
-	pcie_base = (vm_offset_t)pmap_mapdev(base, (maxbus + 1) << 20);
+	pcie_base = (vm_offset_t)pmap_mapdev_pciecfg(base, (maxbus + 1) << 20);
 	pcie_minbus = minbus;
 	pcie_maxbus = maxbus;
 	cfgmech = CFGMECH_PCIE;

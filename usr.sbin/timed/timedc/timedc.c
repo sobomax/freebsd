@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1985, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -95,6 +97,9 @@ main(int argc, char *argv[])
 	}
 
 	fromatty = isatty(fileno(stdin));
+	if (fromatty)
+		printf("TIMEDC will be removed from FreeBSD-13, and will be "
+		    "provided as a port (net/timed) or package (timed).\n");
 	if (setjmp(toplevel))
 		putchar('\n');
 	(void) signal(SIGINT, intr);

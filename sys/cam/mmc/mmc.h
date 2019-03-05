@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2014-2016 Ilya Bakulin.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -87,8 +89,17 @@ struct mmc_params {
 #define CARD_FEATURE_SDIO   0x1 << 2
 #define CARD_FEATURE_SD20   0x1 << 3
 #define CARD_FEATURE_MMC    0x1 << 4
+#define CARD_FEATURE_18V    0x1 << 5
 
         uint8_t sdio_func_count;
 } __packed;
 
+/*
+ * Only one MMC card on bus is supported now.
+ * If we ever want to support multiple MMC cards on the same bus,
+ * mmc_xpt needs to be extended to issue new RCAs based on number
+ * of already probed cards. Furthermore, retuning and high-speed
+ * settings should also take all cards into account.
+ */
+#define MMC_PROPOSED_RCA    2
 #endif

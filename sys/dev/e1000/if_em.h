@@ -1,5 +1,7 @@
 /*-
- * Copyright (c) 2016 Matt Macy <mmacy@nextbsd.org>
+ * SPDX-License-Identifier: BSD-2-Clause
+ *
+ * Copyright (c) 2016 Nicole Graziano <nicole@nextbsd.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -248,11 +250,6 @@
 #define IGB_LINK_ITR            2000
 #define I210_LINK_DELAY		1000
 
-#define IGB_MAX_SCATTER		40
-#define IGB_VFTA_SIZE		128
-#define IGB_BR_SIZE		4096	/* ring buf size */
-#define IGB_TSO_SIZE		(65535 + sizeof(struct ether_vlan_header))
-#define IGB_TSO_SEG_SIZE	4096	/* Max dma segment size */
 #define IGB_TXPBSIZE		20408
 #define IGB_HDR_BUF		128
 #define IGB_PKTTYPE_MASK	0x0000FFF0
@@ -338,22 +335,25 @@
 
 #define EM_MAX_SCATTER		40
 #define EM_VFTA_SIZE		128
-#define EM_TSO_SIZE		(65535 + sizeof(struct ether_vlan_header))
+#define EM_TSO_SIZE		65535
 #define EM_TSO_SEG_SIZE		4096	/* Max dma segment size */
 #define EM_MSIX_MASK		0x01F00000 /* For 82574 use */
 #define EM_MSIX_LINK		0x01000000 /* For 82574 use */
 #define ETH_ZLEN		60
 #define ETH_ADDR_LEN		6
-#define EM_CSUM_OFFLOAD		7	/* Offload bits in mbuf flag */
-#define IGB_CSUM_OFFLOAD	0x0E0F	/* Offload bits in mbuf flag */
+#define EM_CSUM_OFFLOAD		(CSUM_IP | CSUM_IP_UDP | CSUM_IP_TCP) /* Offload bits in mbuf flag */
+#define IGB_CSUM_OFFLOAD	(CSUM_IP | CSUM_IP_UDP | CSUM_IP_TCP | \
+				 CSUM_IP_SCTP | CSUM_IP6_UDP | CSUM_IP6_TCP | \
+				 CSUM_IP6_SCTP)	/* Offload bits in mbuf flag */
+
 
 #define IGB_PKTTYPE_MASK	0x0000FFF0
 #define IGB_DMCTLX_DCFLUSH_DIS	0x80000000  /* Disable DMA Coalesce Flush */
 
 /*
  * 82574 has a nonstandard address for EIAC
- * and since its only used in MSIX, and in
- * the em driver only 82574 uses MSIX we can
+ * and since its only used in MSI-X, and in
+ * the em driver only 82574 uses MSI-X we can
  * solve it just using this define.
  */
 #define EM_EIAC 0x000DC
@@ -468,7 +468,6 @@ struct adapter {
 	struct resource *memory;
 	struct resource *flash;
 	struct resource	*ioport;
-	int		io_rid;
 
 	struct resource	*res;
 	void		*tag;
@@ -520,7 +519,6 @@ struct adapter {
 
 	u64		que_mask;
 
-	
 	struct em_int_delay_info tx_int_delay;
 	struct em_int_delay_info tx_abs_int_delay;
 	struct em_int_delay_info rx_int_delay;
@@ -530,9 +528,6 @@ struct adapter {
 	/* Misc stats maintained by the driver */
 	unsigned long	dropped_pkts;
 	unsigned long	link_irq;
-	unsigned long	mbuf_defrag_failed;
-	unsigned long	no_tx_dma_setup;
-	unsigned long	no_tx_map_avail;
 	unsigned long	rx_overruns;
 	unsigned long	watchdog_events;
 

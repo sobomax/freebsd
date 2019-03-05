@@ -835,7 +835,7 @@ _archive_write_disk_header(struct archive *_a, struct archive_entry *entry)
 }
 
 int
-archive_write_disk_set_skip_file(struct archive *_a, int64_t d, int64_t i)
+archive_write_disk_set_skip_file(struct archive *_a, la_int64_t d, la_int64_t i)
 {
 	struct archive_write_disk *a = (struct archive_write_disk *)_a;
 	archive_check_magic(&a->archive, ARCHIVE_WRITE_DISK_MAGIC,
@@ -1705,6 +1705,20 @@ _archive_write_disk_finish_entry(struct archive *_a)
 	}
 
 	/*
+	 * HYPOTHESIS:
+	 * If we're not root, we won't be setting any security
+	 * attributes that may be wiped by the set_mode() routine
+	 * below.  We also can't set xattr on non-owner-writable files,
+	 * which may be the state after set_mode(). Perform
+	 * set_xattrs() first based on these constraints.
+	 */
+	if (a->user_uid != 0 &&
+	    (a->todo & TODO_XATTR)) {
+		int r2 = set_xattrs(a);
+		if (r2 < ret) ret = r2;
+	}
+
+	/*
 	 * set_mode must precede ACLs on systems such as Solaris and
 	 * FreeBSD where setting the mode implicitly clears extended ACLs
 	 */
@@ -1717,8 +1731,10 @@ _archive_write_disk_finish_entry(struct archive *_a)
 	 * Security-related extended attributes (such as
 	 * security.capability on Linux) have to be restored last,
 	 * since they're implicitly removed by other file changes.
+	 * We do this last only when root.
 	 */
-	if (a->todo & TODO_XATTR) {
+	if (a->user_uid == 0 &&
+	    (a->todo & TODO_XATTR)) {
 		int r2 = set_xattrs(a);
 		if (r2 < ret) ret = r2;
 	}
@@ -1775,10 +1791,8 @@ finish_metadata:
 		a->fd = -1;
 	}
 	/* If there's an entry, we can release it now. */
-	if (a->entry) {
-		archive_entry_free(a->entry);
-		a->entry = NULL;
-	}
+	archive_entry_free(a->entry);
+	a->entry = NULL;
 	a->archive.state = ARCHIVE_STATE_HEADER;
 	return (ret);
 }
@@ -1786,7 +1800,7 @@ finish_metadata:
 int
 archive_write_disk_set_group_lookup(struct archive *_a,
     void *private_data,
-    int64_t (*lookup_gid)(void *private, const char *gname, int64_t gid),
+    la_int64_t (*lookup_gid)(void *private, const char *gname, la_int64_t gid),
     void (*cleanup_gid)(void *private))
 {
 	struct archive_write_disk *a = (struct archive_write_disk *)_a;
@@ -1822,7 +1836,7 @@ archive_write_disk_set_user_lookup(struct archive *_a,
 }
 
 int64_t
-archive_write_disk_gid(struct archive *_a, const char *name, int64_t id)
+archive_write_disk_gid(struct archive *_a, const char *name, la_int64_t id)
 {
        struct archive_write_disk *a = (struct archive_write_disk *)_a;
        archive_check_magic(&a->archive, ARCHIVE_WRITE_DISK_MAGIC,
@@ -1833,7 +1847,7 @@ archive_write_disk_gid(struct archive *_a, const char *name, int64_t id)
 }
  
 int64_t
-archive_write_disk_uid(struct archive *_a, const char *name, int64_t id)
+archive_write_disk_uid(struct archive *_a, const char *name, la_int64_t id)
 {
 	struct archive_write_disk *a = (struct archive_write_disk *)_a;
 	archive_check_magic(&a->archive, ARCHIVE_WRITE_DISK_MAGIC,
@@ -1981,6 +1995,10 @@ restore_entry(struct archive_write_disk *a)
 	if ((en == EISDIR || en == EEXIST)
 	    && (a->flags & ARCHIVE_EXTRACT_NO_OVERWRITE)) {
 		/* If we're not overwriting, we're done. */
+		if (S_ISDIR(a->mode)) {
+			/* Don't overwrite any settings on existing directories. */
+			a->todo = 0;
+		}
 		archive_entry_unset_size(a->entry);
 		return (ARCHIVE_OK);
 	}
@@ -2219,6 +2237,15 @@ create_filesystem_object(struct archive_write_disk *a)
 	 */
 	mode = final_mode & 0777 & ~a->user_umask;
 
+	/* 
+	 * Always create writable such that [f]setxattr() works if we're not
+	 * root.
+	 */
+	if (a->user_uid != 0 &&
+	    a->todo & (TODO_HFS_COMPRESSION | TODO_XATTR)) {
+		mode |= 0200;
+	}
+
 	switch (a->mode & AE_IFMT) {
 	default:
 		/* POSIX requires that we fall through here. */
@@ -2369,8 +2396,7 @@ _archive_write_disk_free(struct archive *_a)
 	ret = _archive_write_disk_close(&a->archive);
 	archive_write_disk_set_group_lookup(&a->archive, NULL, NULL, NULL);
 	archive_write_disk_set_user_lookup(&a->archive, NULL, NULL, NULL);
-	if (a->entry)
-		archive_entry_free(a->entry);
+	archive_entry_free(a->entry);
 	archive_string_free(&a->_name_data);
 	archive_string_free(&a->archive.error_string);
 	archive_string_free(&a->path_safe);

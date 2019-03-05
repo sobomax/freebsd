@@ -1,4 +1,6 @@
-/*
+/*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 2007-2009 Google Inc. and Amit Singh
  * All rights reserved.
  * 
@@ -210,7 +212,7 @@ fuse_internal_attr_fat2vat(struct mount *mp,
     vattr_null(vap);
 
     vap->va_fsid = mp->mnt_stat.f_fsid.val[0];
-    vap->va_fileid = fat->ino; /* XXX cast from 64 bits to 32 */
+    vap->va_fileid = fat->ino;
     vap->va_mode = fat->mode & ~S_IFMT;
     vap->va_nlink     = fat->nlink;
     vap->va_uid       = fat->uid;

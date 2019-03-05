@@ -31,7 +31,7 @@
 .\"
 .\" $FreeBSD$
 .\"
-.Dd March 22, 2017
+.Dd January 30, 2019
 .Dt EM 4
 .Os
 .Sh NAME
@@ -39,9 +39,10 @@
 .Nd "Intel(R) PRO/1000 Gigabit Ethernet adapter driver"
 .Sh SYNOPSIS
 To compile this driver into the kernel,
-place the following line in your
+place the following lines in your
 kernel configuration file:
 .Bd -ragged -offset indent
+.Cd "device iflib"
 .Cd "device em"
 .Ed
 .Pp
@@ -298,6 +299,7 @@ issue to
 .Sh SEE ALSO
 .Xr altq 4 ,
 .Xr arp 4 ,
+.Xr iflib 4 ,
 .Xr led 4 ,
 .Xr netintro 4 ,
 .Xr ng_ether 4 ,
@@ -319,6 +321,6 @@ The
 driver was originally written by
 .An Intel Corporation Aq Mt freebsd@intel.com .
 It was merged with igb driver and converted to the iflib framework by
-.An Matthew Macy Aq Mt mmacy@nextbsd.org
+.An Matthew Macy Aq Mt mmacy@mattmacy.io
 and
 .An Sean Bruno Aq Mt sbruno@FreeBSD.org .

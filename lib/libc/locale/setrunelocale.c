@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -110,9 +112,8 @@ __setrunelocale(struct xlocale_ctype *l, const char *encoding)
 	}
 
 	/* Range checking not needed, encoding length already checked before */
-	asprintf(&path, "%s/%s/LC_CTYPE", _PathLocale, encoding);
-	if (path == NULL)
-		return (0);
+	if (asprintf(&path, "%s/%s/LC_CTYPE", _PathLocale, encoding) == -1)
+		return (errno);
 
 	if ((rl = _Read_RuneMagi(path)) == NULL) {
 		free(path);

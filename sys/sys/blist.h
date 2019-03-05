@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
  * Copyright (c) 1998 Matthew Dillon.  All Rights Reserved.
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -71,24 +73,24 @@ typedef	uint64_t	u_daddr_t;	/* unsigned disk address */
  */
 
 typedef struct blmeta {
-	union {
-	    daddr_t	bmu_avail;	/* space available under us	*/
-	    u_daddr_t	bmu_bitmap;	/* bitmap if we are a leaf	*/
-	} u;
+	u_daddr_t	bm_bitmap;	/* bitmap if we are a leaf	*/
 	daddr_t		bm_bighint;	/* biggest contiguous block hint*/
 } blmeta_t;
 
 typedef struct blist {
 	daddr_t		bl_blocks;	/* area of coverage		*/
+	daddr_t		bl_avail;	/* # available blocks */
 	u_daddr_t	bl_radix;	/* coverage radix		*/
 	daddr_t		bl_cursor;	/* next-fit search starts at	*/
-	blmeta_t	*bl_root;	/* root of radix tree		*/
+	blmeta_t	bl_root[1];	/* root of radix tree		*/
 } *blist_t;
 
-#define BLIST_META_RADIX	16
 #define BLIST_BMAP_RADIX	(sizeof(u_daddr_t)*8)
+#define BLIST_META_RADIX	BLIST_BMAP_RADIX
 
 #define BLIST_MAX_ALLOC		BLIST_BMAP_RADIX
+
+struct sbuf;
 
 daddr_t	blist_alloc(blist_t blist, daddr_t count);
 daddr_t	blist_avail(blist_t blist);
@@ -98,6 +100,7 @@ daddr_t	blist_fill(blist_t bl, daddr_t blkno, daddr_t count);
 void	blist_free(blist_t blist, daddr_t blkno, daddr_t count);
 void	blist_print(blist_t blist);
 void	blist_resize(blist_t *pblist, daddr_t count, int freenew, int flags);
+void	blist_stats(blist_t blist, struct sbuf *s);
 
 #endif	/* _SYS_BLIST_H_ */
 

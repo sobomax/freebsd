@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2013 The FreeBSD Foundation
  * Copyright (c) 2013 Mariusz Zaborski <oshogbo@FreeBSD.org>
  * All rights reserved.
@@ -63,11 +65,6 @@ msghdr_add_fd(struct cmsghdr *cmsg, int fd)
 {
 
 	PJDLOG_ASSERT(fd >= 0);
-
-	if (!fd_is_valid(fd)) {
-		errno = EBADF;
-		return (-1);
-	}
 
 	cmsg->cmsg_level = SOL_SOCKET;
 	cmsg->cmsg_type = SCM_RIGHTS;
@@ -299,7 +296,6 @@ fd_package_recv(int sock, int *fds, size_t nfds)
 	PJDLOG_ASSERT(nfds > 0);
 	PJDLOG_ASSERT(fds != NULL);
 
-	i = 0;
 	bzero(&msg, sizeof(msg));
 	bzero(&iov, sizeof(iov));
 

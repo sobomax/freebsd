@@ -1,4 +1,6 @@
 /*-
+ * SPDX-License-Identifier: BSD-2-Clause-FreeBSD
+ *
  * Copyright (c) 2013 Ian Lepore <ian@freebsd.org>
  * Copyright (c) 2011 Ben Gray <ben.r.gray@gmail.com>.
  * All rights reserved.
@@ -683,11 +685,7 @@ ti_sdhci_attach(device_t dev)
 	bus_generic_probe(dev);
 	bus_generic_attach(dev);
 
-#ifdef MMCCAM
-	sdhci_cam_start_slot(&sc->slot);
-#else
 	sdhci_start_slot(&sc->slot);
-#endif
 	return (0);
 
 fail:
@@ -757,7 +755,7 @@ static driver_t ti_sdhci_driver = {
 
 DRIVER_MODULE(sdhci_ti, simplebus, ti_sdhci_driver, ti_sdhci_devclass, NULL,
     NULL);
-MODULE_DEPEND(sdhci_ti, sdhci, 1, 1, 1);
+SDHCI_DEPEND(sdhci_ti);
 
 #ifndef MMCCAM
 MMC_DECLARE_BRIDGE(sdhci_ti);
