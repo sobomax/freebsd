@@ -73,6 +73,14 @@ SRCS+=	interp_simple.c
 .error Unknown interpreter ${LOADER_INTERP}
 .endif
 
+.if ${MK_LOADER_VERIEXEC} != "no"
+CFLAGS+= -DLOADER_VERIEXEC -I${SRCTOP}/lib/libsecureboot/h
+.endif
+
+.if ${MK_LOADER_VERIEXEC_PASS_MANIFEST} != "no"
+CFLAGS+= -DLOADER_VERIEXEC_PASS_MANIFEST -I${SRCTOP}/lib/libsecureboot/h
+.endif
+
 .if defined(BOOT_PROMPT_123)
 CFLAGS+=	-DBOOT_PROMPT_123
 .endif

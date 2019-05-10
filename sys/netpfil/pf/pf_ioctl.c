@@ -3103,24 +3103,20 @@ DIOCCHANGEADDR_error:
 			break;
 		}
 
-		PF_RULES_WLOCK();
+		PF_RULES_RLOCK();
 		n = pfr_table_count(&io->pfrio_table, io->pfrio_flags);
 		io->pfrio_size = min(io->pfrio_size, n);
+		PF_RULES_RUNLOCK();
 
 		totlen = io->pfrio_size * sizeof(struct pfr_table);
 		pfrts = mallocarray(io->pfrio_size, sizeof(struct pfr_table),
-		    M_TEMP, M_NOWAIT);
-		if (pfrts == NULL) {
-			error = ENOMEM;
-			PF_RULES_WUNLOCK();
-			break;
-		}
+		    M_TEMP, M_WAITOK);
 		error = copyin(io->pfrio_buffer, pfrts, totlen);
 		if (error) {
 			free(pfrts, M_TEMP);
-			PF_RULES_WUNLOCK();
 			break;
 		}
+		PF_RULES_WLOCK();
 		error = pfr_set_tflags(pfrts, io->pfrio_size,
 		    io->pfrio_setflag, io->pfrio_clrflag, &io->pfrio_nchange,
 		    &io->pfrio_ndel, io->pfrio_flags | PFR_FLAG_USERIOCTL);
@@ -3753,6 +3749,8 @@ DIOCCHANGEADDR_error:
 			psn->psn_len = sizeof(struct pf_src_node) * nr;
 			break;
 		}
+
+		nr = 0;
 
 		p = pstore = malloc(psn->psn_len, M_TEMP, M_WAITOK);
 		for (i = 0, sh = V_pf_srchash; i <= pf_srchashmask;

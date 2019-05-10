@@ -133,6 +133,7 @@ SUBDIR_DEPEND_libpcap= ofed
 # NB: keep these sorted by MK_* knobs
 
 SUBDIR.${MK_ATM}+=	libngatm
+SUBDIR.${MK_BEARSSL}+=	libbearssl libsecureboot
 SUBDIR.${MK_BLACKLIST}+=libblacklist
 SUBDIR.${MK_BLUETOOTH}+=libbluetooth libsdp
 SUBDIR.${MK_BSNMP}+=	libbsnmp
@@ -198,6 +199,7 @@ _librtld_db=	librtld_db
 _libdl=		libdl
 .endif
 
+SUBDIR.${MK_OPENMP}+=	libomp
 SUBDIR.${MK_OPENSSL}+=	libmp
 SUBDIR.${MK_PMC}+=	libpmc libpmcstat
 SUBDIR.${MK_RADIUS_SUPPORT}+=	libradius
@@ -208,6 +210,7 @@ SUBDIR.${MK_TESTS}+=	tests
 SUBDIR.${MK_UNBOUND}+=	libunbound
 SUBDIR.${MK_USB}+=	libusbhid libusb
 SUBDIR.${MK_OFED}+=	ofed
+SUBDIR.${MK_VERIEXEC}+=	libveriexec
 SUBDIR.${MK_ZFS}+=	libbe
 
 .if !make(install)

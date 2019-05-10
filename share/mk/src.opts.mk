@@ -187,9 +187,11 @@ __DEFAULT_YES_OPTIONS = \
     WIRELESS \
     WPA_SUPPLICANT_EAPOL \
     ZFS \
+    LOADER_ZFS \
     ZONEINFO
 
 __DEFAULT_NO_OPTIONS = \
+    BEARSSL \
     BSD_GREP \
     CLANG_EXTRAS \
     DTRACE_TESTS \
@@ -198,6 +200,7 @@ __DEFAULT_NO_OPTIONS = \
     LIBSOFT \
     LOADER_FIREWIRE \
     LOADER_FORCE_LE \
+    LOADER_VERIEXEC_PASS_MANIFEST \
     NAND \
     OFED_EXTRA \
     OPENLDAP \
@@ -213,6 +216,9 @@ __DEFAULT_NO_OPTIONS = \
 __DEFAULT_DEPENDENT_OPTIONS= \
 	CLANG_FULL/CLANG \
 	LLVM_TARGET_ALL/CLANG \
+	LOADER_VERIEXEC/BEARSSL \
+	LOADER_EFI_SECUREBOOT/LOADER_VERIEXEC \
+	VERIEXEC/BEARSSL \
 
 # MK_*_SUPPORT options which default to "yes" unless their corresponding
 # MK_* variable is set to "no".
@@ -279,6 +285,7 @@ __DEFAULT_DEPENDENT_OPTIONS+=	LLVM_TARGET_${__llt:${__LLVM_TARGET_FILT}:tu}/LLVM
 .endfor
 
 __DEFAULT_NO_OPTIONS+=LLVM_TARGET_BPF
+__DEFAULT_NO_OPTIONS+=LLVM_TARGET_RISCV
 
 .include <bsd.compiler.mk>
 # If the compiler is not C++11 capable, disable Clang and use GCC instead.
@@ -392,6 +399,12 @@ __DEFAULT_YES_OPTIONS+=NVME
 __DEFAULT_NO_OPTIONS+=NVME
 .endif
 
+.if ${COMPILER_FEATURES:Mc++11} && (${__T} == "amd64" || ${__T} == "i386")
+__DEFAULT_YES_OPTIONS+=OPENMP
+.else
+__DEFAULT_NO_OPTIONS+=OPENMP
+.endif
+
 .include <bsd.mkopt.mk>
 
 #
@@ -448,6 +461,7 @@ MK_SOURCELESS_UCODE:= no
 
 .if ${MK_CDDL} == "no"
 MK_ZFS:=	no
+MK_LOADER_ZFS:=	no
 MK_CTF:=	no
 .endif
 
@@ -531,6 +545,10 @@ MK_LLDB:=	no
 MK_CLANG_EXTRAS:= no
 MK_CLANG_FULL:= no
 MK_LLVM_COV:= no
+.endif
+
+.if ${MK_LOADER_VERIEXEC} == "no"
+MK_LOADER_VERIEXEC_PASS_MANIFEST := no
 .endif
 
 #

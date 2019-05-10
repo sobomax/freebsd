@@ -479,8 +479,20 @@ vm_fault_populate(struct faultstate *fs, vm_prot_t prot, int fault_type,
 			    fault_flags, true);
 		}
 		VM_OBJECT_WUNLOCK(fs->first_object);
-		pmap_enter(fs->map->pmap, vaddr, m, prot, fault_type | (wired ?
-		    PMAP_ENTER_WIRED : 0), psind);
+		rv = pmap_enter(fs->map->pmap, vaddr, m, prot, fault_type |
+		    (wired ? PMAP_ENTER_WIRED : 0), psind);
+#if defined(__amd64__)
+		if (psind > 0 && rv == KERN_FAILURE) {
+			for (i = 0; i < npages; i++) {
+				rv = pmap_enter(fs->map->pmap, vaddr + ptoa(i),
+				    &m[i], prot, fault_type |
+				    (wired ? PMAP_ENTER_WIRED : 0), 0);
+				MPASS(rv == KERN_SUCCESS);
+			}
+		}
+#else
+		MPASS(rv == KERN_SUCCESS);
+#endif
 		VM_OBJECT_WLOCK(fs->first_object);
 		m_mtx = NULL;
 		for (i = 0; i < npages; i++) {
@@ -1733,8 +1745,7 @@ again:
 			}
 			pmap_copy_page(src_m, dst_m);
 			VM_OBJECT_RUNLOCK(object);
-			dst_m->valid = VM_PAGE_BITS_ALL;
-			dst_m->dirty = VM_PAGE_BITS_ALL;
+			dst_m->dirty = dst_m->valid = src_m->valid;
 		} else {
 			dst_m = src_m;
 			if (vm_page_sleep_if_busy(dst_m, "fltupg"))
@@ -1747,8 +1758,6 @@ again:
 				 */
 				break;
 			vm_page_xbusy(dst_m);
-			KASSERT(dst_m->valid == VM_PAGE_BITS_ALL,
-			    ("invalid dst page %p", dst_m));
 		}
 		VM_OBJECT_WUNLOCK(dst_object);
 
@@ -1756,9 +1765,18 @@ again:
 		 * Enter it in the pmap. If a wired, copy-on-write
 		 * mapping is being replaced by a write-enabled
 		 * mapping, then wire that new mapping.
+		 *
+		 * The page can be invalid if the user called
+		 * msync(MS_INVALIDATE) or truncated the backing vnode
+		 * or shared memory object.  In this case, do not
+		 * insert it into pmap, but still do the copy so that
+		 * all copies of the wired map entry have similar
+		 * backing pages.
 		 */
-		pmap_enter(dst_map->pmap, vaddr, dst_m, prot,
-		    access | (upgrade ? PMAP_ENTER_WIRED : 0), 0);
+		if (dst_m->valid == VM_PAGE_BITS_ALL) {
+			pmap_enter(dst_map->pmap, vaddr, dst_m, prot,
+			    access | (upgrade ? PMAP_ENTER_WIRED : 0), 0);
+		}
 
 		/*
 		 * Mark it no longer busy, and put it on the active list.

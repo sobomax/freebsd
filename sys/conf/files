@@ -19,17 +19,9 @@ bhnd_nvram_map_data.h		optional bhnd				   \
 	compile-with	"sh $S/dev/bhnd/tools/nvram_map_gen.sh $S/dev/bhnd/nvram/nvram_map -d" \
 	no-obj no-implicit-rule before-depend				   \
 	clean		"bhnd_nvram_map_data.h"
-#
-# The 'fdt_dtb_file' target covers an actual DTB file name, which is derived
-# from the specified source (DTS) file: <platform>.dts -> <platform>.dtb
-#
-fdt_dtb_file			optional fdt fdt_dtb_static \
-	compile-with "sh -c 'MACHINE=${MACHINE} $S/tools/fdt/make_dtb.sh $S ${FDT_DTS_FILE} ${.CURDIR}'" \
-	no-obj no-implicit-rule before-depend	\
-	clean		"${FDT_DTS_FILE:R}.dtb"
 fdt_static_dtb.h		optional fdt fdt_dtb_static \
 	compile-with "sh -c 'MACHINE=${MACHINE} $S/tools/fdt/make_dtbh.sh ${FDT_DTS_FILE} ${.CURDIR}'" \
-	dependency	"fdt_dtb_file" \
+	dependency	"${FDT_DTS_FILE:T:R}.dtb" \
 	no-obj no-implicit-rule before-depend \
 	clean		"fdt_static_dtb.h"
 feeder_eq_gen.h			optional sound				   \
@@ -637,6 +629,17 @@ contrib/ngatm/netnatm/sig/sig_unimsgcpy.c optional ngatm_uni \
 	compile-with "${NORMAL_C} -I$S/contrib/ngatm"
 contrib/ngatm/netnatm/sig/sig_verify.c optional ngatm_uni \
 	compile-with "${NORMAL_C} -I$S/contrib/ngatm"
+# xz
+dev/xz/xz_mod.c	optional xz \
+	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
+contrib/xz-embedded/linux/lib/xz/xz_crc32.c	optional xz \
+	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
+contrib/xz-embedded/linux/lib/xz/xz_dec_bcj.c	optional xz \
+	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
+contrib/xz-embedded/linux/lib/xz/xz_dec_lzma2.c	optional xz \
+	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
+contrib/xz-embedded/linux/lib/xz/xz_dec_stream.c optional xz \
+	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
 # Zstd
 contrib/zstd/lib/freebsd/zstd_kmalloc.c		optional zstdio compile-with ${ZSTD_C}
 contrib/zstd/lib/common/zstd_common.c		optional zstdio compile-with ${ZSTD_C}
@@ -675,8 +678,8 @@ crypto/rijndael/rijndael-alg-fst.c optional crypto | ekcd | geom_bde | \
 crypto/rijndael/rijndael-api-fst.c optional ekcd | geom_bde | random !random_loadable
 crypto/rijndael/rijndael-api.c	optional crypto | ipsec | ipsec_support | \
 	wlan_ccmp
-crypto/sha1.c			optional carp | crypto | ipsec | \
-	ipsec_support | netgraph_mppc_encryption | sctp 
+crypto/sha1.c			optional carp | crypto | ether | ipsec | \
+	ipsec_support | netgraph_mppc_encryption | sctp
 crypto/sha2/sha256c.c		optional crypto | ekcd | geom_bde | ipsec | \
 	ipsec_support | random !random_loadable | sctp | zfs
 crypto/sha2/sha512c.c		optional crypto | geom_bde | ipsec | \
@@ -1397,6 +1400,8 @@ dev/cxgb/sys/uipc_mvec.c	optional cxgb pci \
 	compile-with "${NORMAL_C} -I$S/dev/cxgb"
 dev/cxgb/cxgb_t3fw.c		optional cxgb cxgb_t3fw \
 	compile-with "${NORMAL_C} -I$S/dev/cxgb"
+dev/cxgbe/t4_clip.c		optional cxgbe pci \
+	compile-with "${NORMAL_C} -I$S/dev/cxgbe"
 dev/cxgbe/t4_filter.c		optional cxgbe pci \
 	compile-with "${NORMAL_C} -I$S/dev/cxgbe"
 dev/cxgbe/t4_if.m		optional cxgbe pci
@@ -1466,7 +1471,7 @@ t4fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t4fw.fwo"
 t4fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t4fw-1.19.1.0.bin.uu"	\
+	dependency	"$S/dev/cxgbe/firmware/t4fw-1.23.0.0.bin.uu"	\
 	compile-with	"${NORMAL_FW}"					\
 	no-obj no-implicit-rule						\
 	clean		"t4fw.fw"
@@ -1500,7 +1505,7 @@ t5fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t5fw.fwo"
 t5fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t5fw-1.19.1.0.bin.uu"	\
+	dependency	"$S/dev/cxgbe/firmware/t5fw-1.23.0.0.bin.uu"	\
 	compile-with	"${NORMAL_FW}"					\
 	no-obj no-implicit-rule						\
 	clean		"t5fw.fw"
@@ -1534,7 +1539,7 @@ t6fw.fwo		optional cxgbe					\
 	no-implicit-rule						\
 	clean		"t6fw.fwo"
 t6fw.fw			optional cxgbe					\
-	dependency	"$S/dev/cxgbe/firmware/t6fw-1.19.1.0.bin.uu"	\
+	dependency	"$S/dev/cxgbe/firmware/t6fw-1.23.0.0.bin.uu"	\
 	compile-with	"${NORMAL_FW}"					\
 	no-obj no-implicit-rule						\
 	clean		"t6fw.fw"
@@ -1771,9 +1776,9 @@ dev/fdt/fdt_clock_if.m		optional fdt fdt_clock
 dev/fdt/fdt_common.c		optional fdt
 dev/fdt/fdt_pinctrl.c		optional fdt fdt_pinctrl
 dev/fdt/fdt_pinctrl_if.m	optional fdt fdt_pinctrl
-dev/fdt/fdt_slicer.c		optional fdt cfi | fdt nand | fdt mx25l | fdt n25q
+dev/fdt/fdt_slicer.c		optional fdt cfi | fdt nand | fdt mx25l | fdt n25q | fdt at45d
 dev/fdt/fdt_static_dtb.S	optional fdt fdt_dtb_static \
-	dependency	"fdt_dtb_file"
+	dependency	"${FDT_DTS_FILE:T:R}.dtb"
 dev/fdt/simplebus.c		optional fdt
 dev/fe/if_fe.c			optional fe
 dev/fe/if_fe_pccard.c		optional fe pccard
@@ -3659,7 +3664,7 @@ geom/geom_disk.c		standard
 geom/geom_dump.c		standard
 geom/geom_event.c		standard
 geom/geom_fox.c			optional geom_fox
-geom/geom_flashmap.c		optional fdt cfi | fdt nand | fdt mx25l | mmcsd | fdt n25q
+geom/geom_flashmap.c		optional fdt cfi | fdt nand | fdt mx25l | mmcsd | fdt n25q | fdt at45d
 geom/geom_io.c			standard
 geom/geom_kern.c		standard
 geom/geom_map.c			optional geom_map
@@ -3676,6 +3681,7 @@ geom/journal/g_journal.c	optional geom_journal
 geom/journal/g_journal_ufs.c	optional geom_journal
 geom/label/g_label.c		optional geom_label | geom_label_gpt
 geom/label/g_label_ext2fs.c	optional geom_label
+geom/label/g_label_flashmap.c	optional geom_label
 geom/label/g_label_iso9660.c	optional geom_label
 geom/label/g_label_msdosfs.c	optional geom_label
 geom/label/g_label_ntfs.c	optional geom_label
@@ -3718,21 +3724,6 @@ geom/raid3/g_raid3.c		optional geom_raid3
 geom/raid3/g_raid3_ctl.c	optional geom_raid3
 geom/shsec/g_shsec.c		optional geom_shsec
 geom/stripe/g_stripe.c		optional geom_stripe
-contrib/xz-embedded/freebsd/xz_malloc.c	\
-	optional xz_embedded | geom_uzip \
-	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
-contrib/xz-embedded/linux/lib/xz/xz_crc32.c \
-	optional xz_embedded | geom_uzip \
-	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
-contrib/xz-embedded/linux/lib/xz/xz_dec_bcj.c \
-	optional xz_embedded | geom_uzip \
-	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
-contrib/xz-embedded/linux/lib/xz/xz_dec_lzma2.c \
-	optional xz_embedded | geom_uzip \
-	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
-contrib/xz-embedded/linux/lib/xz/xz_dec_stream.c \
-	optional xz_embedded | geom_uzip \
-	compile-with "${NORMAL_C} -I$S/contrib/xz-embedded/freebsd/ -I$S/contrib/xz-embedded/linux/lib/xz/ -I$S/contrib/xz-embedded/linux/include/linux/"
 geom/uzip/g_uzip.c		optional geom_uzip
 geom/uzip/g_uzip_lzma.c		optional geom_uzip
 geom/uzip/g_uzip_wrkthr.c	optional geom_uzip
@@ -3919,6 +3910,7 @@ kern/subr_pidctrl.c		standard
 kern/subr_power.c		standard
 kern/subr_prf.c			standard
 kern/subr_prof.c		standard
+kern/subr_rangeset.c		standard
 kern/subr_rman.c		standard
 kern/subr_rtc.c			standard
 kern/subr_sbuf.c		standard
@@ -4444,10 +4436,14 @@ netpfil/ipfw/ip_fw_iface.c	optional inet ipfirewall
 netpfil/ipfw/ip_fw_nat.c	optional inet ipfirewall_nat
 netpfil/ipfw/nat64/ip_fw_nat64.c	optional inet inet6 ipfirewall \
 	ipfirewall_nat64
+netpfil/ipfw/nat64/nat64clat.c	optional inet inet6 ipfirewall \
+	ipfirewall_nat64
+netpfil/ipfw/nat64/nat64clat_control.c	optional inet inet6 ipfirewall \
+	ipfirewall_nat64
 netpfil/ipfw/nat64/nat64lsn.c	optional inet inet6 ipfirewall \
-	ipfirewall_nat64
+	ipfirewall_nat64 compile-with "${NORMAL_C} -I$S/contrib/ck/include"
 netpfil/ipfw/nat64/nat64lsn_control.c	optional inet inet6 ipfirewall \
-	ipfirewall_nat64
+	ipfirewall_nat64 compile-with "${NORMAL_C} -I$S/contrib/ck/include"
 netpfil/ipfw/nat64/nat64stl.c	optional inet inet6 ipfirewall \
 	ipfirewall_nat64
 netpfil/ipfw/nat64/nat64stl_control.c	optional inet inet6 ipfirewall \
@@ -4855,6 +4851,8 @@ crypto/libsodium/randombytes.c	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include -I$S/crypto/libsodium"
 crypto/libsodium/utils.c	optional crypto \
 	compile-with "${NORMAL_C} -I$S/contrib/libsodium/src/libsodium/include -I$S/crypto/libsodium"
+opencrypto/cbc_mac.c		optional crypto
+opencrypto/xform_cbc_mac.c	optional crypto
 rpc/auth_none.c			optional krpc | nfslockd | nfscl | nfsd
 rpc/auth_unix.c			optional krpc | nfslockd | nfscl | nfsd
 rpc/authunix_prot.c		optional krpc | nfslockd | nfscl | nfsd
@@ -4928,14 +4926,15 @@ security/mac_portacl/mac_portacl.c optional mac_portacl
 security/mac_seeotheruids/mac_seeotheruids.c optional mac_seeotheruids
 security/mac_stub/mac_stub.c	optional mac_stub
 security/mac_test/mac_test.c	optional mac_test
-security/mac_veriexec/mac_veriexec.c		optional mac_veriexec
-security/mac_veriexec/veriexec_fingerprint.c	optional mac_veriexec
-security/mac_veriexec/veriexec_metadata.c	optional mac_veriexec
-security/mac_veriexec/mac_veriexec_rmd160.c	optional mac_veriexec_rmd160
-security/mac_veriexec/mac_veriexec_sha1.c	optional mac_veriexec_sha1
-security/mac_veriexec/mac_veriexec_sha256.c	optional mac_veriexec_sha256
-security/mac_veriexec/mac_veriexec_sha384.c	optional mac_veriexec_sha384
-security/mac_veriexec/mac_veriexec_sha512.c	optional mac_veriexec_sha512
+security/mac_veriexec/mac_veriexec.c			optional mac_veriexec
+security/mac_veriexec/veriexec_fingerprint.c		optional mac_veriexec
+security/mac_veriexec/veriexec_metadata.c		optional mac_veriexec
+security/mac_veriexec_parser/mac_veriexec_parser.c	optional mac_veriexec mac_veriexec_parser
+security/mac_veriexec/mac_veriexec_rmd160.c		optional mac_veriexec_rmd160
+security/mac_veriexec/mac_veriexec_sha1.c		optional mac_veriexec_sha1
+security/mac_veriexec/mac_veriexec_sha256.c		optional mac_veriexec_sha256
+security/mac_veriexec/mac_veriexec_sha384.c		optional mac_veriexec_sha384
+security/mac_veriexec/mac_veriexec_sha512.c		optional mac_veriexec_sha512
 teken/teken.c			optional sc | vt
 ufs/ffs/ffs_alloc.c		optional ffs
 ufs/ffs/ffs_balloc.c		optional ffs

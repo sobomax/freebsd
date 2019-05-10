@@ -351,6 +351,7 @@ vendor ALCATELT		0x06b9	Alcatel Telecom
 vendor AGFA		0x06bd	AGFA-Gevaert
 vendor ASIAMD		0x06be	Asia Microelectronic Development
 vendor BIZLINK		0x06c4	Bizlink International
+vendor SYNAPTICS	0x06cb  Synaptics, Inc.
 vendor KEYSPAN		0x06cd	Keyspan / InnoSys Inc.
 vendor CONTEC		0x06ce	Contec products
 vendor AASHIMA		0x06d6	Aashima Technology
@@ -2582,6 +2583,7 @@ product INTEL2 IRMH        	0x0020	Integrated Rate Matching Hub
 product INTEL2 IRMH2        	0x0024	Integrated Rate Matching Hub
 product INTEL2 IRMH3        	0x8000	Integrated Rate Matching Hub
 product INTEL2 IRMH4        	0x8008	Integrated Rate Matching Hub
+product INTEL2 SNP		0x0a2b	Stone Peak (7265) Bluetooth Module
 product INTEL2 SFP		0x0aa7  Sandy Peak (3168) Bluetooth Module
 product INTEL2 JFP		0x0aaa	Jefferson Peak (9460/9560) Bluetooth Module
 product INTEL2 THP 		0x0025	Thunder Peak (9160/9260) Bluetooth Module
@@ -2648,6 +2650,7 @@ product JATON EDA		0x5704	Ethernet
 product JETI SPC1201		0x04b2	FTDI compatible adapter
 
 /* JMicron products */
+product JMICRON JMS566		0x3569	USB to SATA 3.0Gb/s bridge 
 product JMICRON JMS567		0x0567	USB to SATA 6.0Gb/s bridge 
 product JMICRON JM20336		0x2336	USB to SATA Bridge
 product JMICRON JM20337		0x2338	USB to ATA/ATAPI Bridge
@@ -2672,6 +2675,9 @@ product KEISOKUGIKEN USBDAQ	0x0068	HKS-0200 USBDAQ
 /* Kensington products */
 product KENSINGTON ORBIT	0x1003	Orbit USB/PS2 trackball
 product KENSINGTON TURBOBALL	0x1005	TurboBall
+
+/* Synaptics products */
+product SYNAPTICS FPR9A		0x009a	Fingerprint Reader
 
 /* Keyspan products */
 product KEYSPAN USA28_NF	0x0101	USA-28 serial Adapter (no firmware)
@@ -4025,6 +4031,8 @@ product ROLAND SD20		0x0027	SD-20 MIDI Synth
 product ROLAND SD80		0x0029	SD-80 MIDI Synth
 product ROLAND UA700		0x002b	UA-700 Audio I/F
 product ROLAND PCR300		0x0033  EDIROL PCR-300 MIDI I/F
+product ROLAND UA25EX_AD	0x00e6  EDIROL UA-25EX (Advanced Driver)
+product ROLAND UA25EX_CC	0x00e7  EDIROL UA-25EX (Class Compliant)
 
 /* Rockfire products */
 product ROCKFIRE GAMEPAD	0x2033	gamepad 203USB
