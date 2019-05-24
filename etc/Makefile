@@ -4,6 +4,7 @@
 .include <src.opts.mk>
 
 FILESGROUPS=	FILES
+PWD_MKDB_CMD?=	pwd_mkdb
 
 # No need as it is empty and just causes rebuilds since this file does so much.
 UPDATE_DEPENDFILE=	no
@@ -70,7 +71,7 @@ distribution:
 .if ${MK_TCSH} == "no"
 	sed -i "" -e 's;/bin/csh;/bin/sh;' ${DESTDIR}/etc/master.passwd
 .endif
-	pwd_mkdb -i -p -d ${DESTDIR}/etc ${DESTDIR}/etc/master.passwd
+	${PWD_MKDB_CMD} -i -p -d ${DESTDIR}/etc ${DESTDIR}/etc/master.passwd
 .if defined(NO_ROOT)
 	( \
 		echo "./etc/passwd type=file mode=0644 uname=root gname=wheel"; \
