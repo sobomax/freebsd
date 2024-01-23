@@ -208,6 +208,9 @@ gpt_mktbl(u_int tblsz)
 				idx++;
 			}
 		}
+		if (part->index + 1 == active_partition) {
+			le64enc(&ent->ent_attr, GPT_ENT_ATTR_BOOTME);
+		}
 	}
 	return (tbl);
 }
