@@ -98,6 +98,9 @@ LDFLAGS+=	-static ${LDFLAGS_ORG} -Wl,--gc-sections
 LDFLAGS+=	-Wl,-z,nostart-stop-gc
 .endif
 
+LDSYM_SCRIPT=	${.CURDIR}/../loader/Symbol.map
+LDFLAGS+=	-Wl,--version-script=${LDSYM_SCRIPT}
+
 # i386 standalone support library
 LIBI386=	${BOOTOBJ}/i386/libi386/libi386.a
 CFLAGS+=	-I${BOOTSRC}/i386
@@ -145,8 +148,8 @@ LDFLAGS+=	${BTXCRT}
 # if someone has set a larger default linker max page size via /etc/src.conf.
 LDFLAGS+= -Wl,-z,max-page-size=0x1000
 
-DPADD=	${LDR_INTERP32} ${LIBI386} ${LIBSA32}
-LDADD=	${LDR_INTERP32} ${LIBI386} ${LIBSA32}
+DPADD=	${LDR_INTERP32} ${LIBI386} ${LIBSA32} ${LDSYM_SCRIPT}
+LDADD=	-Wl,--whole-archive ${LDR_INTERP32} ${LIBI386} ${LIBSA32} -Wl,--no-whole-archive
 
 .if ${MACHINE_CPUARCH} == "amd64"
 CFLAGS+=	-DLOADER_PREFER_AMD64

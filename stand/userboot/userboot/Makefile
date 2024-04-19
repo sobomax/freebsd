@@ -56,6 +56,8 @@ CWARNFLAGS.main.c += -Wno-implicit-function-declaration
 
 NEWVERSWHAT=	"User boot ${LOADER_INTERP}" ${MACHINE_CPUARCH}
 VERSION_FILE?=	${.CURDIR}/../userboot/version
+LDSYM_SCRIPT=	${.CURDIR}/../Symbol.map
+LDFLAGS+=	-Wl,--version-script=${LDSYM_SCRIPT}
 
 .if ${LOADER_INTERP} == ${LOADER_DEFAULT_INTERP}
 LINKS+=		${BINDIR}/${SHLIB_NAME} ${BINDIR}/userboot.so
@@ -75,7 +77,7 @@ HELP_FILENAME=	loader.help.userboot
 # Always add MI sources
 .include	"${BOOTSRC}/loader.mk"
 CFLAGS+=	-I.
-DPADD+=		${LDR_INTERP} ${LIBSA}
-LDADD+=		${LDR_INTERP} ${LIBSA}
+DPADD+=		${LDR_INTERP} ${LIBSA} ${LDSYM_SCRIPT}
+LDADD+=		-Wl,--whole-archive ${LDR_INTERP} ${LIBSA} -Wl,--no-whole-archive
 
 .include <bsd.lib.mk>

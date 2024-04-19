@@ -74,7 +74,7 @@ gptzfsboot.bin: gptzfsboot.out
 	${OBJCOPY} -S -O binary gptzfsboot.out ${.TARGET}
 
 gptzfsboot.out: ${BTXCRT} ${OBJS}
-	${LD} ${LD_FLAGS} --defsym ORG=${ORG2} -T ${LDSCRIPT} -o ${.TARGET} ${.ALLSRC} ${LIBI386} ${LIBSA32}
+	${LD} ${LD_FLAGS} --defsym ORG=${ORG2} -T ${LDSCRIPT} -o ${.TARGET} ${.ALLSRC} --whole-archive ${LIBI386} ${LIBSA32}
 
 zfsboot.o: ${ZFSSRC}/zfsimpl.c
 

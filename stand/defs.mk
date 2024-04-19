@@ -82,6 +82,12 @@ LIBSA32=	${BOOTOBJ}/libsa32/libsa32.a
 
 # Standard options:
 CFLAGS+=	-nostdinc
+CFLAGS+=	-flto
+.if ${MACHINE_CPUARCH} == "aarch64" || ${MACHINE_CPUARCH} == "amd64"
+# This options is for the sake of EFI, which mandates 16-bit wchars. Just to make sure
+# we are generating ABI-compatible code while compiling common libs.
+CFLAGS+=	 -fshort-wchar
+.endif
 # Allow CFLAGS_EARLY.file/target so that code that needs specific stack
 # of include paths can set them up before our include paths. Normally
 # the only thing that should be there are -I directives, and as few of

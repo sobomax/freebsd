@@ -69,6 +69,9 @@ LDFLAGS+=	-Wl,-T${LDSCRIPT},-Bsymbolic,-znotext -pie
 LDFLAGS+=	-Wl,--no-dynamic-linker
 .endif
 
+LDSYM_SCRIPT=	${.CURDIR}/../loader/Symbol.map
+LDFLAGS+=	-Wl,--version-script=${LDSYM_SCRIPT}
+
 .if ${MACHINE_CPUARCH} == "aarch64"
 CFLAGS+=	-mgeneral-regs-only
 .endif
@@ -84,9 +87,9 @@ LIBEFI=		${BOOTOBJ}/efi/libefi/libefi.a
 # string and memory functions for all platforms.
 #
 DPADD+=		${LIBEFI} ${LIBSA}
-LDADD+=		${LIBEFI} ${LIBSA}
+LDADD+=		-Wl,--whole-archive ${LIBEFI} ${LIBSA} -Wl,--no-whole-archive
 
-DPADD+=		${LDSCRIPT}
+DPADD+=		${LDSCRIPT} ${LDSYM_SCRIPT}
 
 CLEANFILES+=	${BOOT1}.efi
 

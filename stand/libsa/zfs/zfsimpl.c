@@ -153,9 +153,9 @@ static int dnode_read(const spa_t *, const dnode_phys_t *, off_t, void *,
 static int vdev_indirect_read(vdev_t *, const blkptr_t *, void *, off_t,
     size_t);
 static int vdev_mirror_read(vdev_t *, const blkptr_t *, void *, off_t, size_t);
-vdev_indirect_mapping_t *vdev_indirect_mapping_open(spa_t *, objset_phys_t *,
+vdev_indirect_mapping_t * __attribute__((weak)) vdev_indirect_mapping_open(spa_t *, objset_phys_t *,
     uint64_t);
-vdev_indirect_mapping_entry_phys_t *
+vdev_indirect_mapping_entry_phys_t * __attribute__((weak))
     vdev_indirect_mapping_duplicate_adjacent_entries(vdev_t *, uint64_t,
     uint64_t, uint64_t *);
 
@@ -280,7 +280,7 @@ rs_alloc(vdev_t *vd, uint64_t offset, uint64_t asize, uint64_t split_offset)
 	return (rs);
 }
 
-vdev_indirect_mapping_t *
+vdev_indirect_mapping_t * __attribute__((weak))
 vdev_indirect_mapping_open(spa_t *spa, objset_phys_t *os,
     uint64_t mapping_object)
 {
@@ -493,7 +493,7 @@ vdev_indirect_mapping_entry_for_offset(vdev_indirect_mapping_t *vim,
  * Finally, since we are doing an allocation, it is up to the caller to
  * free the array allocated in this function.
  */
-vdev_indirect_mapping_entry_phys_t *
+vdev_indirect_mapping_entry_phys_t * __attribute__((weak))
 vdev_indirect_mapping_duplicate_adjacent_entries(vdev_t *vd, uint64_t offset,
     uint64_t asize, uint64_t *copied_entries)
 {
@@ -1760,7 +1760,7 @@ vdev_write_bootenv_impl(vdev_t *vdev, vdev_boot_envblock_t *be)
 	return (rv);
 }
 
-int
+int __attribute__((weak))
 vdev_write_bootenv(vdev_t *vdev, nvlist_t *nvl)
 {
 	vdev_boot_envblock_t *be;
@@ -1822,7 +1822,7 @@ vdev_write_bootenv(vdev_t *vdev, nvlist_t *nvl)
  * Read the bootenv area from pool label, return the nvlist from it.
  * We return from first successful read.
  */
-nvlist_t *
+nvlist_t * __attribute__((weak))
 vdev_read_bootenv(vdev_t *vdev)
 {
 	vdev_t *kid;
@@ -3331,7 +3331,7 @@ zfs_list_dataset(const spa_t *spa, uint64_t objnum/*, int pos, char *entry*/)
 	return (zap_list(spa, &child_dir_zap) != 0);
 }
 
-int
+int __attribute__((weak))
 zfs_callback_dataset(const spa_t *spa, uint64_t objnum,
     int (*callback)(const char *, uint64_t))
 {

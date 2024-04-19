@@ -43,7 +43,7 @@
  * buf must be at least BPE_GET_PSIZE(bp) bytes long (which will never be
  * more than BPE_PAYLOAD_SIZE bytes).
  */
-void
+void __attribute__((weak))
 decode_embedded_bp_compressed(const blkptr_t *bp, void *buf)
 {
 	int psize;

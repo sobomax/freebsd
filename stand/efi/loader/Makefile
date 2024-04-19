@@ -125,6 +125,9 @@ LDFLAGS+=	-Wl,--no-dynamic-linker
 LDFLAGS+=	-Wl,--threads=1
 .endif
 
+LDSYM_SCRIPT=	${.CURDIR}/../loader/Symbol.map
+LDFLAGS+=	-Wl,--version-script=${LDSYM_SCRIPT}
+
 CLEANFILES+=	${LOADER}.efi
 
 ${LOADER}.efi: ${PROG}
@@ -144,10 +147,12 @@ LIBEFI32=	${BOOTOBJ}/efi/libefi32/libefi.a
 
 .if ${__arch} == "i386"
 DPADD=		${LDR_INTERP32} ${LIBEFI32} ${LIBSA32} ${LDSCRIPT}
-LDADD=		${LDR_INTERP32} ${LIBEFI32} ${LIBSA32}
+_LDADD=		${LDR_INTERP32} ${LIBEFI32} ${LIBSA32}
 .else
 DPADD=		${LDR_INTERP} ${LIBEFI} ${LIBSAFDT} ${LIBEFI_FDT} ${LIBSA} ${LDSCRIPT}
-LDADD=		${LDR_INTERP} ${LIBEFI} ${LIBSAFDT} ${LIBEFI_FDT} ${LIBSA}
+_LDADD=		${LDR_INTERP} ${LIBEFI} ${LIBSAFDT} ${LIBEFI_FDT} ${LIBSA}
 .endif
+DPADD+=		${LDSYM_SCRIPT}
+LDADD=		-Wl,--whole-archive ${_LDADD} -Wl,--no-whole-archive
 
 .include <bsd.prog.mk>

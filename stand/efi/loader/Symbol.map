@@ -1,0 +1,4 @@
+EFILOADER_1.0 {
+    global: efi_main;
+    local: *;
+};

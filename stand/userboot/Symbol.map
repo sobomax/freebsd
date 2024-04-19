@@ -1,0 +1,4 @@
+USERBOOT_1.0 {
+    global: loader_main;
+    local: *;
+};

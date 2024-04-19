@@ -57,6 +57,6 @@ isoboot.bin: isoboot.out
 	${OBJCOPY} -S -O binary isoboot.out ${.TARGET}
 
 isoboot.out: ${BTXCRT} isoboot.o sio.o drv.o cons.o
-	${LD} ${LD_FLAGS} --defsym ORG=${ORG2} -T ${LDSCRIPT} -o ${.TARGET} ${.ALLSRC} ${LIBSA32}
+	${LD} ${LD_FLAGS} --defsym ORG=${ORG2} -T ${LDSCRIPT} -o ${.TARGET} ${.ALLSRC} --whole-archive ${LIBSA32}
 
 .include <bsd.prog.mk>
