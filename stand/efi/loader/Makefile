@@ -126,6 +126,9 @@ LDFLAGS+=	-Wl,--no-dynamic-linker
 LDFLAGS+=	-Wl,--threads=1
 .endif
 
+LDSYM_SCRIPT=	${.CURDIR}/../loader/Symbol.map
+LDFLAGS+=	-Wl,--version-script=${LDSYM_SCRIPT}
+
 CLEANFILES+=	${LOADER}.efi
 
 ${LOADER}.efi: ${PROG}
@@ -150,5 +153,6 @@ LDADD=		${LDR_INTERP32} ${LIBEFI32} ${LIBSA32}
 DPADD=		${LDR_INTERP} ${LIBEFI} ${LIBSAFDT} ${LIBEFI_FDT} ${LIBSA} ${LDSCRIPT}
 LDADD=		${LDR_INTERP} ${LIBEFI} ${LIBSAFDT} ${LIBEFI_FDT} ${LIBSA}
 .endif
+DPADD+=		${LDSYM_SCRIPT}
 
 .include <bsd.prog.mk>
