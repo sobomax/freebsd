@@ -804,13 +804,32 @@ kassert_sysctl_kassert(SYSCTL_HANDLER_ARGS)
 	return (0);
 }
 
+static const char *
+trim_to_sys(const char *path)
+{
+	const char *tp, *cp = path;
+
+	while ((tp = strstr(cp, "/sys/")) != NULL ) {
+		cp = tp + 1;
+	}
+	return (cp);
+}
+
 #ifdef KASSERT_PANIC_OPTIONAL
+static void
+kassert_print(const struct panic_codeptr *where, const char *buf)
+{
+
+	printf("KASSERT failed at %s:%d (%s): %s\n", trim_to_sys(where->fname),
+	    where->linen, where->funcn, buf);
+}
+
 /*
  * Called by KASSERT, this decides if we will panic
  * or if we will log via printf and/or ktr.
  */
 void
-kassert_panic(const char *fmt, ...)
+do_kassert_panic(const struct panic_codeptr *where, const char *fmt, ...)
 {
 	static char buf[256];
 	va_list ap;
@@ -825,7 +844,7 @@ kassert_panic(const char *fmt, ...)
 	 */
 	if (KERNEL_PANICKED() && kassert_suppress_in_panic) {
 		if (kassert_do_log) {
-			printf("KASSERT failed: %s\n", buf);
+			kassert_print(where, buf);
 #ifdef KDB
 			if (trace_all_panics && trace_on_panic)
 				kdb_backtrace();
@@ -842,7 +861,7 @@ kassert_panic(const char *fmt, ...)
 	    (kassert_log_panic_at > 0 &&
 	     kassert_warnings >= kassert_log_panic_at)) {
 		va_start(ap, fmt);
-		vpanic(fmt, ap);
+		do_vpanic(where, fmt, ap);
 		/* NORETURN */
 	}
 #ifdef KTR
@@ -859,7 +878,7 @@ kassert_panic(const char *fmt, ...)
 		static  int curerr;
 
 		if (ppsratecheck(&lasterr, &curerr, kassert_log_pps_limit)) {
-			printf("KASSERT failed: %s\n", buf);
+			kassert_print(where, buf);
 			kdb_backtrace();
 		}
 	}
@@ -879,16 +898,16 @@ kassert_panic(const char *fmt, ...)
  * the disks as this often leads to recursive panics.
  */
 void
-panic(const char *fmt, ...)
+do_panic(const struct panic_codeptr *where, const char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	vpanic(fmt, ap);
+	do_vpanic(where, fmt, ap);
 }
 
 void
-vpanic(const char *fmt, va_list ap)
+do_vpanic(const struct panic_codeptr *where, const char *fmt, va_list ap)
 {
 #ifdef SMP
 	cpuset_t other_cpus;
@@ -940,13 +959,15 @@ vpanic(const char *fmt, va_list ap)
 	/* Unmute when panic */
 	cn_mute = 0;
 
+	if (newpanic)
+		cngrab();
+	printf("panic at %s:%d (%s): ", trim_to_sys(where->fname),
+	    where->linen, where->funcn);
 	if (newpanic) {
 		(void)vsnprintf(buf, sizeof(buf), fmt, ap);
 		panicstr = buf;
-		cngrab();
-		printf("panic: %s\n", buf);
+		printf("%s\n", buf);
 	} else {
-		printf("panic: ");
 		vprintf(fmt, ap);
 		printf("\n");
 	}

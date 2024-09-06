@@ -40,6 +40,7 @@
 #include <linux/cache.h>
 
 #include <net/ipv6.h>
+#include <sys/kassert.h>
 
 #include "fw.h"
 #include "icm.h"

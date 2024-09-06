@@ -107,14 +107,29 @@ extern void *poisoned_buf;
 #define	CTASSERT(x)	_Static_assert(x, "compile-time assertion failed")
 #endif
 
+struct panic_codeptr {
+	const char * const fname;
+	const int linen;
+	const char * const funcn;
+};
+
+#  define PANIC_CTX	({static const struct panic_codeptr _panic_ctx = { \
+    .fname = __FILE__, .linen = __LINE__, .funcn = __func__}; \
+    &_panic_ctx;})
+
 /*
  * These functions need to be declared before the KASSERT macro is invoked in
  * !KASSERT_PANIC_OPTIONAL builds, so their declarations are sort of out of
  * place compared to other function definitions in this header.  On the other
  * hand, this header is a bit disorganized anyway.
  */
-void	panic(const char *, ...) __dead2 __printflike(1, 2);
-void	vpanic(const char *, __va_list) __dead2 __printflike(1, 0);
+void	do_panic(const struct panic_codeptr *, const char *, ...)
+    __dead2 __printflike(2, 3);
+void	do_vpanic(const struct panic_codeptr *, const char *, __va_list)
+    __dead2 __printflike(2, 0);
+
+#  define panic(args...)	do_panic(PANIC_CTX, ## args)
+#  define vpanic(args...)	do_vpanic(PANIC_CTX, ## args)
 #endif	/* _KERNEL */
 
 #if defined(_STANDALONE)
@@ -130,7 +145,11 @@ int	printf(const char *, ...) __printflike(1, 2);
 #else /* !_STANDALONE */
 #  if defined(WITNESS) || defined(INVARIANT_SUPPORT)
 #    ifdef KASSERT_PANIC_OPTIONAL
-void	kassert_panic(const char *fmt, ...)  __printflike(1, 2);
+
+void	do_kassert_panic(const struct panic_codeptr *, const char *fmt, ...)
+    __printflike(2, 3);
+#      define kassert_panic(args...)	do_kassert_panic(PANIC_CTX, ## args)
+
 #    else
 #      define kassert_panic	panic
 #    endif /* KASSERT_PANIC_OPTIONAL */

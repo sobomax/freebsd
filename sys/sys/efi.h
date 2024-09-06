@@ -393,6 +393,9 @@ efi_var_set(uint16_t *name, efi_guid_t *vendor, uint32_t attrib,
 
 int efi_status_to_errno(efi_status status);
 
+void efi_panic(const char *, ...) __attribute__((format(printf, 1, 2),
+    __noreturn__));
+
 #endif	/* _KERNEL */
 
 #endif /* _SYS_EFI_H_ */

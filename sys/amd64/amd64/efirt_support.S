@@ -78,7 +78,7 @@ ENTRY(efi_rt_arch_call)
 	decl	%ebx
 	jz	1f
 	movq	$efi_rt_panic_str, %rdi
-	call	panic
+	call	efi_panic
 1:	movq	EC_FPTR(%rdi), %rax
 	movq	$efi_rt_fault, PCB_ONFAULT(%rsi)
 	callq	*%rax

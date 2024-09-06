@@ -72,8 +72,10 @@ extern void zprintf(zoneid_t, const char *, ...)
 extern void vuprintf(const char *, __va_list)
     __attribute__((format(printf, 1, 0)));
 
-extern void panic(const char *, ...)
-    __attribute__((format(printf, 1, 2), __noreturn__));
+struct panic_codeptr;
+
+extern void do_panic(const struct panic_codeptr *, const char *, ...)
+    __attribute__((format(printf, 2, 3), __noreturn__));
 
 #define	cmn_err_once(ce, ...)				\
 do {							\

@@ -46,6 +46,7 @@
 #include <isa/rtc.h>
 #include <machine/efi.h>
 #include <machine/md_var.h>
+#include <machine/stdarg.h>
 #include <machine/vmparam.h>
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -388,6 +389,15 @@ efi_time_sysctl_handler(SYSCTL_HANDLER_ARGS)
 		    tm.tm_min, tm.tm_sec);
 	}
 	return (error);
+}
+
+void
+efi_panic(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	panic(fmt, ap);
 }
 
 SYSCTL_PROC(_debug, OID_AUTO, efi_time,
