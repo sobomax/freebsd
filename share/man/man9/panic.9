@@ -149,6 +149,10 @@ The
 and
 .Fn vpanic
 functions do not return.
+.Sh IMPLEMENTATION NOTES
+For convinience, both functions are implememted as macros, which also
+capture location of the call site in the source code. This is to provide
+more context when generating error message.
 .Sh SEE ALSO
 .Xr printf 3 ,
 .Xr ddb 4 ,

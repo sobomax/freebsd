@@ -32,6 +32,10 @@
  * SOFTWARE.
  */
 
+#include <sys/types.h>
+#include <machine/stdarg.h>
+#include <sys/kassert.h>
+
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/module.h>

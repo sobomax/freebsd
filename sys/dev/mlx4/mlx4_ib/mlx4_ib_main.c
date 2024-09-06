@@ -45,6 +45,7 @@
 #include <linux/delay.h>
 
 #include <net/ipv6.h>
+#include <sys/kassert.h>
 
 #include <rdma/ib_smi.h>
 #include <rdma/ib_user_verbs.h>
