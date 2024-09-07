@@ -146,7 +146,7 @@ struct pipepair {
 
 #ifdef _KERNEL
 void	pipe_dtor(struct pipe *dpipe);
-int	pipe_named_ctor(struct pipe **ppipe, struct thread *td);
+void	pipe_named_ctor(struct pipe **ppipe, struct thread *td);
 void	pipeselwakeup(struct pipe *cpipe);
 #endif
 #endif /* !_SYS_PIPE_H_ */
