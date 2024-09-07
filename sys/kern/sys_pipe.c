@@ -115,6 +115,7 @@
 #include <sys/uio.h>
 #include <sys/user.h>
 #include <sys/event.h>
+#include <sys/jail.h>
 
 #include <security/mac/mac_framework.h>
 
@@ -528,6 +529,20 @@ sys_pipe2(struct thread *td, struct pipe2_args *uap)
 	return (error);
 }
 
+static void
+pipekva_enomem(void)
+{
+	static int curfail = 0;
+	static struct timeval lastfail;
+
+	pipeallocfail++;
+	if (!ppsratecheck(&lastfail, &curfail, 1))
+		return;
+	printf("pid %d (%s), jid %d, uid %d: kern.ipc.maxpipekva exceeded\n",
+	    curproc->p_pid, curproc->p_comm, curproc->p_ucred->cr_prison->pr_id,
+	    curproc->p_ucred->cr_uid);
+}
+
 /*
  * Allocate kva for pipe circular buffer, the space is pageable
  * This routine will 'realloc' the size of a pipe safely, if it fails
@@ -539,8 +554,6 @@ pipespace_new(struct pipe *cpipe, int size)
 {
 	caddr_t buffer;
 	int error, cnt, firstseg;
-	static int curfail = 0;
-	static struct timeval lastfail;
 
 	KASSERT(!mtx_owned(PIPE_MTX(cpipe)), ("pipespace: pipe mutex locked"));
 	KASSERT(!(cpipe->pipe_state & PIPE_DIRECTW),
@@ -588,9 +601,7 @@ retry:
 			goto retry;
 		}
 		if (cpipe->pipe_buffer.buffer == NULL) {
-			pipeallocfail++;
-			if (ppsratecheck(&lastfail, &curfail, 1))
-				printf("kern.ipc.maxpipekva exceeded; see tuning(7)\n");
+			pipekva_enomem();
 		} else {
 			piperesizefail++;
 		}
