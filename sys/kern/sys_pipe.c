@@ -233,8 +233,8 @@ SYSCTL_INT(_kern_ipc, OID_AUTO, pipebuf_reserv, CTLFLAG_RW,
 static void pipeinit(void *dummy __unused);
 static void pipeclose(struct pipe *cpipe);
 static void pipe_free_kmem(struct pipe *cpipe);
-static int pipe_create(struct pipe *pipe, bool backing);
-static int pipe_paircreate(struct thread *td, struct pipepair **p_pp);
+static void pipe_create(struct pipe *pipe, bool backing);
+static void pipe_paircreate(struct thread *td, struct pipepair **p_pp);
 static __inline int pipelock(struct pipe *cpipe, bool catch);
 static __inline void pipeunlock(struct pipe *cpipe);
 static void pipe_timestamp(struct timespec *tsp);
@@ -366,12 +366,11 @@ pipe_zone_fini(void *mem, int size)
 	mtx_destroy(&pp->pp_mtx);
 }
 
-static int
+static void
 pipe_paircreate(struct thread *td, struct pipepair **p_pp)
 {
 	struct pipepair *pp;
 	struct pipe *rpipe, *wpipe;
-	int error;
 
 	*p_pp = pp = uma_zalloc(pipe_zone, M_WAITOK);
 #ifdef MAC
@@ -394,51 +393,21 @@ pipe_paircreate(struct thread *td, struct pipepair **p_pp)
 	 * Only the forward direction pipe is backed by big buffer by
 	 * default.
 	 */
-	error = pipe_create(rpipe, true);
-	if (error != 0)
-		goto fail;
-	error = pipe_create(wpipe, false);
-	if (error != 0) {
-		/*
-		 * This cleanup leaves the pipe inode number for rpipe
-		 * still allocated, but never used.  We do not free
-		 * inode numbers for opened pipes, which is required
-		 * for correctness because numbers must be unique.
-		 * But also it avoids any memory use by the unr
-		 * allocator, so stashing away the transient inode
-		 * number is reasonable.
-		 */
-		pipe_free_kmem(rpipe);
-		goto fail;
-	}
+	pipe_create(rpipe, true);
+	pipe_create(wpipe, false);
 
 	rpipe->pipe_state |= PIPE_DIRECTOK;
 	wpipe->pipe_state |= PIPE_DIRECTOK;
-	return (0);
-
-fail:
-	knlist_destroy(&rpipe->pipe_sel.si_note);
-	knlist_destroy(&wpipe->pipe_sel.si_note);
-	crfree(pp->pp_owner);
-#ifdef MAC
-	mac_pipe_destroy(pp);
-#endif
-	uma_zfree(pipe_zone, pp);
-	return (error);
 }
 
-int
+void
 pipe_named_ctor(struct pipe **ppipe, struct thread *td)
 {
 	struct pipepair *pp;
-	int error;
 
-	error = pipe_paircreate(td, &pp);
-	if (error != 0)
-		return (error);
+	pipe_paircreate(td, &pp);
 	pp->pp_rpipe.pipe_type |= PIPE_TYPE_NAMED;
 	*ppipe = &pp->pp_rpipe;
-	return (0);
 }
 
 void
@@ -482,9 +451,7 @@ kern_pipe(struct thread *td, int fildes[2], int flags, struct filecaps *fcaps1,
 	struct pipepair *pp;
 	int fd, fflags, error;
 
-	error = pipe_paircreate(td, &pp);
-	if (error != 0)
-		return (error);
+	pipe_paircreate(td, &pp);
 	rpipe = &pp->pp_rpipe;
 	wpipe = &pp->pp_wpipe;
 	error = falloc_caps(td, &rf, &fd, flags, fcaps1);
@@ -731,16 +698,21 @@ pipeselwakeup(struct pipe *cpipe)
  * Initialize and allocate VM and memory for pipe.  The structure
  * will start out zero'd from the ctor, so we just manage the kmem.
  */
-static int
+static void
 pipe_create(struct pipe *pipe, bool large_backing)
 {
-	int error;
 
-	error = pipespace_new(pipe, !large_backing || amountpipekva >
+	/*
+	 * Note that pipespace_new() can fail if pipe map is exhausted
+	 * (as a result of too many pipes created), but we ignore the
+	 * error here as it is not fatal and could be provoked by
+	 * unprivileged users. The pipe will be unused in absolute majority
+	 * of cases anyways, so it is not a big deal. If the condition
+	 * persists, the write() will re-try allocation and report it then.
+	 */
+	(void)pipespace_new(pipe, !large_backing || amountpipekva >
 	    maxpipekva / 2 ? SMALL_PIPE_SIZE : PIPE_SIZE);
-	if (error == 0)
-		pipe->pipe_ino = alloc_unr64(&pipeino_unr);
-	return (error);
+	pipe->pipe_ino = alloc_unr64(&pipeino_unr);
 }
 
 /* ARGSUSED */
@@ -1196,7 +1168,17 @@ pipe_write(struct file *fp, struct uio *uio, struct ucred *active_cred,
 		pipespace(wpipe, desiredsize);
 		PIPE_LOCK(wpipe);
 	}
-	MPASS(wpipe->pipe_buffer.size != 0);
+	if (wpipe->pipe_buffer.size == 0) {
+		/*
+		 * This can only happen for reverse direction use of pipes
+		 * in a complete OOM situation.
+		 */
+		error = ENOMEM;
+		--wpipe->pipe_busy;
+		pipeunlock(wpipe);
+		PIPE_UNLOCK(wpipe);
+		return (error);
+	}
 
 	orig_resid = uio->uio_resid;
 
