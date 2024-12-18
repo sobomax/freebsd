@@ -44,6 +44,7 @@
 
 #include "libc_private.h"
 #include "thr_private.h"
+#include "thr_codecntr.h"
 
 static void	exit_thread(void) __dead2;
 
@@ -317,8 +318,19 @@ exit_thread(void)
 	_thr_try_gc(curthread, curthread); /* thread lock released */
 
 #if defined(_PTHREADS_INVARIANTS)
-	if (THR_IN_CRITICAL(curthread))
-		PANIC("thread %p exits with resources held!", curthread);
+	static atomic_flag stderr_mutex = {0};
+	if (THR_IN_CRITICAL(curthread)) {
+		while (atomic_flag_test_and_set(&stderr_mutex)) continue;
+		if (curthread->critical_count) {
+			_thread_printf(STDERR_FILENO, "ENTER(s):\n");
+			_thr_codecntr_dump(curthread->critical_hst.enters);
+			_thread_printf(STDERR_FILENO, "EXITS(s):\n");
+			_thr_codecntr_dump(curthread->critical_hst.exits);
+		}
+		PANIC("thread %p exits with resources held (ll=%d, cc=%d)!",
+		    curthread, curthread->locklevel, curthread->critical_count);
+		atomic_flag_clear(&stderr_mutex);
+        }
 #endif
 	/*
 	 * Kernel will do wakeup at the address, so joiner thread

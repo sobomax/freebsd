@@ -43,6 +43,7 @@
 #include <machine/atomic.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdatomic.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -362,6 +363,23 @@ struct pthread_key {
  */
 #define TID(thread)	((uint32_t) ((thread)->tid))
 
+struct _thr_codeptr {
+	const char *fname;
+	int linen;
+	const char *funcn;
+};
+
+struct _thr_codecntr {
+	_Atomic(const struct _thr_codeptr *) ptr;
+	_Atomic(unsigned long) cnt;
+};
+
+struct _thr_crithistory {
+#define _THR_CH_LEN 16
+	struct _thr_codecntr enters[_THR_CH_LEN];
+	struct _thr_codecntr exits[_THR_CH_LEN];
+};
+
 /*
  * Thread structure.
  */
@@ -387,6 +405,7 @@ struct pthread {
 	 * region.  We allow for recursive entries into critical regions.
 	 */
 	int			critical_count;
+	struct _thr_crithistory	critical_hst;
 
 	/* Signal blocked counter. */
 	int			sigblock;
@@ -579,6 +598,30 @@ struct pthread {
 	int			dlerror_seen;
 };
 
+static inline void
+_thr_codecntr_incr(struct _thr_codecntr *tccp, const struct _thr_codeptr *lp)
+{
+
+	for (int i = 0; i < _THR_CH_LEN; i++) {
+		const struct _thr_codeptr *old_lp;
+retry:
+		old_lp = atomic_load_explicit(&tccp[i].ptr, memory_order_relaxed);
+		if (old_lp == NULL) {
+			if (atomic_compare_exchange_strong(&tccp[i].ptr, &old_lp, lp) != true) {
+				goto retry;
+			}
+		}
+		if (old_lp != NULL && old_lp != lp)
+			continue;
+		atomic_fetch_add_explicit(&tccp[i].cnt, 1, memory_order_relaxed);
+		break;
+	}
+}
+
+#define THR_HERE	( 						\
+	{static const struct _thr_codeptr _here = {.fname = __FILE__,	\
+	 .linen = __LINE__, .funcn = __func__}; &_here;})
+
 #define THR_SHOULD_GC(thrd) 						\
 	((thrd)->refcount == 0 && (thrd)->state == PS_DEAD &&		\
 	 ((thrd)->flags & THR_FLAGS_DETACHED) != 0)
@@ -587,16 +630,18 @@ struct pthread {
 	(((thrd)->locklevel > 0) ||			\
 	((thrd)->critical_count > 0))
 
-#define	THR_CRITICAL_ENTER(thrd)			\
-	do {						\
-		(thrd)->critical_count++;		\
+#define	THR_CRITICAL_ENTER(thrd)					\
+	do {								\
+		(thrd)->critical_count++;				\
+		_thr_codecntr_incr((thrd)->critical_hst.enters, THR_HERE);\
 	} while (0)
 
-#define	THR_CRITICAL_LEAVE(thrd, do_ast)		\
-	do {						\
-		(thrd)->critical_count--;		\
-		if (do_ast)				\
-			_thr_ast(thrd);			\
+#define	THR_CRITICAL_LEAVE(thrd, do_ast)				\
+	do {								\
+		(thrd)->critical_count--;				\
+		_thr_codecntr_incr((thrd)->critical_hst.exits, THR_HERE);\
+		if (do_ast)						\
+			_thr_ast(thrd);					\
 	} while (0)
 
 #define THR_UMUTEX_TRYLOCK(thrd, lck)			\
