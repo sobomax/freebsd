@@ -48,6 +48,7 @@
 #include <pthread_np.h>
 #include "un-namespace.h"
 
+#include "rtld_lock.h"
 #include "thr_private.h"
 
 _Static_assert(sizeof(struct pthread_mutex) <= THR_PAGE_SIZE_MIN,

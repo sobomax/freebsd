@@ -39,12 +39,15 @@
 #include "rtld_printf.h"
 
 void debug_printf(const char *, ...) __printflike(1, 2);
+void t_debug_printf(const char *, ...) __printflike(1, 2);
 extern int debug;
 
 #ifndef NO_LD_DEBUG
 #define dbg(...)	debug_printf(__VA_ARGS__)
+#define t_dbg(...)	t_debug_printf(__VA_ARGS__)
 #else
 #define dbg(...)	((void) 0)
+#define t_dbg(...)	((void) 0)
 #endif
 
 #define assert(cond)	((cond) ? (void) 0 :			\

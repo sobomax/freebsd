@@ -33,6 +33,16 @@
 
 #define	MAX_RTLD_LOCKS	8
 
+struct _thr_codeptr {
+       const char *fname;
+       int linen;
+       const char *funcn;
+};
+
+#define THR_HERE       (                                               \
+       {static const struct _thr_codeptr _here = {.fname = __FILE__,   \
+        .linen = __LINE__, .funcn = __func__}; &_here;})
+
 /*
  * This structure is part of the ABI between rtld and threading
  * libraries, like libthr and even libc_r.  Its layout is fixed and
@@ -49,9 +59,9 @@ struct RtldLockInfo
 
 	void *(*lock_create)(void);
 	void  (*lock_destroy)(void *);
-	void  (*rlock_acquire)(void *);
-	void  (*wlock_acquire)(void *);
-	void  (*lock_release)(void *);
+	void  (*_rlock_acquire)(void *, const struct _thr_codeptr *);
+	void  (*_wlock_acquire)(void *, const struct _thr_codeptr *);
+	void  (*_lock_release)(void *, const struct _thr_codeptr *);
 	int   (*thread_set_flag)(int);
 	int   (*thread_clr_flag)(int);
 	void  (*at_fork)(void);
@@ -59,6 +69,7 @@ struct RtldLockInfo
 	/* Version 2 fields */
 	char *(*dlerror_loc)(void);
 	int  *(*dlerror_seen)(void);
+	struct pthread *(*curthread)(void);
 	int   dlerror_loc_sz;
 };
 
@@ -88,11 +99,15 @@ extern struct RtldLockInfo lockinfo;
 struct Struct_RtldLockState;
 typedef struct Struct_RtldLockState RtldLockState;
 
-void	rlock_acquire(rtld_lock_t, RtldLockState *);
-void 	wlock_acquire(rtld_lock_t, RtldLockState *);
-void	lock_release(rtld_lock_t, RtldLockState *);
+void	_rlock_acquire(rtld_lock_t, RtldLockState *, const struct _thr_codeptr *);
+#define rlock_acquire(x, y) _rlock_acquire((x), (y), THR_HERE)
+void 	_wlock_acquire(rtld_lock_t, RtldLockState *, const struct _thr_codeptr *);
+#define wlock_acquire(x, y) _wlock_acquire((x), (y), THR_HERE)
+void	_lock_release(rtld_lock_t, RtldLockState *, const struct _thr_codeptr *);
+#define lock_release(x, y) _lock_release((x), (y), THR_HERE)
 void	lock_upgrade(rtld_lock_t, RtldLockState *);
 void	lock_restart_for_upgrade(RtldLockState *);
+struct pthread *curthread(void);
 
 void	dlerror_dflt_init(void);
 

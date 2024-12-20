@@ -29,6 +29,7 @@
  * Support for printing debugging messages.
  */
 
+#include <stdatomic.h>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -54,6 +55,35 @@ debug_printf(const char *format, ...)
 	rtld_fdputchar(STDERR_FILENO, '\n');
 
 	va_end(ap);
+    }
+}
+
+#define MAX_SPINS (1 << 20)
+
+void
+t_debug_printf(const char *format, ...)
+{
+    if (debug) {
+        static atomic_flag stderr_mutex = {0};
+        atomic_flag *mp = NULL;
+        for (int i = 0; i < MAX_SPINS; i++) {
+            if (atomic_flag_test_and_set(&stderr_mutex))
+                continue;
+            mp = &stderr_mutex;
+            break;
+        }
+        rtld_fdprintf(STDERR_FILENO, "[%p] ", curthread());
+
+        va_list ap;
+        va_start(ap, format);
+
+        rtld_vfdprintf(STDERR_FILENO, format, ap);
+        rtld_fdputchar(STDERR_FILENO, '\n');
+
+        va_end(ap);
+
+        if (mp != NULL)
+            atomic_flag_clear(mp);
     }
 }
 

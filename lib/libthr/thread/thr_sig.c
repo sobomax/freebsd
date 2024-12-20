@@ -41,6 +41,7 @@
 #include "libc_private.h"
 
 #include "libc_private.h"
+#include "rtld_lock.h"
 #include "thr_private.h"
 
 /* #define DEBUG_SIGNAL */

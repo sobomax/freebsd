@@ -174,19 +174,19 @@ def_lock_acquire(Lock *l, bool wlock)
 }
 
 static void
-def_rlock_acquire(void *lock)
+def_rlock_acquire(void *lock, const struct _thr_codeptr *_)
 {
 	def_lock_acquire(lock, false);
 }
 
 static void
-def_wlock_acquire(void *lock)
+def_wlock_acquire(void *lock, const struct _thr_codeptr *_)
 {
 	def_lock_acquire(lock, true);
 }
 
 static void
-def_lock_release(void *lock)
+def_lock_release(void *lock, const struct _thr_codeptr *_)
 {
 	Lock *l = lock;
 
@@ -245,7 +245,8 @@ rtld_lock_t	rtld_libc_lock = &rtld_locks[1];
 rtld_lock_t	rtld_phdr_lock = &rtld_locks[2];
 
 void
-rlock_acquire(rtld_lock_t lock, RtldLockState *lockstate)
+_rlock_acquire(rtld_lock_t lock, RtldLockState *lockstate,
+    const struct _thr_codeptr *lp)
 {
 
 	if (lockstate == NULL)
@@ -256,12 +257,13 @@ rlock_acquire(rtld_lock_t lock, RtldLockState *lockstate)
 		lockstate->lockstate = RTLD_LOCK_UNLOCKED;
 		return;
 	}
-	lockinfo.rlock_acquire(lock->handle);
+	lockinfo._rlock_acquire(lock->handle, lp);
 	lockstate->lockstate = RTLD_LOCK_RLOCKED;
 }
 
 void
-wlock_acquire(rtld_lock_t lock, RtldLockState *lockstate)
+_wlock_acquire(rtld_lock_t lock, RtldLockState *lockstate,
+    const struct _thr_codeptr *lp)
 {
 
 	if (lockstate == NULL)
@@ -272,12 +274,12 @@ wlock_acquire(rtld_lock_t lock, RtldLockState *lockstate)
 		lockstate->lockstate = RTLD_LOCK_UNLOCKED;
 		return;
 	}
-	lockinfo.wlock_acquire(lock->handle);
+	lockinfo._wlock_acquire(lock->handle, lp);
 	lockstate->lockstate = RTLD_LOCK_WLOCKED;
 }
 
 void
-lock_release(rtld_lock_t lock, RtldLockState *lockstate)
+_lock_release(rtld_lock_t lock, RtldLockState *lockstate, const struct _thr_codeptr *lp)
 {
 
 	if (lockstate == NULL)
@@ -289,7 +291,7 @@ lock_release(rtld_lock_t lock, RtldLockState *lockstate)
 	case RTLD_LOCK_RLOCKED:
 	case RTLD_LOCK_WLOCKED:
 		thread_mask_clear(lock->mask);
-		lockinfo.lock_release(lock->handle);
+		lockinfo._lock_release(lock->handle, lp);
 		break;
 	default:
 		assert(0);
@@ -326,6 +328,20 @@ lock_restart_for_upgrade(RtldLockState *lockstate)
 	}
 }
 
+struct pthread *
+curthread(void)
+{
+
+	return lockinfo.curthread();
+}
+
+static struct pthread *
+def_curthread(void)
+{
+
+	return (NULL);
+}
+
 void
 dlerror_dflt_init(void)
 {
@@ -342,15 +358,16 @@ lockdflt_init(void)
 	deflockinfo.rtli_version = RTLI_VERSION;
 	deflockinfo.lock_create = def_lock_create;
 	deflockinfo.lock_destroy = def_lock_destroy;
-	deflockinfo.rlock_acquire = def_rlock_acquire;
-	deflockinfo.wlock_acquire = def_wlock_acquire;
-	deflockinfo.lock_release = def_lock_release;
+	deflockinfo._rlock_acquire = def_rlock_acquire;
+	deflockinfo._wlock_acquire = def_wlock_acquire;
+	deflockinfo._lock_release = def_lock_release;
 	deflockinfo.thread_set_flag = def_thread_set_flag;
 	deflockinfo.thread_clr_flag = def_thread_clr_flag;
 	deflockinfo.at_fork = NULL;
 	deflockinfo.dlerror_loc = def_dlerror_loc;
 	deflockinfo.dlerror_loc_sz = sizeof(def_dlerror_msg);
 	deflockinfo.dlerror_seen = def_dlerror_seen;
+	deflockinfo.curthread = def_curthread;
 
 	for (i = 0; i < RTLD_LOCK_CNT; i++) {
 		rtld_locks[i].mask   = (1 << i);
@@ -424,24 +441,25 @@ _rtld_thread_init(struct RtldLockInfo *pli)
 		if (rtld_locks[i].handle == NULL)
 			continue;
 		if (flags & rtld_locks[i].mask)
-			lockinfo.lock_release(rtld_locks[i].handle);
+			lockinfo._lock_release(rtld_locks[i].handle, THR_HERE);
 		lockinfo.lock_destroy(rtld_locks[i].handle);
 	}
 
 	for (i = 0; i < RTLD_LOCK_CNT; i++) {
 		rtld_locks[i].handle = locks[i];
 		if (flags & rtld_locks[i].mask)
-			pli->wlock_acquire(rtld_locks[i].handle);
+			pli->_wlock_acquire(rtld_locks[i].handle, THR_HERE);
 	}
 
 	lockinfo.lock_create = pli->lock_create;
 	lockinfo.lock_destroy = pli->lock_destroy;
-	lockinfo.rlock_acquire = pli->rlock_acquire;
-	lockinfo.wlock_acquire = pli->wlock_acquire;
-	lockinfo.lock_release  = pli->lock_release;
+	lockinfo._rlock_acquire = pli->_rlock_acquire;
+	lockinfo._wlock_acquire = pli->_wlock_acquire;
+	lockinfo._lock_release  = pli->_lock_release;
 	lockinfo.thread_set_flag = pli->thread_set_flag;
 	lockinfo.thread_clr_flag = pli->thread_clr_flag;
 	lockinfo.at_fork = pli->at_fork;
+	lockinfo.curthread = pli->curthread;
 	if (lockinfo.rtli_version > RTLI_VERSION_ONE && pli != NULL) {
 		strlcpy(pli->dlerror_loc(), lockinfo.dlerror_loc(),
 		    lockinfo.dlerror_loc_sz);

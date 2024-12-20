@@ -36,6 +36,7 @@
 #include <pthread.h>
 
 #include "libc_private.h"
+#include "rtld_lock.h"
 #include "thr_private.h"
 #include "static_tls.h"
 

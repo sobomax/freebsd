@@ -363,15 +363,17 @@ struct pthread_key {
  */
 #define TID(thread)	((uint32_t) ((thread)->tid))
 
+#if 0
 struct _thr_codeptr {
 	const char *fname;
 	int linen;
 	const char *funcn;
 };
+#endif
 
 struct _thr_codecntr {
-	_Atomic(const struct _thr_codeptr *) ptr;
-	_Atomic(unsigned long) cnt;
+	const struct _thr_codeptr *ptr;
+	unsigned long cnt;
 };
 
 struct _thr_crithistory {
@@ -457,6 +459,9 @@ struct pthread {
 
 	/* Cancellation is in progress */
 	int			cancelling;
+
+	/* Exiting is in progress */
+	int			exiting;
 
 	/* Thread temporary signal mask. */
 	sigset_t		sigmask;
@@ -603,17 +608,13 @@ _thr_codecntr_incr(struct _thr_codecntr *tccp, const struct _thr_codeptr *lp)
 {
 
 	for (int i = 0; i < _THR_CH_LEN; i++) {
-		const struct _thr_codeptr *old_lp;
-retry:
-		old_lp = atomic_load_explicit(&tccp[i].ptr, memory_order_relaxed);
+		const struct _thr_codeptr *old_lp = tccp[i].ptr;
 		if (old_lp == NULL) {
-			if (atomic_compare_exchange_strong(&tccp[i].ptr, &old_lp, lp) != true) {
-				goto retry;
-			}
-		}
-		if (old_lp != NULL && old_lp != lp)
+			tccp[i].ptr = lp;
+		} else if (old_lp != lp) {
 			continue;
-		atomic_fetch_add_explicit(&tccp[i].cnt, 1, memory_order_relaxed);
+		}
+		tccp[i].cnt += 1;
 		break;
 	}
 }
@@ -630,16 +631,21 @@ retry:
 	(((thrd)->locklevel > 0) ||			\
 	((thrd)->critical_count > 0))
 
-#define	THR_CRITICAL_ENTER(thrd)					\
+#define THR_CRITICAL_ENTER(thrd) THR_CRITICAL_ENTER_LOC((thrd), THR_HERE)
+
+#define	THR_CRITICAL_ENTER_LOC(thrd, lp)				\
 	do {								\
 		(thrd)->critical_count++;				\
-		_thr_codecntr_incr((thrd)->critical_hst.enters, THR_HERE);\
+		_thr_codecntr_incr((thrd)->critical_hst.enters, lp);	\
 	} while (0)
 
-#define	THR_CRITICAL_LEAVE(thrd, do_ast)				\
+#define THR_CRITICAL_LEAVE(thrd, do_ast) \
+	THR_CRITICAL_LEAVE_LOC(thrd, do_ast, THR_HERE)
+
+#define	THR_CRITICAL_LEAVE_LOC(thrd, do_ast, lp)			\
 	do {								\
 		(thrd)->critical_count--;				\
-		_thr_codecntr_incr((thrd)->critical_hst.exits, THR_HERE);\
+		_thr_codecntr_incr((thrd)->critical_hst.exits, lp);	\
 		if (do_ast)						\
 			_thr_ast(thrd);					\
 	} while (0)

@@ -97,7 +97,7 @@ typedef struct Struct_LockInfo {
     /* Methods */
     void *(*lock_create)(void *context);
     void (*rlock_acquire)(void *lock);
-    void (*wlock_acquire)(void *lock);
+    void (*_wlock_acquire)(void *lock);
     void (*rlock_release)(void *lock);
     void (*wlock_release)(void *lock);
     void (*lock_destroy)(void *lock);

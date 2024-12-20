@@ -1053,7 +1053,7 @@ _rtld_bind(Obj_Entry *obj, Elf_Size reloff)
     else
 	target = (Elf_Addr)(defobj->relocbase + def->st_value);
 
-    dbg("\"%s\" in \"%s\" ==> %p in \"%s\"",
+    t_dbg("\"%s\" in \"%s\" ==> %p in \"%s\"",
       defobj->strtab + def->st_name,
       obj->path == NULL ? NULL : basename(obj->path),
       (void *)target,
@@ -2992,7 +2992,7 @@ preinit_main(void)
 
     for (index = 0; index < obj_main->preinit_array_num; index++) {
 	if (preinit_addr[index] != 0 && preinit_addr[index] != 1) {
-	    dbg("calling preinit function for %s at %p", obj_main->path,
+	    t_dbg("calling preinit function for %s at %p", obj_main->path,
 	      (void *)preinit_addr[index]);
 	    LD_UTRACE(UTRACE_INIT_CALL, obj_main, (void *)preinit_addr[index],
 	      0, 0, obj_main->path);
@@ -3047,7 +3047,7 @@ objlist_call_fini(Objlist *list, Obj_Entry *root, RtldLockState *lockstate)
 		for (index = elm->obj->fini_array_num - 1; index >= 0;
 		  index--) {
 		    if (fini_addr[index] != 0 && fini_addr[index] != 1) {
-			dbg("calling fini function for %s at %p",
+			t_dbg("calling fini function for %s at %p",
 			    elm->obj->path, (void *)fini_addr[index]);
 			LD_UTRACE(UTRACE_FINI_CALL, elm->obj,
 			    (void *)fini_addr[index], 0, 0, elm->obj->path);
@@ -3056,7 +3056,7 @@ objlist_call_fini(Objlist *list, Obj_Entry *root, RtldLockState *lockstate)
 		}
 	    }
 	    if (elm->obj->fini != (Elf_Addr)NULL) {
-		dbg("calling fini function for %s at %p", elm->obj->path,
+		t_dbg("calling fini function for %s at %p", elm->obj->path,
 		    (void *)elm->obj->fini);
 		LD_UTRACE(UTRACE_FINI_CALL, elm->obj, (void *)elm->obj->fini,
 		    0, 0, elm->obj->path);
@@ -3135,7 +3135,7 @@ objlist_call_init(Objlist *list, RtldLockState *lockstate)
          * When this happens, DT_INIT is processed first.
          */
 	if (elm->obj->init != (Elf_Addr)NULL) {
-	    dbg("calling init function for %s at %p", elm->obj->path,
+	    t_dbg("calling init function for %s at %p", elm->obj->path,
 	        (void *)elm->obj->init);
 	    LD_UTRACE(UTRACE_INIT_CALL, elm->obj, (void *)elm->obj->init,
 	        0, 0, elm->obj->path);
@@ -3145,7 +3145,7 @@ objlist_call_init(Objlist *list, RtldLockState *lockstate)
 	if (init_addr != NULL) {
 	    for (index = 0; index < elm->obj->init_array_num; index++) {
 		if (init_addr[index] != 0 && init_addr[index] != 1) {
-		    dbg("calling init function for %s at %p", elm->obj->path,
+		    t_dbg("calling init function for %s at %p", elm->obj->path,
 			(void *)init_addr[index]);
 		    LD_UTRACE(UTRACE_INIT_CALL, elm->obj,
 			(void *)init_addr[index], 0, 0, elm->obj->path);
@@ -3462,7 +3462,7 @@ rtld_exit(void)
     RtldLockState lockstate;
 
     wlock_acquire(rtld_bind_lock, &lockstate);
-    dbg("rtld_exit()");
+    t_dbg("rtld_exit()");
     objlist_call_fini(&list_fini, NULL, &lockstate);
     /* No need to remove the items from the list, since we are exiting. */
     if (!libmap_disable)
@@ -3780,7 +3780,7 @@ dlopen_object(const char *name, int fd, Obj_Entry *refobj, int lo_flags,
     RtldLockState mlockstate;
     int result;
 
-    dbg("dlopen_object name \"%s\" fd %d refobj \"%s\" lo_flags %#x mode %#x",
+    t_dbg("dlopen_object name \"%s\" fd %d refobj \"%s\" lo_flags %#x mode %#x",
       name != NULL ? name : "<null>", fd, refobj == NULL ? "<null>" :
       refobj->path, lo_flags, mode);
     objlist_init(&initlist);

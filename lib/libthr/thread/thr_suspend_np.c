@@ -35,6 +35,7 @@
 #include <pthread_np.h>
 #include "un-namespace.h"
 
+#include "rtld_lock.h"
 #include "thr_private.h"
 
 static int suspend_common(struct pthread *, struct pthread *,

@@ -45,10 +45,10 @@ extern int errno;
 static int	_thr_rtld_clr_flag(int);
 static void	*_thr_rtld_lock_create(void);
 static void	_thr_rtld_lock_destroy(void *);
-static void	_thr_rtld_lock_release(void *);
-static void	_thr_rtld_rlock_acquire(void *);
+static void	_thr_rtld_lock_release(void *, const struct _thr_codeptr *);
+static void	_thr_rtld_rlock_acquire(void *, const struct _thr_codeptr *);
 static int	_thr_rtld_set_flag(int);
-static void	_thr_rtld_wlock_acquire(void *);
+static void	_thr_rtld_wlock_acquire(void *, const struct _thr_codeptr *);
 
 struct rtld_lock {
 	struct	urwlock	lock;
@@ -107,7 +107,7 @@ _thr_rtld_lock_destroy(void *lock)
 }
 
 static void
-_thr_rtld_rlock_acquire(void *lock)
+_thr_rtld_rlock_acquire(void *lock, const struct _thr_codeptr *lp)
 {
 	struct pthread		*curthread;
 	struct rtld_lock	*l;
@@ -117,7 +117,7 @@ _thr_rtld_rlock_acquire(void *lock)
 	SAVE_ERRNO();
 	l = (struct rtld_lock *)lock;
 
-	THR_CRITICAL_ENTER(curthread);
+	THR_CRITICAL_ENTER_LOC(curthread, lp);
 	while (_thr_rwlock_rdlock(&l->lock, 0, NULL) != 0)
 		;
 	curthread->rdlock_count++;
@@ -125,7 +125,7 @@ _thr_rtld_rlock_acquire(void *lock)
 }
 
 static void
-_thr_rtld_wlock_acquire(void *lock)
+_thr_rtld_wlock_acquire(void *lock, const struct _thr_codeptr *lp)
 {
 	struct pthread		*curthread;
 	struct rtld_lock	*l;
@@ -135,14 +135,14 @@ _thr_rtld_wlock_acquire(void *lock)
 	SAVE_ERRNO();
 	l = (struct rtld_lock *)lock;
 
-	THR_CRITICAL_ENTER(curthread);
+	THR_CRITICAL_ENTER_LOC(curthread, lp);
 	while (_thr_rwlock_wrlock(&l->lock, NULL) != 0)
 		;
 	RESTORE_ERRNO();
 }
 
 static void
-_thr_rtld_lock_release(void *lock)
+_thr_rtld_lock_release(void *lock, const struct _thr_codeptr *lp)
 {
 	struct pthread		*curthread;
 	struct rtld_lock	*l;
@@ -168,14 +168,14 @@ _thr_rtld_lock_release(void *lock)
 	if (_thr_rwlock_unlock(&l->lock) == 0) {
 		if ((state & URWLOCK_WRITE_OWNER) == 0)
 			curthread->rdlock_count--;
-		THR_CRITICAL_LEAVE(curthread, 1);
+		THR_CRITICAL_LEAVE(curthread, 1, lp);
 	} else if (curthread->cancelling) {
 		/*
 		 * If the main thread is being destroyed as well and
 		 * tries to cancel us, some of the rtld locks might
 		 * already be gone and unlock() will err.
 		 */
-		THR_CRITICAL_LEAVE(curthread, 0);
+		THR_CRITICAL_LEAVE(curthread, 0, lp);
 	}
 	RESTORE_ERRNO();
 }
@@ -248,15 +248,16 @@ _thr_rtld_init(void)
 	li.rtli_version = RTLI_VERSION;
 	li.lock_create  = _thr_rtld_lock_create;
 	li.lock_destroy = _thr_rtld_lock_destroy;
-	li.rlock_acquire = _thr_rtld_rlock_acquire;
-	li.wlock_acquire = _thr_rtld_wlock_acquire;
-	li.lock_release  = _thr_rtld_lock_release;
+	li._rlock_acquire = _thr_rtld_rlock_acquire;
+	li._wlock_acquire = _thr_rtld_wlock_acquire;
+	li._lock_release  = _thr_rtld_lock_release;
 	li.thread_set_flag = _thr_rtld_set_flag;
 	li.thread_clr_flag = _thr_rtld_clr_flag;
 	li.at_fork = NULL;
 	li.dlerror_loc = _thr_dlerror_loc;
 	li.dlerror_loc_sz = sizeof(curthread->dlerror_msg);
 	li.dlerror_seen = _thr_dlerror_seen;
+	li.curthread = _get_curthread;
 
 	/*
 	 * Preresolve the symbols needed for the fork interposer.  We
