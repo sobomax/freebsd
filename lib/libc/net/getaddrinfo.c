@@ -1593,6 +1593,44 @@ find_afd(int af)
 	return NULL;
 }
 
+static void
+compat_addrconfig(struct addrinfo *pai, int *seen_inetp, int *seen_inet6p)
+{
+	struct sockaddr *sa;
+
+	// Check IPv4 availability
+	if (pai->ai_family == AF_UNSPEC || pai->ai_family == AF_INET) {
+		int sock = _socket(AF_INET, SOCK_STREAM, 0);
+		if (sock >= 0) {
+			struct sockaddr_in addr = {0};
+			addr.sin_family = AF_INET;
+			addr.sin_addr.s_addr = htonl(INADDR_ANY);
+			sa = (struct sockaddr *)&addr;
+			if (_bind(sock, sa, sizeof(addr)) == 0) {
+				*seen_inetp = 1;
+			}
+			_close(sock);
+		}
+	}
+
+	// Check IPv6 availability
+#ifdef INET6
+	if (pai->ai_family == AF_UNSPEC || pai->ai_family == AF_INET6) {
+		int sock = _socket(AF_INET6, SOCK_STREAM, 0);
+		if (sock >= 0) {
+			struct sockaddr_in6 addr6 = {0};
+			addr6.sin6_family = AF_INET6;
+			addr6.sin6_addr = in6addr_any;
+			sa = (struct sockaddr *)&addr6;
+			if (_bind(sock, sa, sizeof(addr6)) == 0) {
+				*seen_inet6p = 1;
+			}
+			_close(sock);
+		}
+	}
+#endif
+}
+
 /*
  * RFC 3493: AI_ADDRCONFIG check.  Determines which address families are
  * configured on the local system and correlates with pai->ai_family value.
@@ -1613,8 +1651,10 @@ addrconfig(struct addrinfo *pai)
 #endif
 	int seen_inet = 0, seen_inet6 = 0;
 
-	if (getifaddrs(&ifaddrs) != 0)
-		return (0);
+	if (getifaddrs(&ifaddrs) != 0) {
+		compat_addrconfig(pai, &seen_inet, &seen_inet6);
+		goto out;
+	}
 
 	for (ifa = ifaddrs; ifa != NULL; ifa = ifa->ifa_next) {
 		if (ifa->ifa_addr == NULL || (ifa->ifa_flags & IFF_UP) == 0)
@@ -1647,6 +1687,7 @@ addrconfig(struct addrinfo *pai)
 	}
 	freeifaddrs(ifaddrs);
 
+out:
 	switch(pai->ai_family) {
 	case AF_INET6:
 		return (seen_inet6);
