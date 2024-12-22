@@ -426,7 +426,7 @@ check_suspend(struct pthread *curthread)
 	 * because we are leaf code, we don't want to recursively call
 	 * ourself.
 	 */
-	curthread->critical_count++;
+	THR_CRITICAL_ENTER(curthread);
 	THR_UMUTEX_LOCK(curthread, &(curthread)->lock);
 	while ((curthread->flags & THR_FLAGS_NEED_SUSPEND) != 0) {
 		curthread->cycle++;
@@ -447,7 +447,7 @@ check_suspend(struct pthread *curthread)
 		THR_UMUTEX_LOCK(curthread, &(curthread)->lock);
 	}
 	THR_UMUTEX_UNLOCK(curthread, &(curthread)->lock);
-	curthread->critical_count--;
+	THR_CRITICAL_LEAVE(curthread, 0);
 
 	_thr_signal_unblock(curthread);
 }

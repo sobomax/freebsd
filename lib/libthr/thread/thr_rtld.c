@@ -168,7 +168,7 @@ _thr_rtld_lock_release(void *lock)
 	if (_thr_rwlock_unlock(&l->lock) == 0) {
 		if ((state & URWLOCK_WRITE_OWNER) == 0)
 			curthread->rdlock_count--;
-		THR_CRITICAL_LEAVE(curthread);
+		THR_CRITICAL_LEAVE(curthread, 1);
 	}
 	RESTORE_ERRNO();
 }

@@ -55,7 +55,6 @@ static int message_printed;
 
 static void thread_unwind(void) __dead2;
 #ifdef PIC
-static void thread_uw_init(void);
 static _Unwind_Reason_Code thread_unwind_stop(int version,
 	_Unwind_Action actions,
 	uint64_t exc_class,
@@ -66,8 +65,8 @@ static _Unwind_Reason_Code (*uwl_forcedunwind)(struct _Unwind_Exception *,
 	_Unwind_Stop_Fn, void *);
 static uintptr_t (*uwl_getcfa)(struct _Unwind_Context *);
 
-static void
-thread_uw_init(void)
+void
+_thread_uw_init(struct pthread *curthread)
 {
 	static int inited = 0;
 	Dl_info dli;
@@ -83,13 +82,14 @@ thread_uw_init(void)
 		 * Make sure the address is always valid by holding the library,
 		 * also assume functions are in same library.
 		 */
-		if ((handle = dlopen(dli.dli_fname, RTLD_LAZY)) != NULL) {
+		if ((handle = dlopen(dli.dli_fname, RTLD_NOW)) != NULL) {
 		    forcedunwind = dlsym(handle, "_Unwind_ForcedUnwind");
 		    getcfa = dlsym(handle, "_Unwind_GetCFA");
 		    if (forcedunwind != NULL && getcfa != NULL) {
 			uwl_getcfa = getcfa;
 			atomic_store_rel_ptr((volatile void *)&uwl_forcedunwind,
 				(uintptr_t)forcedunwind);
+			curthread->unwind_dlhandle = handle;
 		    } else {
 			dlclose(handle);
 		    }
@@ -103,7 +103,11 @@ _Unwind_Reason_Code
 _Unwind_ForcedUnwind(struct _Unwind_Exception *ex, _Unwind_Stop_Fn stop_func,
 	void *stop_arg)
 {
-	return (*uwl_forcedunwind)(ex, stop_func, stop_arg);
+	struct pthread *curthread = _get_curthread();
+	_Unwind_Reason_Code r = (*uwl_forcedunwind)(ex, stop_func, stop_arg);
+	if (curthread->unwind_dlhandle != NULL)
+		dlclose(curthread->unwind_dlhandle);
+	return r;
 }
 
 uintptr_t
@@ -238,7 +242,6 @@ _pthread_exit_mask(void *status, sigset_t *mask)
 #ifdef _PTHREAD_FORCED_UNWIND
 
 #ifdef PIC
-	thread_uw_init();
 	if (uwl_forcedunwind != NULL) {
 #else
 	if (_Unwind_ForcedUnwind != NULL) {
@@ -249,17 +252,17 @@ _pthread_exit_mask(void *status, sigset_t *mask)
 				_thread_printf(2, "Warning: old _pthread_cleanup_push was called, "
 				  	"stack unwinding is disabled.\n");
 			}
+			if (curthread->unwind_dlhandle != NULL)
+				dlclose(curthread->unwind_dlhandle);
 			goto cleanup;
 		}
 		thread_unwind();
-
 	} else {
 cleanup:
 		while (curthread->cleanup != NULL) {
 			__pthread_cleanup_pop_imp(1);
 		}
 		__cxa_thread_call_dtors();
-
 		exit_thread();
 	}
 

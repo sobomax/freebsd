@@ -427,6 +427,9 @@ init_main_thread(struct pthread *thread)
 
 #ifdef _PTHREAD_FORCED_UNWIND
 	thread->unwind_stackend = _usrstack;
+#ifdef PIC
+        _thread_uw_init(thread);
+#endif
 #endif
 
 	/* Others cleared to zero by thr_alloc() */

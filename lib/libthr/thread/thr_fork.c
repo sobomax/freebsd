@@ -97,7 +97,7 @@ _thr_atfork(void (*prepare)(void), void (*parent)(void),
 	_thr_rwl_wrlock(&_thr_atfork_lock);
 	TAILQ_INSERT_TAIL(&_thr_atfork_list, af, qe);
 	_thr_rwl_unlock(&_thr_atfork_lock);
-	THR_CRITICAL_LEAVE(curthread);
+	THR_CRITICAL_LEAVE(curthread, 1);
 	return (0);
 }
 
@@ -122,7 +122,7 @@ __pthread_cxa_finalize(struct dl_phdr_info *phdr_info)
 		}
 	}
 	_thr_rwl_unlock(&_thr_atfork_lock);
-	THR_CRITICAL_LEAVE(curthread);
+	THR_CRITICAL_LEAVE(curthread, 1);
 	while ((af = TAILQ_FIRST(&temp_list)) != NULL) {
 		TAILQ_REMOVE(&temp_list, af, qe);
 		free(af);

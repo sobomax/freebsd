@@ -311,7 +311,7 @@ _thr_ref_delete(struct pthread *curthread, struct pthread *thread)
 	THR_THREAD_LOCK(curthread, thread);
 	thread->refcount--;
 	_thr_try_gc(curthread, thread);
-	THR_CRITICAL_LEAVE(curthread);
+	THR_CRITICAL_LEAVE(curthread, 1);
 }
 
 /* entered with thread lock held, exit with thread lock released */

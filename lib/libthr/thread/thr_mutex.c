@@ -639,7 +639,7 @@ __Tthr_mutex_trylock(pthread_mutex_t *mutex)
 		_mutex_leave_robust(curthread, m);
 	if (ret != 0 && ret != EOWNERDEAD &&
 	    (m->m_flags & PMUTEX_FLAG_PRIVATE) != 0)
-		THR_CRITICAL_LEAVE(curthread);
+		THR_CRITICAL_LEAVE(curthread, 1);
 	return (ret);
 }
 
@@ -736,7 +736,7 @@ mutex_lock_common(struct pthread_mutex *m, const struct timespec *abstime,
 		_mutex_leave_robust(curthread, m);
 	if (ret != 0 && ret != EOWNERDEAD &&
 	    (m->m_flags & PMUTEX_FLAG_PRIVATE) != 0 && !cvattach)
-		THR_CRITICAL_LEAVE(curthread);
+		THR_CRITICAL_LEAVE(curthread, 1);
 	return (ret);
 }
 
@@ -997,7 +997,7 @@ mutex_unlock_common(struct pthread_mutex *m, bool cv, int *mtx_defer)
 			_mutex_leave_robust(curthread, m);
 	}
 	if (!cv && private)
-		THR_CRITICAL_LEAVE(curthread);
+		THR_CRITICAL_LEAVE(curthread, 1);
 	return (error);
 }
 

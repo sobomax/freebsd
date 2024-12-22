@@ -525,6 +525,7 @@ struct pthread {
 	struct _Unwind_Exception	ex;
 	void			*unwind_stackend;
 	int			unwind_disabled;
+	void			*unwind_dlhandle;
 #endif
 
 	/*
@@ -587,12 +588,15 @@ struct pthread {
 	((thrd)->critical_count > 0))
 
 #define	THR_CRITICAL_ENTER(thrd)			\
-	(thrd)->critical_count++
+	do {						\
+		(thrd)->critical_count++;		\
+	} while (0)
 
-#define	THR_CRITICAL_LEAVE(thrd)			\
+#define	THR_CRITICAL_LEAVE(thrd, do_ast)		\
 	do {						\
 		(thrd)->critical_count--;		\
-		_thr_ast(thrd);				\
+		if (do_ast)				\
+			_thr_ast(thrd);			\
 	} while (0)
 
 #define THR_UMUTEX_TRYLOCK(thrd, lck)			\
@@ -701,7 +705,7 @@ do {								\
 
 #define THR_REF_DEL(curthread, pthread) {			\
 	pthread->refcount--;					\
-	THR_CRITICAL_LEAVE(curthread);				\
+	THR_CRITICAL_LEAVE(curthread, 1);			\
 } while (0)
 
 #define GC_NEEDED()	(_gc_count >= 5)
@@ -1103,6 +1107,9 @@ int __Tthr_mutex_trylock(pthread_mutex_t *);
 bool __thr_get_main_stack_base(char **base);
 bool __thr_get_main_stack_lim(size_t *lim);
 int _Tthr_sigqueue(pthread_t pthread, int sig, const union sigval value);
+#ifdef PIC
+void _thread_uw_init(struct pthread *);
+#endif
 
 __END_DECLS
 __NULLABILITY_PRAGMA_POP
