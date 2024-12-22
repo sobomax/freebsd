@@ -169,6 +169,13 @@ _thr_rtld_lock_release(void *lock)
 		if ((state & URWLOCK_WRITE_OWNER) == 0)
 			curthread->rdlock_count--;
 		THR_CRITICAL_LEAVE(curthread, 1);
+	} else if (curthread->cancelling) {
+		/*
+		 * If the main thread is being destroyed as well and
+		 * tries to cancel us, some of the rtld locks might
+		 * already be gone and unlock() will err.
+		 */
+		THR_CRITICAL_LEAVE(curthread, 0);
 	}
 	RESTORE_ERRNO();
 }
