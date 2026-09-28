@@ -2959,7 +2959,7 @@ journal_mount(struct mount *mp,
 	 */
 	if (fs->fs_clean) {
 		DIP_SET(ip, i_modrev, fs->fs_mtime);
-		ip->i_flags |= IN_MODIFIED;
+		ip->i_flag |= IN_MODIFIED;
 		ffs_update(vp, 1);
 	}
 out:
