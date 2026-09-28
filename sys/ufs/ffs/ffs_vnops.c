@@ -804,6 +804,97 @@ ffs_read(
 }
 
 /*
+ * With soft updates, finish a synchronous write that allocated blocks by
+ * making the pointers to the blocks backing [off, off + len) durable.  Only
+ * what those pointers depend on is written, not the rest of the vnode as
+ * ffs_syncvnode() would do, so that the cost does not depend on what other
+ * writers left dirty.
+ *
+ * The data blocks are already on disk.  A new block pointer is rolled back
+ * when the inode or an indirect block holding it is written before the
+ * dependencies of the block, such as its cylinder group map, are.
+ * softdep_sync_metadata() completes those of the blocks the inode points
+ * to.  The size written with the inode is also rolled back to a direct
+ * block whose allocation is incomplete, which could hide the new data, so
+ * write the direct blocks that still carry allocation dependencies, at most
+ * UFS_NDADDR of them.  Then, deepest level first, complete the dependencies
+ * recorded in each indirect block leading to the range and write it out;
+ * pointers there to blocks that other writers allocated and have not
+ * written yet stay rolled back.  The caller writes the inode.
+ */
+static int
+ffs_sync_alloc(struct vnode *vp, off_t off, off_t len)
+{
+	struct indir indirs[UFS_NIADDR + 2];
+	struct bufobj *bo;
+	struct buf *bp;
+	struct fs *fs;
+	ufs_lbn_t firstlbn, lastlbn, lbn, meta;
+	int error, level, num;
+
+	ASSERT_VOP_ELOCKED(vp, "ffs_sync_alloc");
+	fs = ITOFS(VTOI(vp));
+	bo = &vp->v_bufobj;
+	error = softdep_sync_metadata(vp);
+	if (error != 0)
+		return (error);
+	for (lbn = 0; lbn < UFS_NDADDR; lbn++) {
+		BO_LOCK(bo);
+		bp = gbincore(bo, lbn);
+		if (bp == NULL) {
+			BO_UNLOCK(bo);
+			continue;
+		}
+		error = BUF_LOCK(bp, LK_EXCLUSIVE | LK_SLEEPFAIL | LK_INTERLOCK,
+		    BO_LOCKPTR(bo));
+		if (error == ENOLCK) {
+			lbn--;		/* Slept, retry. */
+			continue;
+		}
+		if (error != 0)
+			return (error);
+		if ((bp->b_flags & B_DELWRI) != 0 && !LIST_EMPTY(&bp->b_dep)) {
+			bremfree(bp);
+			error = bwrite(bp);
+			if (error != 0)
+				return (error);
+		} else
+			BUF_UNLOCK(bp);
+	}
+	if (len <= 0)
+		return (0);
+	firstlbn = MAX(lblkno(fs, off), UFS_NDADDR);
+	lastlbn = lblkno(fs, off + len - 1);
+	for (level = UFS_NIADDR; level > 0; level--) {
+		meta = 0;
+		for (lbn = firstlbn; lbn <= lastlbn; lbn++) {
+			error = ufs_getlbns(vp, lbn, indirs, &num);
+			if (error != 0)
+				return (error);
+			/* indirs[1] is the top level, indirs[num - 1] the leaf. */
+			if (level >= num || indirs[level].in_lbn == meta)
+				continue;
+			meta = indirs[level].in_lbn;
+			error = bread(vp, meta, (int)fs->fs_bsize, NOCRED, &bp);
+			if (error != 0)
+				return (error);
+			error = softdep_sync_buf(vp, bp, MNT_WAIT);
+			if (error != 0) {
+				brelse(bp);
+				return (error);
+			}
+			if ((bp->b_flags & B_DELWRI) != 0) {
+				error = bwrite(bp);
+				if (error != 0)
+					return (error);
+			} else
+				brelse(bp);
+		}
+	}
+	return (0);
+}
+
+/*
  * Vnode op for writing.
  */
 static int
@@ -822,6 +913,7 @@ ffs_write(
 	struct buf *bp;
 	ufs_lbn_t lbn;
 	off_t osize;
+	uint64_t oblocks;
 	ssize_t resid, r;
 	int seqcount;
 	int blkoffset, error, flags, ioflag, size, xfersize;
@@ -885,6 +977,7 @@ ffs_write(
 
 	resid = uio->uio_resid;
 	osize = ip->i_size;
+	oblocks = DIP(ip, i_blocks);
 	if (seqcount > BA_SEQMAX)
 		flags = BA_SEQMAX << BA_SEQSHIFT;
 	else
@@ -1023,8 +1116,19 @@ ffs_write(
 			uio->uio_resid = resid;
 		}
 	} else if (resid > uio->uio_resid && (ioflag & IO_SYNC)) {
-		if (!(ioflag & IO_DATASYNC) ||
-		    (ip->i_flag & (IN_SIZEMOD | IN_IBLKDATA)))
+		/*
+		 * With soft updates, the pointers to the blocks this
+		 * write allocated are rolled back until their
+		 * dependencies are on disk.  A write that allocated
+		 * nothing adds no dependencies of its own and only needs
+		 * the inode written, as without soft updates.
+		 */
+		if (DOINGSOFTDEP(vp) && DIP(ip, i_blocks) != oblocks)
+			error = ffs_sync_alloc(vp,
+			    uio->uio_offset - (resid - uio->uio_resid),
+			    resid - uio->uio_resid);
+		if (error == 0 && (!(ioflag & IO_DATASYNC) ||
+		    (ip->i_flag & (IN_SIZEMOD | IN_IBLKDATA))))
 			error = ffs_update(vp, 1);
 		if (ffs_fsfail_cleanup(VFSTOUFS(vp->v_mount), error))
 			error = ENXIO;
