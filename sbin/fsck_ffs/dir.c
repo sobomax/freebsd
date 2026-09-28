@@ -61,6 +61,17 @@ static int lftempname(char *bufp, ino_t ino);
 static int mkentry(struct inodesc *);
 
 /*
+ * Where makeentry() last added an entry to lost+found.  Reconnecting
+ * orphans appends to it over and over, and scanning it from the start
+ * for every entry makes that quadratic, so the next entry is looked for
+ * starting at that block.  See makeentry().
+ */
+static ino_t mkentry_dir;
+static uint64_t mkentry_gen;
+static ufs_lbn_t mkentry_lbn;
+static ufs_lbn_t mkentry_startlbn;
+
+/*
  * Propagate connected state through the tree.
  */
 void
@@ -207,6 +218,11 @@ dirscan(struct inodesc *idesc)
 	if (chkrange(idesc->id_blkno, idesc->id_numfrags)) {
 		idesc->id_filesize -= blksiz;
 		return (SKIP);
+	}
+	/* Skip, without reading them, the blocks makeentry() is not after. */
+	if (idesc->id_func == mkentry && idesc->id_lbn < mkentry_startlbn) {
+		idesc->id_filesize -= blksiz;
+		return (idesc->id_filesize > 0 ? KEEPON : STOP);
 	}
 	idesc->id_loc = 0;
 	for (dp = fsck_readdir(idesc); dp != NULL; dp = fsck_readdir(idesc)) {
@@ -753,18 +769,35 @@ makeentry(ino_t parent, ino_t ino, const char *name)
 		DIP_SET(dp, di_size, roundup(DIP(dp, di_size), DIRBLKSIZ));
 		inodirty(&ip);
 	}
-	if ((ckinode(dp, &idesc) & ALTERED) != 0) {
-		irelse(&ip);
-		free(idesc.id_name);
-		return (1);
-	}
-	getpathname(pathbuf, parent, parent);
-	if (expanddir(&ip, pathbuf) == 0) {
-		irelse(&ip);
-		free(idesc.id_name);
-		return (0);
-	}
+	/*
+	 * When adding to lost+found again, start looking for room in the
+	 * block that got the previous entry, as long as the directory still
+	 * has that block.  Room freed in earlier blocks is not reused then,
+	 * which only costs space.
+	 */
+	mkentry_startlbn = 0;
+	if (parent == lfdir && parent == mkentry_dir &&
+	    DIP(dp, di_gen) == mkentry_gen &&
+	    mkentry_lbn < howmany(DIP(dp, di_size), sblock.fs_bsize))
+		mkentry_startlbn = mkentry_lbn;
 	retval = ckinode(dp, &idesc) & ALTERED;
+	if (retval == 0) {
+		getpathname(pathbuf, parent, parent);
+		if (expanddir(&ip, pathbuf) != 0) {
+			retval = ckinode(dp, &idesc) & ALTERED;
+			/* Not expected, but fall back to a full scan. */
+			if (retval == 0 && mkentry_startlbn != 0) {
+				mkentry_startlbn = 0;
+				retval = ckinode(dp, &idesc) & ALTERED;
+			}
+		}
+	}
+	if (retval != 0 && parent == lfdir) {
+		mkentry_dir = parent;
+		mkentry_gen = DIP(dp, di_gen);
+		mkentry_lbn = idesc.id_lbn;
+	}
+	mkentry_startlbn = 0;
 	irelse(&ip);
 	free(idesc.id_name);
 	return (retval);
