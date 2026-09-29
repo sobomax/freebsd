@@ -1,3 +1,5 @@
+.include <src.opts.mk>
+
 PACKAGE=ufs
 PROG=	fsck_ffs
 LINKS+=	${BINDIR}/fsck_ffs ${BINDIR}/fsck_ufs
@@ -12,5 +14,8 @@ WARNS?=	2
 CFLAGS+= -I${.CURDIR}
 
 .PATH:	${SRCTOP}/sys/ufs/ffs
+
+HAS_TESTS=
+SUBDIR.${MK_TESTS}+= tests
 
 .include <bsd.prog.mk>

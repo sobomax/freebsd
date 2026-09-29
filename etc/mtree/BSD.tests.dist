@@ -491,6 +491,8 @@
         ..
         dhclient
         ..
+        fsck_ffs
+        ..
         fsck_msdosfs
         ..
         growfs
