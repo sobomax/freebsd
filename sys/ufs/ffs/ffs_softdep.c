@@ -336,6 +336,13 @@ softdep_revert_link(struct inode *dp, struct inode *ip)
 }
 
 void
+softdep_revert_dirchg(struct inode *dp, struct inode *ip)
+{
+
+	panic("%s called", __FUNCTION__);
+}
+
+void
 softdep_setup_rmdir(struct inode *dp, struct inode *ip)
 {
 
@@ -5149,6 +5156,40 @@ softdep_revert_link(struct inode *dp, struct inode *ip)
 		cancel_jaddref(jaddref, inodedep, &inodedep->id_inowait);
 	}
 	FREE_LOCK(ITOUMP(dp));
+}
+
+/*
+ * Called by ufs_rename() when a directory replaced directory ip in a new
+ * parent dp, but its ".." could not be changed to name dp.  The pending
+ * removal of ip was set up with DIRCHG, which leaves the link count of dp
+ * alone, because the link of the old ".." was to be taken over by the new
+ * one.  Have the removal drop that link after all, as it does when a
+ * directory is replaced within the same parent.  The caller has lowered
+ * the i_effnlink of dp and holds ip locked, so the dirrem has not been
+ * processed yet.
+ */
+void
+softdep_revert_dirchg(struct inode *dp, struct inode *ip)
+{
+	struct inodedep *inodedep;
+	struct dirrem *dirrem;
+	struct ufsmount *ump;
+
+	ump = ITOUMP(dp);
+	KASSERT(MOUNTEDSOFTDEP(UFSTOVFS(ump)) != 0,
+	    ("softdep_revert_dirchg called on non-softdep filesystem"));
+	ACQUIRE_LOCK(ump);
+	(void)inodedep_lookup_ip(dp);
+	if (inodedep_lookup(UFSTOVFS(ump), ip->i_number, 0, &inodedep) == 0)
+		panic("softdep_revert_dirchg: lost inodedep");
+	LIST_FOREACH(dirrem, &inodedep->id_dirremhd, dm_inonext) {
+		if ((dirrem->dm_state & DIRCHG) != 0)
+			break;
+	}
+	KASSERT(dirrem != NULL, ("softdep_revert_dirchg: no dirrem"));
+	if (dirrem != NULL)
+		dirrem->dm_state &= ~DIRCHG;
+	FREE_LOCK(ump);
 }
 
 /*

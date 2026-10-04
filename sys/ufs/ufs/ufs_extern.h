@@ -106,6 +106,7 @@ void	softdep_setup_rmdir(struct inode *, struct inode *);
 void	softdep_setup_unlink(struct inode *, struct inode *);
 void	softdep_revert_create(struct inode *, struct inode *);
 void	softdep_revert_link(struct inode *, struct inode *);
+void	softdep_revert_dirchg(struct inode *, struct inode *);
 void	softdep_revert_mkdir(struct inode *, struct inode *);
 void	softdep_revert_rmdir(struct inode *, struct inode *);
 

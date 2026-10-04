@@ -1231,6 +1231,39 @@ SYSCTL_INT(_vfs_ufs, OID_AUTO, rename_restarts, CTLFLAG_RD,
     "Times rename had to restart due to lock contention");
 
 /*
+ * A directory moved by ufs_rename() to a new parent could not have its ".."
+ * changed to name the new parent, so ".." still names the old one, which
+ * keeps its link.  The new parent then has one link too many:
+ *
+ * - If the target name was free (tip == NULL), a link was added to the new
+ *   parent for the new "..".  Take it back.
+ * - If the move replaced directory tip, no link was added: the new ".." was
+ *   to take over the link of the ".." of tip.  That link goes away with
+ *   tip.  With soft updates it is dropped when the removal of tip is on
+ *   disk, as for a directory replaced within the same parent.
+ *
+ * Also cancel the journal record that softdep_setup_dotdot_link() set up
+ * for the new "..".  It would otherwise never be written and would keep
+ * the new parent's link count rolled back in every write of its inode.
+ */
+static void
+ufs_rename_dotdot_undo(struct inode *tdp, struct inode *fip, struct inode *tip)
+{
+	struct vnode *tdvp;
+
+	tdvp = ITOV(tdp);
+	tdp->i_effnlink--;
+	if (tip == NULL || !DOINGSOFTDEP(tdvp)) {
+		tdp->i_nlink--;
+		DIP_SET_NLINK(tdp, tdp->i_nlink);
+	} else
+		softdep_revert_dirchg(tdp, tip);
+	UFS_INODE_SET_FLAG(tdp, IN_CHANGE);
+	if (DOINGSOFTDEP(tdvp))
+		softdep_revert_link(fip, tdp);
+}
+
+/*
  * Rename system call.
  * 	rename("foo", "bar");
  * is essentially
@@ -1739,13 +1772,16 @@ relock:
 			error = UFS_UPDATE(tdvp, !DOINGSOFTDEP(tdvp) &&
 			    !DOINGASYNC(tdvp));
 			/* Don't go to bad here as the new link exists. */
-			if (error)
+			if (error) {
+				ufs_rename_dotdot_undo(tdp, fip, NULL);
 				goto unlockout;
+			}
 		} else if (DOINGSUJ(tdvp))
 			/* Journal must account for each new link. */
 			softdep_setup_dotdot_link(tdp, fip);
 		SET_I_OFFSET(fip, mastertemplate.dot_reclen);
-		(void)ufs_dirrewrite(fip, fdp, newparent, DT_DIR, 0);
+		if (ufs_dirrewrite(fip, fdp, newparent, DT_DIR, 0) != 0)
+			ufs_rename_dotdot_undo(tdp, fip, tip);
 		cache_purge(fdvp);
 	}
 	error = ufs_dirremove(fdvp, fip, fcnp->cn_flags, false);
